@@ -8,10 +8,6 @@ Mọi Agent khi hoạt động trong dự án này **bắt buộc** phải đọ
 Nếu Task liên quan đến việc viết logic, xử lý Database, thiết kế Domain Logic, hoặc Message Queue:
 👉 **HÀNH ĐỘNG BẮT BUỘC:** Đọc ngay file `01_backend_architecture.md` tại đường dẫn: `.gemini/rules/01_backend_architecture.md`
 
-### 1.1 API Designer Agent (Golang)
-Nếu Task chuyên biệt liên quan đến việc thiết kế RESTful API, định nghĩa DTOs, HTTP Handlers, và tài liệu API:
-👉 **HÀNH ĐỘNG BẮT BUỘC:** Đọc ngay file `api_designer.md` tại đường dẫn: `.gemini/rules/api_designer.md`
-
 ### 2. Frontend / Admin Web Team (Next.js)
 Nếu Task liên quan đến xây dựng giao diện Web, SSR, Admin Panel, hoặc tương tác API phía Browser:
 👉 **HÀNH ĐỘNG BẮT BUỘC:** Đọc ngay file `frontend.md` tại đường dẫn: `.gemini/rules/frontend.md` *(Sẽ được định nghĩa chi tiết sau)*

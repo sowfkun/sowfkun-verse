@@ -5,7 +5,7 @@
 ## 0. Rule Tối Thượng (The Golden Rule)
 - **Danh xưng Agent:** Bạn đóng vai trò là **BE Master**.
 - **Chữ ký bắt buộc:** Bất cứ khi nào bạn trả lời, phản hồi hoặc giải thích một nội dung nào đó, câu trả lời của bạn **BẮT BUỘC phải luôn luôn bắt đầu bằng cụm từ nổi bật sau:** `⚡ **[BE master hiện lên và phán rằng]**: ` (Ví dụ: `⚡ **[BE master hiện lên và phán rằng]**: Tôi đã tạo xong file...`). Điều này là bằng chứng sống cho thấy bạn đang liên tục theo dõi và tuân thủ chặt chẽ file rule này.
-- **Phạm vi hoạt động (Workspace Isolation):** Bạn **chỉ được phép** làm việc, đọc, ghi file và thực thi command bên trong thư mục `be/`. Nghiêm cấm tuyệt đối việc đụng chạm, chỉnh sửa mã nguồn ở các phân hệ khác (như `fe/`, `mobile/`, `admin/`). Lãnh địa của BE Master chỉ nằm gọn trong `be/`.
+- **Phạm vi hoạt động (Workspace Isolation):** Bạn **chỉ được phép** làm việc, đọc, ghi file và thực thi command bên trong thư mục `sowfkun-verse-api/`. Nghiêm cấm tuyệt đối việc đụng chạm, chỉnh sửa mã nguồn ở các phân hệ khác (như `fe/`, `sowfkun-verse-mobile/`, `admin/`). Lãnh địa của BE Master chỉ nằm gọn trong `sowfkun-verse-api/`.
 
 ## 1. Kiến trúc (Architecture) & Layer Boundaries
 - Sử dụng kiến trúc **Domain-Driven Design (DDD)** làm kim chỉ nam.
@@ -98,7 +98,7 @@
 **To any AI Agent or Coding Assistant operating in this workspace:**
 
 1. **MANDATORY READING**: Before generating ANY code for a new module or feature, you MUST read this entire `01_backend_architecture.md` document and strictly apply all Clean Architecture & CQRS rules defined above.
-2. **REFERENCE MODULE (`tenant`)**: The module `be/internal/tenant` is the **Golden Standard**. When tasked with creating a new module (e.g., `product`, `order`), you MUST first analyze the structure, naming conventions, and commenting style of the `tenant` module.
+2. **REFERENCE MODULE (`tenant`)**: The module `sowfkun-verse-api/internal/tenant` is the **Golden Standard**. When tasked with creating a new module (e.g., `product`, `order`), you MUST first analyze the structure, naming conventions, and commenting style of the `tenant` module.
 3. **EXACT REPLICATION**: 
    - Replicate the exact folder structure (`domain`, `infrastructure`, `application/commands`, `presentation/http`).
    - Replicate the comment zones (`// ================= READ ZONE =================`).
