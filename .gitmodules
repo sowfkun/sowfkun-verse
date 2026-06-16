@@ -1,0 +1,6 @@
+[submodule "sowfkun-verse-api"]
+	path = sowfkun-verse-api
+	url = https://github.com/sowfkun/sowfkun-verse-api
+[submodule "sowfkun-verse-mobile"]
+	path = sowfkun-verse-mobile
+	url = https://github.com/sowfkun/sowfkun-verse-mobile
