@@ -11,7 +11,11 @@ Mọi kết nối API (ngoại trừ GET) đều phải được bảo vệ bằ
 2. **Tạo Session Key**: Frontend tự sinh ngẫu nhiên một mã khóa AES-256-GCM (Bí mật). Kế tiếp, Frontend dùng RSA Public Key của Server để bọc (mã hoá) AES Key này lại.
 3. **Handshake (Bắt tay)**: Frontend gửi chuỗi AES Key đã mã hóa lên `POST /api/v1/security/handshake`. Server sẽ lấy RSA Private Key của mình ra để giải mã, thu được AES Key gốc. Sau đó Server lưu AES Key vào Redis dưới dạng `session:[ID]` và trả về một `Session-ID` cho Frontend.
 4. **Bảo vệ Payload (Giao tiếp an toàn)**: Từ thời điểm này, mọi Request (Post/Put/Delete) Frontend gửi lên bắt buộc phải đính kèm `X-Session-ID` trong Header. Đồng thời, toàn bộ Request Body (chứa data JSON thật) phải bị mã hoá thành một chuỗi duy nhất bằng thuật toán AES. 
-5. **Middleware xử lý**: Ở phía Server, `PayloadCryptoMiddleware` sẽ chặn các Request này, đọc `X-Session-ID`, lấy AES Key từ Redis ra để giải mã Request. Sau khi các Handler xử lý xong nghiệp vụ, Middleware lại bọc Response bằng AES để trả về một cách an toàn cho Frontend. Không một ai (kể cả Hacker hay các công cụ bắt gói tin) có thể đọc được nội dung JSON thực sự.
+5. **Mã hoá cục bộ Response (Partial Encryption)**: Ở phía Server, `PayloadCryptoMiddleware` sẽ chặn các Request này để giải mã. Khi trả Response về cho Frontend, **TUYỆT ĐỐI KHÔNG** mã hoá toàn bộ khối lượng JSON. Middleware bắt buộc phải:
+   - Parse JSON nhận được từ Handler (`{ "data": ..., "error_code": "...", "error_detail": "..." }`).
+   - Bóc riêng trường `data` ra và mã hoá bằng AES.
+   - Giữ nguyên `error_code` và `error_detail` ở dạng Plain Text để Frontend có thể đọc và render UI báo lỗi lập tức (cực kỳ hữu ích với lỗi 500 hoặc Rate Limit).
+   - Đắp chuỗi mã hoá vào trường `data` và trả về đúng Unified Model chuẩn: `{ "data": "<chuỗi_AES_Base64>", "error_code": "...", "error_detail": "..." }`.
 
 ## 3. Quản lý RSA Keys an toàn
 - **Không dùng file `.pem` tĩnh**: Key RSA **TUYỆT ĐỐI KHÔNG ĐƯỢC** đọc từ file `.pem` vật lý lưu cứng ở ổ đĩa (để tránh rủi ro bảo mật lộ Key qua hệ thống Git).
