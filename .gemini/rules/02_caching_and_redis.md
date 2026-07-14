@@ -10,3 +10,7 @@ Tuyệt đối **NGHIÊM CẤM** hành vi nối chuỗi cứng (hardcode string 
 ## 2. Rate Limiting
 - **Cơ chế**: Sử dụng thuật toán **Token Bucket** được thực thi nguyên tử (Atomic) qua Lua Script trên Redis.
 - **Connection**: Dùng một instance Redis độc lập hoặc một Pool riêng cho Rate Limit (thông qua `redisManager.GetClient("rate_limit")`), không dùng chung lẫn lộn với General Cache nhằm tránh việc tắc nghẽn (bottleneck) làm nghẽn toàn bộ hệ thống.
+
+## 3. Kháng lỗi Cache (Cache Miss & Volatility)
+- **Redis KHÔNG phải là Source of Truth**: Dự án đang sử dụng gói Redis Free (có giới hạn dung lượng và tự động eviction/xóa key cũ). Vì vậy, **TUYỆT ĐỐI KHÔNG** được coi Redis là nơi lưu trữ dữ liệu vĩnh viễn (Persistent Storage).
+- **Cơ chế Fallback**: Bất kỳ logic nghiệp vụ nào đọc dữ liệu từ Redis đều **BẮT BUỘC** phải có cơ chế Fallback (tự động truy vấn xuống Database (MongoDB) nếu Cache bị miss hoặc Redis chết ngang). Sự cố mất dữ liệu trên Redis tuyệt đối không được phép làm sập (Crash) hoặc gián đoạn chức năng của App.
