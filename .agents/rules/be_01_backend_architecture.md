@@ -1,58 +1,56 @@
-# 01. Backend Architecture & Coding Standards (Golang)
+# 01. Backend Architecture (Golang)
 
-*Đây là tập hợp các quy tắc "Luật Thép" dành riêng cho Agent chuyên xử lý Backend.*
+Đây là các "Luật Thép" về kiến trúc.
+**GOLDEN STANDARD**: Module `internal/tenant/` là module chuẩn mực nhất. Mọi module khác BẮT BUỘC phải sao chép chính xác cấu trúc, cách đặt tên, và phân zone từ thư mục này.
 
-## 1. Kiến trúc (Architecture) & Layer Boundaries
-- Sử dụng kiến trúc **Domain-Driven Design (DDD)** làm kim chỉ nam.
-- **Cấu trúc Thư mục (Domain-First / Package by Feature):** Bắt buộc tổ chức source code theo từng module/Domain riêng biệt (Bounded Context). Ví dụ: `internal/user/`, `internal/order/`.
+---
 
-- **Domain Layer** (BẮT BUỘC tách thành các file riêng biệt: `entity.go` và `repository.go`): 
-  - **Entity (`entity.go`)**: Chứa định nghĩa các Entity. Mọi Entity **BẮT BUỘC** phải kế thừa `BaseEntity`.
-  - **Repository Interface (`repository.go`)**: **CHỈ** định nghĩa Interface cho Repository tại đây. Thường thêm tiền tố `I` (VD: `ITenantRepository`). Interface này đại diện cho các hành động (contract) mà Application có thể gọi. **TUYỆT ĐỐI KHÔNG** chứa logic thực thi DB (Mongo, SQL) ở layer này.
+## 1. Domain Layer (`domain/`)
+- **Rule 1.1 - Tách biệt Entity & Interface**: `entity.go` chứa struct kế thừa `BaseEntity`. `repository.go` chỉ định nghĩa Interface, TUYỆT ĐỐI không chứa logic DB.
+  - *Tham chiếu:* `internal/tenant/domain/entity.go`
 
-- **Application Layer**: 
-  - **Phân tách Command & Query (CQRS)**: BẮT BUỘC chia rạch ròi các Use Case thành 2 nhóm thư mục: `commands/` (chứa logic Create, Update, Delete làm thay đổi dữ liệu) và `queries/` (chứa logic Read, List lấy dữ liệu). Mỗi nghiệp vụ phải nằm trong 1 file riêng biệt (VD: `create_template.go`).
-  - **Tổ chức DTOs (Request/Response)**: Mỗi Use Case nên đi kèm với cặp Request/Response DTO riêng biệt.
-    - **Read (Query)**: Các DTO dùng cho việc lấy dữ liệu bắt buộc phải kế thừa/nhúng (embed) `appDto.CommonQuery`.
-    - **Write (Command)**: Các DTO dùng cho việc tạo/sửa/xoá bắt buộc phải kế thừa/nhúng (embed) `appDto.CommonCommand` (chứa các thông tin định danh bóc từ Token như `TenantID`, `ByID`, `IsOwner`...). Tầng Presentation sẽ đảm nhận việc giải mã Token và điền dữ liệu vào `CommonCommand` trước khi truyền xuống Application.
-    - **BẮT BUỘC** trả về DTO cho layer Presentation, **TUYỆT ĐỐI KHÔNG** return thẳng Entity của Domain ra ngoài để tránh rò rỉ dữ liệu nhạy cảm.
-  - **Nhiệm vụ chính**: 
-    - Nhận DTO đầu vào, Validate business rules (nếu có).
-    - Triển khai logic khởi tạo Entity (Tạo ID mới, gán `CreatedDate`, `CreatedBy`, set default values) đối với luồng Insert/Add.
-    - Gọi qua Interface của Repository (tầng Domain) để tương tác DB.
-  - **Độc lập Framework**: Tầng này **TUYỆT ĐỐI KHÔNG** được chứa bất kỳ object nào liên quan đến HTTP/Web framework (như `http.Request`, `http.ResponseWriter` hay `gin.Context`). Nó chỉ nhận tham số là Go struct (DTO) và `context.Context`.
-  - **Phân Zone trong Application**: Tương tự như Repository, trong các file Application/Use Case cũng **BẮT BUỘC** phải dùng comment để chia file thành các vùng chức năng: `// ================= READ ZONE =================`, `// ================= WRITE ZONE =================`, và `// ================= HELPERS ZONE =================`.
-  - **Cấm truy cập DB/Cache/ES trực tiếp**: Tại tầng này, **TUYỆT ĐỐI KHÔNG** được tự ý khởi tạo kết nối hay viết code gọi trực tiếp xuống Database, Cache (Redis), hay ElasticSearch. Mọi luồng đọc/ghi dữ liệu **BẮT BUỘC** phải thông qua Interface của Repository.
-  - **Quy tắc đặt tên hàm**: Tên hàm Use Case phải rõ ý nghĩa và phản ánh đúng nghiệp vụ thực hiện (Ubiquitous Language). Dù thực chất là thao tác CRUD, nhưng thay vì đặt tên chung chung như `Update`, hãy đặt tên mô tả hành động cụ thể (Ví dụ: `ChangeTenantTier`, `DeactivateTenant`).
-  - **Khởi tạo Common Data (Audit Fields) bằng Utils**: Khi thực hiện luồng `CREATE` hoặc `UPDATE`, **BẮT BUỘC** phải sử dụng một hàm tiện ích dùng chung (Ví dụ: `utils.SetCommonEntityData(entity, command)`) để tự động gán các trường cơ sở của `BaseEntity` (như `CreatedBy`, `CreatedDate`, `LastUpdatedBy`, `LastUpdatedDate`, `ExpiredRef`). **TUYỆT ĐỐI KHÔNG** tự gán tay thủ công từng trường này rải rác ở các Use Case để tránh sai sót và trùng lặp code.
-  - **Logic Xoá (Delete) Phức Tạp**: tuỳ thuộc vào độ phức tạp, có thể xoá trực tiếp hoặc query để lấy danh sách các ID trước (để lấy được id định danh thực hiện onchange), sau đó mới truyền trực tiếp danh sách ID này xuống hàm Delete của Repository.
-  
-- **Infrastructure Layer**: 
-  - **Repository Implementation**: Đây là nơi chứa các file code thực thi cụ thể cho Repository (Ví dụ: `MongoTenantRepository`). **BẮT BUỘC** kế thừa `abstract_repository` (nơi đã định nghĩa sẵn các hàm tương tác DB). 
-  - **Nhiệm vụ của Repository**: Chỉ làm nhiệm vụ build query cụ thể theo nghiệp vụ và gọi xuống `abstract_repository`.
-  - **Encapsulation (Đóng gói)**: **TUYỆT ĐỐI KHÔNG** được public các hàm nguyên thuỷ của `abstract_repository` ra cho các layer khác gọi trực tiếp. Repository phải cung cấp các hàm đã được build sẵn thông qua Interface đã định nghĩa ở Domain Layer.
-  - **Phân Zone trong Repository**: Trong file source code của Repository, **BẮT BUỘC** phải dùng comment nổi bật để chia file thành các zone chức năng rạch ròi bao gồm: `// ================= READ ZONE =================`, `// ================= WRITE ZONE =================`, và `// ================= HELPERS ZONE =================`. Khi thêm hàm mới, phải đặt đúng vào zone chức năng tương ứng.
-  - **Quy tắc Build Query**: **BẮT BUỘC** phải có một hàm `buildQuery` dùng chung (thường đặt ở Helpers Zone). Hàm này phải gọi `BuildCommonQuery` (để xử lý các điều kiện chung như `tenant_id`, `is_deleted`...) trước, sau đó mới merge với các điều kiện query riêng của domain. Mọi hàm `READ` hoặc `UPDATE` bằng query trong Repository đều **BẮT BUỘC** phải thông qua hàm `buildQuery` này để tạo query DB, tuyệt đối không tự tạo object query rời rạc.
-  - **Quy tắc Data Projection (Tối ưu truy vấn)**: Tất cả các hàm lấy dữ liệu (`READ`, `GET`) trong Repository **BẮT BUỘC** phải hỗ trợ tham số cho phép Application truyền vào danh sách các field cần lấy (Projection). Tuyệt đối cấm hành vi luôn luôn lấy toàn bộ Document (`SELECT *`) từ DB lên bộ nhớ nếu tầng trên chỉ cần sử dụng 1-2 trường cụ thể. Việc sử dụng Projection là bắt buộc để tối ưu hiệu năng.
-  - **Quy tắc Master Update**: **BẮT BUỘC** phải có một hàm **Master Update** (ví dụ: `update(...)`) dùng chung trong Repository. Các hàm update cụ thể (theo từng use-case) sẽ nhận vào một command/DTO, tiến hành build mảng data (chỉ chứa các field thực sự thay đổi), và sau đó gọi đến hàm Master Update này. Master Update sẽ chịu trách nhiệm gọi phương thức `onChange()` (dùng để trigger event, xoá cache, sync ES...). **TUYỆT ĐỐI KHÔNG** được bỏ qua Master Update để gọi trực tiếp DB, nhằm đảm bảo mọi luồng update đều kích hoạt cơ chế `onChange()`.
-  - **Quy tắc hàm Add/Insert**: Hàm `Add` trong Repository **CHỈ** làm duy nhất nhiệm vụ: nhận vào một Entity hoàn chỉnh (đã được tạo), insert xuống Database và sau đó gọi hàm `onChange()`. **TUYỆT ĐỐI KHÔNG** được thực hiện logic khởi tạo (build) Entity bên trong hàm này. Toàn bộ logic khởi tạo Entity (gán ID, set default values, gán ngày tạo...) phải được thực hiện ở **Application Layer** trước khi đẩy xuống Repository.
-  - **Quy tắc Master Delete**: Tương tự như Update, **BẮT BUỘC** chỉ viết một hàm **Master Delete** (xóa 1 ID hoặc xóa nhiều theo danh sách ID) trong Repository. Trách nhiệm của hàm này chỉ đơn thuần là gọi lệnh xoá ở DB và kích hoạt `onChange()` cho danh sách ID đó. Mọi danh sách ID cần xoá đều phải được Application Layer chuẩn bị và truyền xuống.
+## 2. Application Layer (`application/`)
+- **Rule 2.1 - Tách bạch CQRS**: Các UseCase phải chia vào 2 thư mục `commands/` (Write) và `queries/` (Read). Mỗi nghiệp vụ 1 file riêng. Tên hàm UseCase phải thể hiện rõ nghiệp vụ (vd: `ChangeTenantTier` thay vì `Update`).
+- **Rule 2.2 - Phân Zone Rõ Ràng**: BẮT BUỘC chia mỗi file thành 3 zone bằng comment.
+  - *Ví dụ:*
+    ```go
+    // ================= MODEL ZONE =================
+    type CreateXCommand struct { ... } // DTO
+    // ================= TYPE ZONE =================
+    type ICreateXUseCase interface { ... }
+    type createXUseCase struct { ... }
+    // ================= EXECUTION ZONE =================
+    func NewCreateXUseCase(...) ICreateXUseCase { ... }
+    func (uc *createXUseCase) Execute(...) error { ... }
+    ```
+- **Rule 2.3 - DTO và Trả về**: 
+  - Request DTO bắt buộc nhúng `appDto.CommonCommand` hoặc `appDto.CommonQuery`.
+  - TUYỆT ĐỐI KHÔNG trả về thẳng Entity ra Controller, phải dùng Response DTO.
+- **Rule 2.4 - Audit Fields**: Dùng `utils.SetCommonEntityData(entity, command)` để set tự động thông tin Audit khi Create/Update.
+- **Rule 2.5 - Cấm lạm quyền**: TUYỆT ĐỐI KHÔNG gọi thẳng DB, Cache, ES ở layer này. Phải đi qua Interface của Repo. Xoá (Delete) thì gom list ID truyền xuống Repo.
 
-- **Presentation Layer**: 
-  - **Trách nhiệm duy nhất**: Tầng này là cửa ngõ giao tiếp (HTTP/gRPC) với client. Trách nhiệm của nó CẦN ĐƯỢC GIỚI HẠN ở việc: Nhận Request -> Validate data format (JSON/Form) -> Bóc tách JWT -> Gọi Application Layer -> Trả về HTTP Response. **TUYỆT ĐỐI KHÔNG** được phép chứa bất kỳ logic nghiệp vụ (business rules) nào tại đây.
-  - **Bóc tách Token & DTOs**: Đây là nơi duy nhất được phép tương tác trực tiếp với JWT/Token. Đối với các API thay đổi dữ liệu (Write), Handler phải giải mã Token, trích xuất `TenantID`, `ByID`, `IsOwner`... và **BẮT BUỘC** phải tự động điền vào struct `CommonCommand` trước khi truyền xuống tầng Application. Tương tự với `CommonQuery` cho luồng Read.
-  - **Cách ly Framework**: Các object đặc thù của Web Framework (như `*http.Request`, `http.ResponseWriter`, `gin.Context`, `fiber.Ctx`) **BẮT BUỘC** chỉ được tồn tại ở tầng này. Tuyệt đối cấm truyền chúng xuống Application Layer.
-  - **Chuẩn hoá Response**: Mọi kết quả trả về cho Client (bao gồm cả lỗi từ Handler và Middleware) **BẮT BUỘC** phải tuân theo một Unified Model chuẩn duy nhất của toàn hệ thống: `{ "data": ..., "error_code": ..., "error_detail": ... }`. Việc dịch đa ngôn ngữ cho `error_detail` phải được xử lý ở Backend, Frontend chỉ việc hiển thị.
-  - **Phân chia Route & Handler**: Không viết logic xử lý request cùng một chỗ với code đăng ký API URL. Cần tách bạch rõ ràng giữa file Route (định nghĩa endpoint) và file Handler (chứa logic HTTP). **BẮT BUỘC**: 
-    1. Khi khai báo Route path, không được hardcode toàn bộ chuỗi URL. Thay vào đó, **BẮT BUỘC** phải định nghĩa một hàm `func getRoutePrefix() string` trong file `route.go` để trả về prefix chung của module (Ví dụ: `return "/api/v1/tenant"`), sau đó dùng biến `prefix := getRoutePrefix()` nối chuỗi với từng endpoint.
-    2. **Tuyệt đối không dùng Dynamic Path Parameter** (như `/:id`, `/:userId`) trong việc định nghĩa URL nhằm mục đích thân thiện với các hệ thống phân tích metrics và Rate Limit ở tầng API Gateway/WAF. Để truyền ID hoặc tham số động, bắt buộc phải dùng **Query Parameter** (Ví dụ: `/detail?id=123`) hoặc truyền qua **Request Body**.
+## 3. Infrastructure Layer (`infrastructure/`)
+- **Rule 3.1 - Naming Convention**: Tên file BẮT BUỘC là tên Database engine (Ví dụ: `mongodb_repository.go`, `redis_repository.go`).
+- **Rule 3.2 - Phân Zone Repository**: File repository BẮT BUỘC chia 3 zone.
+  - *Ví dụ:*
+    ```go
+    // ================= READ ZONE =================
+    // ================= WRITE ZONE =================
+    // ================= HELPERS ZONE =================
+    ```
+- **Rule 3.3 - Đóng gói**: Kế thừa `abstract_repository` nhưng TUYỆT ĐỐI KHÔNG public các hàm nguyên thuỷ ra ngoài.
+- **Rule 3.4 - Build Query & Projection**: 
+  - Hàm Read/Update phải dùng hàm `buildQuery` chung (gọi `BuildCommonQuery` để xử lý `tenant_id`, `is_deleted`...).
+  - Mọi hàm GET/READ bắt buộc phải hỗ trợ Projection (chỉ lấy field cần thiết, cấm `SELECT *`).
+- **Rule 3.5 - Master Function (Add/Update/Delete)**: 
+  - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
+  - `Update/Delete`: Hàm nghiệp vụ lẻ phải gom data rồi gọi về hàm **Master Update** / **Master Delete** để thực thi DB và kích hoạt `onChange()`.
 
-- **Dependency Injection & Bootstrapping**:
-  - **Shared Infrastructure Setup (Khởi tạo Hạ tầng dùng chung)**: Các thành phần hạ tầng dùng chung (như MongoDB, Redis, Kafka, SMTP/Email Sender) **BẮT BUỘC** phải được khởi tạo đúng 1 lần duy nhất ở cấp độ Root (tách ra các file `setup_xxx.go` trong thư mục `cmd/api/`). Ví dụ: `setup_db.go`, `setup_mail.go`. Tuyệt đối không khởi tạo kết nối hoặc đọc cấu hình môi trường (`os.Getenv`) của các Shared Infra này bên trong các module hoặc bên trong hàm `RegisterRoutes` / `startGlobalConsumers`.
-  - **Module Encapsulation (Đóng gói khởi tạo)**: Hàm `main()` **TUYỆT ĐỐI KHÔNG** được chứa logic khởi tạo lắt nhắt của từng Repo, UseCase, Handler. Trách nhiệm khởi tạo (Dependency Injection) phải được **đẩy vào bên trong từng Module** thông qua một hàm `Register[Domain]Routes(...)` duy nhất ở tầng `presentation/http/route.go` (Ví dụ: `RegisterTenantRoutes(mux, db)`). Hàm `main()` chỉ làm nhiệm vụ lấy các Shared Infra (như `db`, `emailSender`) truyền vào các hàm Register của các module này.
-  - **Specific Injection**: Khi một UseCase cần tương tác với nhiều Repositories khác nhau, phải sử dụng phương pháp **Tiêm trực tiếp (Specific Injection)** thông qua tham số của constructor (Ví dụ: `NewUseCase(tenantRepo, userRepo)`). Khuyến cáo một UseCase không nên thao tác với quá 3 Repositories để đảm bảo nguyên lý Single Responsibility.
+## 4. Presentation Layer (`presentation/`)
+- **Rule 4.1 - Controller "Ngu ngốc"**: Tầng này CHỈ được làm: Nhận HTTP Request -> Parse JWT gán vào DTO -> Gọi Application Layer -> Trả về HTTP Response. KHÔNG chứa business logic.
+- **Rule 4.2 - Chuẩn hoá Response**: Trả về đúng format `{ "data": ..., "error_code": ..., "error_detail": ... }`.
+- **Rule 4.3 - Route & URL Prefix**: BẮT BUỘC dùng hàm `getRoutePrefix() string`. Tuyệt đối không dùng Dynamic Path Parameter (`/:id`), phải dùng Query Parameter.
 
-## 2. Infrastructure Connections (Database, Cache, MQ)
-- **Tính Abstract & Đa kết nối (Multi-server)**: Tất cả kết nối hạ tầng phải được trừu tượng hóa (Abstracted) thông qua Interface hoặc Connection Factory. Hệ thống phải hỗ trợ khả năng khởi tạo và duy trì kết nối tới nhiều server/cụm (cluster) khác nhau cùng lúc (ví dụ: kết nối nhiều cụm Kafka, Master-Slave DB, nhiều cụm Redis). **Tuyệt đối không dùng biến Singleton hardcode 1 connection duy nhất** áp đặt cho toàn hệ thống.
-- **MongoDB**: Đảm bảo khai báo index, tối ưu truy vấn. Hỗ trợ pool kết nối đa dạng.
-- **Redis**: Quản lý TTL chặt chẽ, tối ưu kích thước dữ liệu.
+## 5. Dependency Injection & Infrastructure (Root Level)
+- **Rule 5.1 - Shared Infra Khởi tạo 1 lần**: Tại `cmd/api/setup_xxx.go`. Hỗ trợ kết nối Multi-server (nhiều DB, Redis cluster), cấm hardcode 1 connection Singleton.
+- **Rule 5.2 - Module Encapsulation**: Hạ tầng được truyền từ `main.go` vào qua hàm `RegisterXRoutes(mux, db)` của từng module. Khởi tạo Repo, UseCase ở trong đó thông qua Specific Injection (truyền interface qua Constructor).
