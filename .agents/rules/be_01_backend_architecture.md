@@ -2,8 +2,6 @@
 
 *Đây là tập hợp các quy tắc "Luật Thép" dành riêng cho Agent chuyên xử lý Backend.*
 
-
-
 ## 1. Kiến trúc (Architecture) & Layer Boundaries
 - Sử dụng kiến trúc **Domain-Driven Design (DDD)** làm kim chỉ nam.
 - **Cấu trúc Thư mục (Domain-First / Package by Feature):** Bắt buộc tổ chức source code theo từng module/Domain riêng biệt (Bounded Context). Ví dụ: `internal/user/`, `internal/order/`.
@@ -46,60 +44,15 @@
   - **Cách ly Framework**: Các object đặc thù của Web Framework (như `*http.Request`, `http.ResponseWriter`, `gin.Context`, `fiber.Ctx`) **BẮT BUỘC** chỉ được tồn tại ở tầng này. Tuyệt đối cấm truyền chúng xuống Application Layer.
   - **Chuẩn hoá Response**: Mọi kết quả trả về cho Client (bao gồm cả lỗi từ Handler và Middleware) **BẮT BUỘC** phải tuân theo một Unified Model chuẩn duy nhất của toàn hệ thống: `{ "data": ..., "error_code": ..., "error_detail": ... }`. Việc dịch đa ngôn ngữ cho `error_detail` phải được xử lý ở Backend, Frontend chỉ việc hiển thị.
   - **Phân chia Route & Handler**: Không viết logic xử lý request cùng một chỗ với code đăng ký API URL. Cần tách bạch rõ ràng giữa file Route (định nghĩa endpoint) và file Handler (chứa logic HTTP). **BẮT BUỘC**: 
-    1. Khi khai báo Route path, không được hardcode toàn bộ chuỗi URL. Thay vào đó, phải có một cơ chế lấy prefix bao gồm cả tên domain (Ví dụ: gọi hàm `getRoutePrefix("tenant")` để trả về `/api/v1/tenant`).
+    1. Khi khai báo Route path, không được hardcode toàn bộ chuỗi URL. Thay vào đó, **BẮT BUỘC** phải định nghĩa một hàm `func getRoutePrefix() string` trong file `route.go` để trả về prefix chung của module (Ví dụ: `return "/api/v1/tenant"`), sau đó dùng biến `prefix := getRoutePrefix()` nối chuỗi với từng endpoint.
     2. **Tuyệt đối không dùng Dynamic Path Parameter** (như `/:id`, `/:userId`) trong việc định nghĩa URL nhằm mục đích thân thiện với các hệ thống phân tích metrics và Rate Limit ở tầng API Gateway/WAF. Để truyền ID hoặc tham số động, bắt buộc phải dùng **Query Parameter** (Ví dụ: `/detail?id=123`) hoặc truyền qua **Request Body**.
 
 - **Dependency Injection & Bootstrapping**:
-  - **Module Encapsulation (Đóng gói khởi tạo)**: Hàm `main()` **TUYỆT ĐỐI KHÔNG** được chứa logic khởi tạo lắt nhắt của từng Repo, UseCase, Handler. Trách nhiệm khởi tạo (Dependency Injection) phải được **đẩy vào bên trong từng Module** (ví dụ thông qua hàm `RegisterTenantRoutes(mux, db)`). Hàm `main()` chỉ làm nhiệm vụ kết nối Database và gọi các hàm Register của các module.
+  - **Shared Infrastructure Setup (Khởi tạo Hạ tầng dùng chung)**: Các thành phần hạ tầng dùng chung (như MongoDB, Redis, Kafka, SMTP/Email Sender) **BẮT BUỘC** phải được khởi tạo đúng 1 lần duy nhất ở cấp độ Root (tách ra các file `setup_xxx.go` trong thư mục `cmd/api/`). Ví dụ: `setup_db.go`, `setup_mail.go`. Tuyệt đối không khởi tạo kết nối hoặc đọc cấu hình môi trường (`os.Getenv`) của các Shared Infra này bên trong các module hoặc bên trong hàm `RegisterRoutes` / `startGlobalConsumers`.
+  - **Module Encapsulation (Đóng gói khởi tạo)**: Hàm `main()` **TUYỆT ĐỐI KHÔNG** được chứa logic khởi tạo lắt nhắt của từng Repo, UseCase, Handler. Trách nhiệm khởi tạo (Dependency Injection) phải được **đẩy vào bên trong từng Module** thông qua một hàm `Register[Domain]Routes(...)` duy nhất ở tầng `presentation/http/route.go` (Ví dụ: `RegisterTenantRoutes(mux, db)`). Hàm `main()` chỉ làm nhiệm vụ lấy các Shared Infra (như `db`, `emailSender`) truyền vào các hàm Register của các module này.
   - **Specific Injection**: Khi một UseCase cần tương tác với nhiều Repositories khác nhau, phải sử dụng phương pháp **Tiêm trực tiếp (Specific Injection)** thông qua tham số của constructor (Ví dụ: `NewUseCase(tenantRepo, userRepo)`). Khuyến cáo một UseCase không nên thao tác với quá 3 Repositories để đảm bảo nguyên lý Single Responsibility.
 
-## 2. Tiêu chuẩn Code & Đặt tên (Coding Standards & Naming Conventions)
-- **Idiomatic Go**: Tuân thủ chuẩn định dạng `gofmt`. Sử dụng `camelCase` cho biến/hàm nội bộ, `PascalCase` cho public.
-- **Ubiquitous Language**: Tên biến, tên hàm, tên struct phải phản ánh đúng thuật ngữ nghiệp vụ (Ubiquitous Language) của DDD. Tên hàm nên bắt đầu bằng động từ hành động (VD: `PlaceOrder`, `CancelSubscription`).
-- **Error Handling**: Xử lý lỗi tường minh, gói lỗi (wrap errors). Tuyệt đối không lạm dụng `panic()`.
-- **Concurrency**: Sử dụng goroutines/channels an toàn, có cơ chế timeout/cancellation qua `context.Context`.
-
-## 3. Quy chuẩn Kafka Topics & Events
-- **Tên Topic**: Đặt theo định dạng `[domain].[entity].[event]` (toàn bộ chữ thường, cách nhau bởi dấu chấm). VD: `orders.payment.succeeded`.
-- **Payload Schema Chung (Common Event Model)**: Mọi message push lên queue bắt buộc phải bọc bởi một Model chuẩn, bao gồm:
-  - `source`: Định danh nguồn phát ra message (service/module nào push message này).
-  - `type`: Loại sự kiện (Ví dụ: `UserCreated`, `ProductPriceUpdated`), dùng để consumer nhận diện.
-  - `data`: Nội dung payload thực sự (thường dạng JSON). Tại phía Consumer, `data` sẽ được parse/Unmarshal thành Struct/Model tương ứng dựa trên `type` của message.
-
-## 4. Quản lý Constants, Cấu hình & Utils
-- **Cấu hình & Biến môi trường (Environment Variables)**: Tuyệt đối **không được hardcode** các thông tin kết nối (Connection URLs, Port), thông tin nhạy cảm (API Keys, Secrets, Passwords) trong source code. Bắt buộc phải inject thông qua biến môi trường (`.env`, env vars) hoặc các trình quản lý config (VD: `Viper`).
-- **Constants (Hằng số tĩnh)**:
-  - Domain-specific (ví dụ: Enum trạng thái đơn hàng): Đặt ngay bên trong package của lớp `Domain` tương ứng.
-  - System-wide (ví dụ: HTTP Status Codes đặc chế, mã lỗi chung): Đặt tại `pkg/constant/`.
-- **Utils (Hàm tiện ích)**:
-  - Logic không chứa nghiệp vụ: Gom vào thư mục `pkg/utils/...`.
-  - Logic liên quan tới nghiệp vụ nội bộ: Chuyển thành **Domain Service** hoặc hàm trong Entity. Không đặt ở Utils.
-
-## 5. Infrastructure Connections (Database, Cache, MQ)
+## 2. Infrastructure Connections (Database, Cache, MQ)
 - **Tính Abstract & Đa kết nối (Multi-server)**: Tất cả kết nối hạ tầng phải được trừu tượng hóa (Abstracted) thông qua Interface hoặc Connection Factory. Hệ thống phải hỗ trợ khả năng khởi tạo và duy trì kết nối tới nhiều server/cụm (cluster) khác nhau cùng lúc (ví dụ: kết nối nhiều cụm Kafka, Master-Slave DB, nhiều cụm Redis). **Tuyệt đối không dùng biến Singleton hardcode 1 connection duy nhất** áp đặt cho toàn hệ thống.
 - **MongoDB**: Đảm bảo khai báo index, tối ưu truy vấn. Hỗ trợ pool kết nối đa dạng.
 - **Redis**: Quản lý TTL chặt chẽ, tối ưu kích thước dữ liệu.
-
-## 6. Testing
-- Viết Unit Test cho các function cốt lõi và UseCase. Tạo Mock cho các Interface của Infrastructure, MQ, External APIs.
-
-## 7. Phân chia Use Case & Tách Hàm (Application Layer)
-- **Thiết kế Use Case (Application)**: Không dồn tất cả nghiệp vụ phức tạp vào một Application/UseCase khổng lồ.
-  - Ở giai đoạn đầu, nếu chỉ là các thao tác CRUD cơ bản, hệ thống cho phép gom chung vào một Application Service cho gọn.
-  - Tuy nhiên, đối với các nghiệp vụ phức tạp hoặc có ngữ cảnh khác nhau (Ví dụ: Việc tạo User có thể đến từ `Register`, `AdminCreate`, hoặc `PublicAPI`), **phải tách riêng** thành các Application/UseCase riêng biệt thay vì dồn chung và dùng `if/else` để kiểm tra role/ngữ cảnh.
-- **Quy tắc tách hàm (Function Splitting)**: Không lạm dụng việc tách hàm (over-engineering). **Hạn chế việc tách hàm** đối với những đoạn code chỉ có vài dòng và chỉ được sử dụng duy nhất ở một nơi. Hãy giữ code liền mạch (inline) để tăng tính dễ đọc (readability) và dễ theo dõi luồng thực thi từ trên xuống dưới.
-
----
-
-# [CRITICAL SYSTEM DIRECTIVE FOR AI AGENTS]
-**To any AI Agent or Coding Assistant operating in this workspace:**
-
-1. **MANDATORY READING**: Before generating ANY code for a new module or feature, you MUST read this entire `01_backend_architecture.md` document and strictly apply all Clean Architecture & CQRS rules defined above.
-2. **REFERENCE MODULE (`tenant`)**: The module `sowfkun-verse-api/internal/tenant` is the **Golden Standard**. When tasked with creating a new module (e.g., `product`, `order`), you MUST first analyze the structure, naming conventions, and commenting style of the `tenant` module.
-3. **EXACT REPLICATION**: 
-   - Replicate the exact folder structure (`domain`, `infrastructure`, `application/commands`, `presentation/http`).
-   - Replicate the comment zones (`// ================= READ ZONE =================`).
-   - Replicate the DTO embedding (`appDto.CommonCommand`, `appDto.CommonQuery`).
-   - Replicate the `onChange` event publishing rule in `Master Update/Delete`.
-   - Never use dynamic path parameters (`/:id`).
-4. Do NOT introduce new architectural patterns or deviate from this guide without explicit USER approval.
