@@ -8,12 +8,12 @@
 - Sử dụng kiến trúc **Domain-Driven Design (DDD)** làm kim chỉ nam.
 - **Cấu trúc Thư mục (Domain-First / Package by Feature):** Bắt buộc tổ chức source code theo từng module/Domain riêng biệt (Bounded Context). Ví dụ: `internal/user/`, `internal/order/`.
 
-- **Domain Layer**: 
-  - **Entity**: Chứa định nghĩa các Entity. Mọi Entity **BẮT BUỘC** phải kế thừa `BaseEntity`.
-  - **Repository Interface**: **CHỈ** định nghĩa Interface cho Repository tại đây. Interface này đại diện cho các hành động (contract) mà Application có thể gọi. **TUYỆT ĐỐI KHÔNG** chứa logic thực thi DB (Mongo, SQL) ở layer này.
+- **Domain Layer** (BẮT BUỘC tách thành các file riêng biệt: `entity.go` và `repository.go`): 
+  - **Entity (`entity.go`)**: Chứa định nghĩa các Entity. Mọi Entity **BẮT BUỘC** phải kế thừa `BaseEntity`.
+  - **Repository Interface (`repository.go`)**: **CHỈ** định nghĩa Interface cho Repository tại đây. Thường thêm tiền tố `I` (VD: `ITenantRepository`). Interface này đại diện cho các hành động (contract) mà Application có thể gọi. **TUYỆT ĐỐI KHÔNG** chứa logic thực thi DB (Mongo, SQL) ở layer này.
 
 - **Application Layer**: 
-  - **Phân tách Command & Query (CQRS)**: Nên chia rạch ròi các Use Case thành 2 nhóm thư mục: `commands/` (chứa logic Create, Update, Delete làm thay đổi dữ liệu) và `queries/` (chứa logic Read, List lấy dữ liệu).
+  - **Phân tách Command & Query (CQRS)**: BẮT BUỘC chia rạch ròi các Use Case thành 2 nhóm thư mục: `commands/` (chứa logic Create, Update, Delete làm thay đổi dữ liệu) và `queries/` (chứa logic Read, List lấy dữ liệu). Mỗi nghiệp vụ phải nằm trong 1 file riêng biệt (VD: `create_template.go`).
   - **Tổ chức DTOs (Request/Response)**: Mỗi Use Case nên đi kèm với cặp Request/Response DTO riêng biệt.
     - **Read (Query)**: Các DTO dùng cho việc lấy dữ liệu bắt buộc phải kế thừa/nhúng (embed) `appDto.CommonQuery`.
     - **Write (Command)**: Các DTO dùng cho việc tạo/sửa/xoá bắt buộc phải kế thừa/nhúng (embed) `appDto.CommonCommand` (chứa các thông tin định danh bóc từ Token như `TenantID`, `ByID`, `IsOwner`...). Tầng Presentation sẽ đảm nhận việc giải mã Token và điền dữ liệu vào `CommonCommand` trước khi truyền xuống Application.

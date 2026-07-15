@@ -36,3 +36,24 @@ type CommonEvent struct {
 - **Ordered Consumer**: Chạy tuần tự từng dòng (1 vòng lặp for duy nhất).
 - **Parallel Consumer**: Chạy qua Worker Pool. `ReadMessage` liên tục và quăng vào `Channel` cho các Worker tranh nhau cày.
 - **Batch Consumer**: Sử dụng thuật toán Application-Level Batching (Time & Count Window). Chỉ xả mẻ dữ liệu xuống Handler khi gom đủ số lượng (VD: 50 tin) HOẶC quá thời gian chờ (VD: 2 giây) để tránh giam dữ liệu khi hệ thống ít request.
+
+## 6. Quy trình từng bước tích hợp Kafka (Kafka Flow Initialization)
+Để đảm bảo tính nhất quán (Consistency) trong việc đặt tên và khởi tạo luồng Kafka mới cho bất kỳ Domain nào, Agent BẮT BUỘC phải tuân theo các bước sau:
+
+**Bước 1: Khai báo Event Type Constant**
+- Mọi tên Event (Ví dụ: "TENANT_ORDERED_EVENT", "EMAIL_SEND_REQUESTED") **BẮT BUỘC** phải được định nghĩa thành biến hằng số trong file `pkg/constant/[domain_name].go`. 
+- Cú pháp tên biến (Golang Variable): Bắt đầu bằng chữ `Event`, tiếp theo là Tên Domain, rồi đến hành động. 
+- Cú pháp giá trị String (Kafka Event Type): Bắt buộc dùng `UPPER_SNAKE_CASE` (Toàn bộ viết hoa, cách nhau bởi dấu gạch dưới).
+- Ví dụ: `constant.EventTenantOrdered = "TENANT_ORDERED_EVENT"`, `constant.EventEmailSendRequested = "EMAIL_SEND_REQUESTED"`.
+
+**Bước 2: Tạo MQ Handler cho Domain**
+- Tại thư mục `internal/[domain_name]/presentation/mq/`, tạo file `handler.go`.
+- Struct xử lý Event bắt buộc phải được đặt tên theo cú pháp `[DomainName]MQHandler` (Ví dụ: `TenantMQHandler`, `EmailMQHandler`). Tuyệt đối không dùng tên tuỳ tiện như `EmailKafkaHandler`.
+- Hàm Constructor phải là `New[DomainName]MQHandler()`.
+
+**Bước 3: Đăng ký Handler với Global Dispatcher**
+- Mở file `cmd/api/setup_kafka.go`.
+- Trong hàm `startGlobalConsumers`, tiến hành khởi tạo UseCase (nếu cần) và gọi Constructor của MQ Handler.
+- Đăng ký hàm xử lý bằng Dispatcher sử dụng hằng số đã tạo ở Bước 1. 
+- Ví dụ: `dispatcher.Register(constant.EventEmailSendRequested, emailHandler.HandleEmailRequested)`.
+- Tuyệt đối không hardcode chuỗi string trực tiếp vào hàm `Register()`.
