@@ -14,6 +14,7 @@
 
 ## 3. Quản lý Constants, Cấu hình & Utils
 - **Cấu hình & Biến môi trường (Environment Variables)**: Tuyệt đối **không được hardcode** các thông tin kết nối (Connection URLs, Port), thông tin nhạy cảm (API Keys, Secrets, Passwords) trong source code. Bắt buộc phải inject thông qua biến môi trường (`.env`, env vars) hoặc các trình quản lý config (VD: `Viper`).
+  - **Đồng bộ đặt tên (Naming Consistency):** Khi khai báo các biến môi trường cho cùng một hệ thống hạ tầng (Infrastructure) cụ thể, bắt buộc phải đồng bộ prefix/suffix theo mục đích sử dụng. Ví dụ: Nếu là Redis dùng cho "general", các biến phải được đặt tên đồng nhất như `REDIS_GENERAL_URL`. Tuyệt đối không đặt tên lộn xộn, thiếu tính liên kết.
 - **Constants (Hằng số tĩnh)**:
   - Domain-specific (ví dụ: Enum trạng thái đơn hàng): Đặt ngay bên trong package của lớp `Domain` tương ứng.
   - System-wide (ví dụ: HTTP Status Codes đặc chế, mã lỗi chung): Đặt tại `pkg/constant/`.
