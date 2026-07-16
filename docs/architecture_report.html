@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sowfkun Verse - Core Architecture</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-panel: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #60a5fa;
+            --accent: #10b981;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Glassmorphism */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 24px 0;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .sidebar h2 {
+            padding: 0 24px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-group {
+            margin-bottom: 24px;
+        }
+
+        .nav-group-title {
+            padding: 0 24px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .nav-item {
+            padding: 10px 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--primary-hover);
+        }
+
+        .nav-item.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-left-color: var(--primary);
+            color: var(--primary-hover);
+            font-weight: 500;
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .content::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.05), transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .section {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section h1 {
+            font-size: 2.2rem;
+            margin-bottom: 12px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .section p.subtitle {
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+
+        /* Info Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            backdrop-filter: blur(8px);
+        }
+
+        .info-card h3 {
+            margin-top: 0;
+            color: var(--primary-hover);
+            font-size: 1.1rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-card p, .info-card li {
+            color: #cbd5e1;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+        
+        .info-card ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .badge.rule {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        /* Mermaid Container Glassmorphism */
+        .mermaid-wrapper {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+            text-align: center;
+            overflow-x: auto;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>⚡ Core Architecture</h2>
+
+        <div class="nav-group">
+            <div class="nav-group-title">Infrastructure Setup</div>
+            <div class="nav-item active" data-target="infra-redis">1. Redis Clusters</div>
+            <div class="nav-item" data-target="infra-mongo">2. MongoDB Clusters</div>
+            <div class="nav-item" data-target="infra-os">3. OpenSearch Engine</div>
+            <div class="nav-item" data-target="infra-mq">4. Kafka & Asynq (MQ)</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">Core Flows</div>
+            <div class="nav-item" data-target="flow-handshake">5. Security Handshake (E2EE)</div>
+            <div class="nav-item" data-target="flow-api">6. API Request Lifecycle</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-group-title">Development Standards</div>
+            <div class="nav-item" data-target="dev-standards">7. Backend Architecture & Conventions</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+
+        <!-- 1. REDIS -->
+        <div id="infra-redis" class="section active">
+            <h1>Redis Clusters</h1>
+            <p class="subtitle">Hệ thống In-memory Cache đa cụm, chịu trách nhiệm tăng tốc độ truy xuất và giảm tải cho Database chính.</p>
+            
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>📍 Khai báo & Khởi tạo</h3>
+                    <p><span class="badge">Khai báo logic:</span> <code>pkg/cache/redis/manager.go</code></p>
+                    <p><span class="badge">Khởi tạo & Kết nối:</span> <code>cmd/api/setup_db.go</code> (thông qua hàm <code>InitDefaultManager</code>).</p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>🧩 Các cụm Redis (Clusters)</h3>
+                    <ul>
+                        <li><strong>General:</strong> Dùng để lưu trữ Cache dữ liệu nghiệp vụ và lưu AES Session Keys (phục vụ mã hóa E2EE). Các Key được quản lý tập trung qua file để tránh trùng lặp.</li>
+                        <li><strong>Rate Limit:</strong> Cụm chuyên biệt để lưu trữ bộ đếm chống DDoS, Spam. Đứng độc lập để nếu bị ngập lụt Request cũng không làm sập bộ nhớ Cache của hệ thống chính.</li>
+                        <li><strong>Asynq:</strong> Cụm chỉ lưu trữ cấu hình Queue cho Worker chạy ngầm (Cronjobs, Background tasks).</li>
+                    </ul>
+                </div>
+
+                <div class="info-card">
+                    <h3>⭐ Rule Tối Thượng (Golden Rule)</h3>
+                    <p><span class="badge rule">NOT SOURCE OF TRUTH</span> Redis chỉ đóng vai trò bộ đệm và tăng tốc. Nếu cụm Redis mất điện, sập, hoặc bị xóa trắng Key đột ngột, hệ thống <strong>bắt buộc</strong> phải tự động truy vấn lại từ Database gốc (MongoDB/OpenSearch) để nạp lại Cache, tuyệt đối không được phép làm sai lệch hoặc mất dữ liệu kinh doanh của hệ thống.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. MONGODB -->
+        <div id="infra-mongo" class="section">
+            <h1>MongoDB Clusters</h1>
+            <p class="subtitle">Cơ sở dữ liệu NoSQL trung tâm, lưu trữ toàn bộ dữ liệu nghiệp vụ của các Tenant và System.</p>
+            
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>📍 Khai báo & Khởi tạo</h3>
+                    <p><span class="badge">Khai báo logic:</span> <code>pkg/database/mongodb/manager.go</code></p>
+                    <p><span class="badge">Khởi tạo & Kết nối:</span> <code>cmd/api/setup_db.go</code></p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>🧩 Các cụm MongoDB</h3>
+                    <ul>
+                        <li><strong>General Cluster:</strong> Chứa các Collection liên quan đến dữ liệu chính của hệ thống như System, Tenant, Email Templates, Users...</li>
+                        <li><strong>Logging Cluster:</strong> Tách biệt hoàn toàn để chứa các dữ liệu Write-heavy (như Action Logs, Access Logs) nếu không muốn đẩy vào OpenSearch. Đảm bảo luồng ghi Log không làm nghẽn luồng đọc/ghi của nghiệp vụ chính.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. OPENSEARCH -->
+        <div id="infra-os" class="section">
+            <h1>OpenSearch Engine</h1>
+            <p class="subtitle">Hệ thống lưu trữ và tìm kiếm Full-text siêu tốc, sinh ra để giải quyết bài toán Logs/Audit Trail khối lượng khổng lồ.</p>
+            
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>📍 Khai báo & Khởi tạo</h3>
+                    <p><span class="badge">Khai báo logic:</span> <code>pkg/database/opensearch/manager.go</code> & <code>time_series.go</code></p>
+                    <p><span class="badge">Migration (Tạo Index/Policy):</span> <code>pkg/database/opensearch/migrations/init.go</code></p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>⭐ Rule Tối Thượng (Golden Rule)</h3>
+                    <p><span class="badge rule">TIME-SERIES ISM POLICY</span> Đối với dữ liệu dòng thời gian (Log, Metric), code Backend <strong>Tuyệt đối không được phép</strong> tự động xóa Data cũ bằng Cronjob. Hệ thống phải tạo <strong>Alias</strong> kèm theo <strong>ISM Policy (Index State Management)</strong>: OpenSearch sẽ tự động Rollover đẻ Index mới khi dung lượng đạt 1GB, và tự động xóa các Index quá 30 ngày tuổi. Backend chỉ việc Ghi (Write) vào Alias.</p>
+                    <p><span class="badge rule">STATIC ENTITIES</span> Đối với các dữ liệu Business (ít cập nhật), sử dụng Alias tĩnh, Backend chủ động gọi lệnh <code>Delete</code> thủ công khi cần thiết.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. KAFKA & ASYNQ -->
+        <div id="infra-mq" class="section">
+            <h1>Kafka & Asynq (Message Queue)</h1>
+            <p class="subtitle">Trái tim của hệ thống hướng sự kiện (Event-driven) và xử lý bất đồng bộ.</p>
+            
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>📍 Khai báo & Khởi tạo</h3>
+                    <p><span class="badge">Kafka Setup:</span> <code>cmd/api/setup_kafka.go</code></p>
+                    <p><span class="badge">Asynq Jobs:</span> <code>internal/system/application/jobs/</code></p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>🧩 Kafka (Event Streaming)</h3>
+                    <p>Đóng vai trò phân phối Message giữa các Service. Hỗ trợ 3 Mode Consume:</p>
+                    <ul>
+                        <li><strong>Ordered:</strong> Xử lý tuần tự nghiêm ngặt (đảm bảo thứ tự sự kiện).</li>
+                        <li><strong>Parallel:</strong> Xử lý song song bằng Goroutine để tăng tối đa Throughput.</li>
+                        <li><strong>Batch:</strong> Gom lô (Ví dụ: 1000 message) rồi mới insert 1 lần vào Database.</li>
+                    </ul>
+                </div>
+
+                <div class="info-card">
+                    <h3>🧩 Asynq (Cron Scheduler)</h3>
+                    <p>Sử dụng Redis làm Broker. <strong>Asynq chỉ làm nhiệm vụ đặt lịch (Scheduler)</strong>. Khi đến giờ kích hoạt, Asynq sẽ không trực tiếp xử lý nghiệp vụ nặng mà sẽ <strong>bắn sự kiện (Push Event) sang Kafka</strong>. Kafka mới là nơi hứng và phân phối Job cho các Consumer. Quy tắc này giúp tập trung luồng xử lý Data vào một xương sống duy nhất (Kafka) và dễ giám sát.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. SECURITY HANDSHAKE -->
+        <div id="flow-handshake" class="section">
+            <h1>Security Handshake (E2EE)</h1>
+            <p class="subtitle">Luồng bắt tay bảo mật thiết lập Mã hóa Đầu - Cuối (End-to-End Encryption).</p>
+            
+            <div class="mermaid-wrapper">
+                <div class="mermaid">
+                    sequenceDiagram
+                        participant Client
+                        participant API as Handshake API
+                        participant Redis as Redis (General)
+                        
+                        Client->>API: 1. GET /api/v1/security/public-key
+                        API-->>Client: Trả về RSA Public Key (Server)
+                        
+                        Note over Client,API: Client tự sinh 1 chuỗi AES Key ngẫu nhiên (Session Key)
+                        Client->>Client: Mã hóa AES Key đó bằng RSA Public Key
+                        
+                        Client->>API: 2. POST /api/v1/security/handshake <br/> { "encrypted_key": "..." }
+                        API->>API: Dùng RSA Private Key nội bộ giải mã lấy AES Key
+                        API->>Redis: Lưu AES Key vào Redis (TTL 12h) <br/> với Key: session_id
+                        API-->>Client: 200 OK + Trả về `session_id`
+                        
+                        Note over Client,API: Các Request nhạy cảm sau đó sẽ mã hóa Body bằng AES Key.
+                </div>
+            </div>
+
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>Mã hóa ra sao?</h3>
+                    <p>Luồng bảo mật này giải quyết lỗ hổng bị đánh cắp Payload ở giữa đường mạng (Man-in-the-middle). Vì AES mã hóa nhanh nên được dùng để mã hóa Data, còn RSA mã hóa chậm nên chỉ dùng để trao đổi khóa AES ban đầu.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. API REQUEST LIFECYCLE -->
+        <div id="flow-api" class="section">
+            <h1>API Request Lifecycle</h1>
+            <p class="subtitle">Vòng đời của 1 HTTP Request từ lúc lọt vào Gateway cho tới khi lưu xuống Database.</p>
+            
+            <div class="mermaid-wrapper">
+                <div class="mermaid">
+                    sequenceDiagram
+                        participant Client
+                        participant RateLimit as RateLimit Middleware
+                        participant Logger as Logger Middleware
+                        participant Crypto as Payload Crypto E2EE
+                        participant Handler as HTTP Handlers
+                        participant Layer as CQRS (App/Domain)
+                        
+                        Client->>RateLimit: Gửi HTTP Request
+                        
+                        alt Vượt ngưỡng Rate Limit
+                            RateLimit-->>Client: 429 Too Many Requests
+                        else Hợp lệ
+                            RateLimit->>Logger: Bắt đầu đo thời gian (Start Timer)
+                            Logger->>Crypto: Chuyển tiếp Request
+                            
+                            alt Chứa Header X-Session-ID
+                                Crypto->>Crypto: Kéo AES Key từ Redis. Giải mã Body.
+                            end
+                            
+                            Crypto->>Handler: Truyền Plaintext JSON
+                            Handler->>Layer: Parse thành Command/Query DTO
+                            Layer->>Layer: Xử lý Business Logic / Gọi DB
+                            Layer-->>Handler: Trả về Entity / Data
+                            Handler-->>Crypto: Trả về JSON Response
+                            
+                            alt Cần mã hóa Response
+                                Crypto->>Crypto: Mã hóa field 'data' thành Base64 AES
+                            end
+                            
+                            Crypto-->>Logger: Trả về Response
+                            Logger->>Logger: Tính Latency, Đọc HTTP Status Code
+                            Logger-->>Client: Gửi Response cho Client
+                            
+                            par Đẩy Async Log
+                                Logger->>OpenSearch: Gửi Audit Log (Status, IP, Latency) qua Goroutine/Kafka
+                            end
+                        end
+                </div>
+            </div>
+
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>Chi tiết Pipeline</h3>
+                    <ul>
+                        <li><strong>Rate Limit Middleware:</strong> Chặn ngay ngoài cổng nếu Spam. Giao tiếp với cụm Redis riêng.</li>
+                        <li><strong>Logger Middleware:</strong> Chặn hai đầu (Trình tự: Đo thời gian bắt đầu -> Gọi Next() -> Tính thời gian kết thúc). Không bao giờ block tiến trình chính, luôn đẩy Log đi bằng Asynchronous Goroutine.</li>
+                        <li><strong>Payload Crypto Middleware:</strong> Nằm sát Handler nghiệp vụ nhất, đảm nhận việc "dịch" các Data Base64 mã hóa trở lại thành JSON thô (Plaintext) để Handler chỉ việc parse bình thường mà không cần quan tâm đến bảo mật.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. DEVELOPMENT STANDARDS -->
+        <div id="dev-standards" class="section">
+            <h1>Backend Architecture & Conventions</h1>
+            <p class="subtitle">Tiêu chuẩn kiến trúc, trình bày mã nguồn và các "Luật Thép" bắt buộc tuân thủ trong Sowfkun Verse.</p>
+            
+            <div class="card-grid">
+                <div class="info-card">
+                    <h3>📍 Kiến trúc 4 Lớp (Clean Architecture)</h3>
+                    <p>Mỗi Module (Domain) bắt buộc phải tuân theo cấu trúc Golden Standard (tham khảo <code>internal/tenant</code>):</p>
+                    <ul>
+                        <li><strong>Domain Layer:</strong> Chứa Entities kế thừa <code>BaseEntity</code> và Interface Repository. TUYỆT ĐỐI KHÔNG chứa logic Database hay Framework.</li>
+                        <li><strong>Application Layer:</strong> Phân tách CQRS (<code>commands/</code> và <code>queries/</code>). DTO truyền vào bắt buộc kế thừa <code>CommonCommand/Query</code>. Tuyệt đối không gọi thẳng DB/Cache/ES ở tầng này mà phải qua Interface. Không over-engineering chia nhỏ hàm lặt vặt.</li>
+                        <li><strong>Infrastructure Layer:</strong> Đặt tên file theo Engine (vd: <code>mongodb_repository.go</code>). Thao tác Write phải gom về hàm Master để thực thi 1 lần. Mọi hàm Read bắt buộc dùng Projection (cấm <code>SELECT *</code>).</li>
+                        <li><strong>Presentation Layer:</strong> "Dumb" Controller - chỉ Parse Request, gọi UseCase và trả Standard Response. Không chứa Business Logic. Cấm dùng Dynamic Path (<code>/:id</code>) nếu thiết kế cho phép dùng Query Params.</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3>🧩 Quy tắc phân vùng (Zoning Comments)</h3>
+                    <p>Trong các file code lớn, bắt buộc phải dùng các dải comment chuẩn để tách biệt rõ ràng cấu trúc file:</p>
+                    <pre style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; color: #a78bfa; margin-top: 12px; border: 1px dashed rgba(255,255,255,0.2); font-family: monospace; font-size: 0.9rem; line-height: 1.5;">
+// ================= MODEL ZONE =================
+// Dành cho struct DTO (Command, Query, Response).
+
+// ================= TYPE ZONE =================
+// Khai báo Interface của UseCase/Handler và private struct.
+
+// ================= EXECUTION ZONE =================
+// Hàm Constructor và hàm thực thi logic chính (Execute).</pre>
+                </div>
+
+                <div class="info-card">
+                    <h3>⭐ Quy tắc Nhúng (Embedding) Siêu Dữ Liệu</h3>
+                    <p>Thay vì khởi tạo bằng tay lặp đi lặp lại <code>CreatedAt</code>, <code>TenantID</code>..., hệ thống yêu cầu sử dụng hàm tiện ích trung tâm:</p>
+                    <pre style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; color: #60a5fa; margin-top: 12px; border: 1px dashed rgba(255,255,255,0.2); font-family: monospace; font-size: 0.9rem;">
+utils.SetCommonEntityData(entity, cmd.CommonCommand)</pre>
+                </div>
+
+                <div class="info-card">
+                    <h3>🕒 Biến môi trường & Tiêu chuẩn Thời gian</h3>
+                    <ul>
+                        <li><strong>Naming Consistency:</strong> Biến môi trường cùng cụm hạ tầng phải chung format prefix (VD: <code>REDIS_GENERAL_URL</code>). Cấm hardcode thông tin nhạy cảm.</li>
+                        <li><strong>Global Time Standard:</strong> Mọi biến thời gian trong DB/Model/Payload bắt buộc dùng <code>int64</code> Unix Timestamp (mili-giây) và ép chuẩn <code>time.UTC()</code>. Tuyệt đối cấm lọt field <code>time.Time</code> vào cấu trúc DB.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script: Menu Tab Switcher & Mermaid Initialization -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'dark',
+            securityLevel: 'loose',
+            fontFamily: 'Inter',
+            themeVariables: {
+                primaryColor: '#1e293b',
+                primaryTextColor: '#f8fafc',
+                primaryBorderColor: '#3b82f6',
+                lineColor: '#94a3b8',
+                secondaryColor: '#334155',
+                tertiaryColor: '#0f172a'
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const navItems = document.querySelectorAll('.nav-item');
+            const sections = document.querySelectorAll('.section');
+
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    sections.forEach(sec => sec.classList.remove('active'));
+
+                    item.classList.add('active');
+                    const targetId = item.getAttribute('data-target');
+                    document.getElementById(targetId).classList.add('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>
