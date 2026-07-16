@@ -19,5 +19,6 @@ Khi bạn nhận một task liên quan đến Backend, bạn **BẮT BUỘC** ph
 4. **Packages & Libraries:** `.agents/rules/be_04_pkg_and_shared_libraries.md`
 5. **Message Queue:** `.agents/rules/be_05_message_queue_kafka.md`
 6. **Coding Standards & Utils:** `.agents/rules/be_06_coding_standards_and_utils.md`
+7. **OpenSearch & Time-Series:** `.agents/rules/be_07_opensearch.md`
 
 Hãy dùng tool `view_file` hoặc tương tự để đọc qua các tài liệu này, đảm bảo không vi phạm quy chuẩn dự án trước khi viết hoặc sửa đổi code Backend.
