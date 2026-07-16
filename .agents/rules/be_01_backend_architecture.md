@@ -50,6 +50,8 @@
 - **Rule 4.1 - Controller "Ngu ngốc"**: Tầng này CHỈ được làm: Nhận HTTP Request -> Parse JWT gán vào DTO -> Gọi Application Layer -> Trả về HTTP Response. KHÔNG chứa business logic.
 - **Rule 4.2 - Chuẩn hoá Response**: Trả về đúng format `{ "data": ..., "error_code": ..., "error_detail": ... }`.
 - **Rule 4.3 - Route & URL Prefix**: BẮT BUỘC dùng hàm `getRoutePrefix() string`. Tuyệt đối không dùng Dynamic Path Parameter (`/:id`), phải dùng Query Parameter.
+- **Rule 4.4 - Tách biệt DTOs**: Các Request/Response struct (DTO) dùng cho API Endpoint hoặc Swagger Docs bắt buộc phải được đặt ở thư mục `presentation/dto/`, TUYỆT ĐỐI KHÔNG khai báo struct inline trong file Handler.
+- **Rule 4.5 - DTO & BaseResponse**: Tất cả API trả về thành công đều phải bọc qua Generic `response.BaseResponse[T]`. Handler phải khởi tạo trực tiếp instance của DTO và truyền vào `response.Success(w, dto)`, KHÔNG dùng `map[string]string` hay anonymous struct để mock. Lỗi dùng `response.BaseResponse[any]`.
 
 ## 5. Dependency Injection & Infrastructure (Root Level)
 - **Rule 5.1 - Shared Infra Khởi tạo 1 lần**: Tại `cmd/api/setup_xxx.go`. Hỗ trợ kết nối Multi-server (nhiều DB, Redis cluster), cấm hardcode 1 connection Singleton.
