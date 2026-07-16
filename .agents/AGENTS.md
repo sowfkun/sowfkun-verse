@@ -11,6 +11,7 @@ Dù bạn là Agent làm ở phân hệ nào, bạn cũng phải tuân thủ:
 4. **Plan First:** Khi nhận một yêu cầu phức tạp, hãy phân tích và trình bày hướng giải quyết trước khi ghi đè hoặc tạo hàng loạt file.
 5. **Thảo Luận Trước Khi Code:** Khi người dùng đặt câu hỏi, yêu cầu phân tích, hoặc yêu cầu lập kế hoạch (planning), PHẢI trả lời và thảo luận trước. KHÔNG được ngay lập tức bắt tay vào viết code.
 6. **Clean Up:** Tự động xóa bỏ mọi file/script tạm thời (scratch files) do Agent sinh ra sau khi hoàn thành mục đích sử dụng. Tự động thêm các file/thư mục không cần thiết (build folder, logs, temp files) vào `.gitignore` để tránh đẩy nhầm lên Git.
+7. **Tiêu chuẩn Thời gian (Time Standard):** Bắt buộc mọi luồng xử lý/lưu trữ thời gian trong code (Model, Filter, API Payload, Database) phải sử dụng **Unix Timestamp (`int64`)** (mili-giây). Tránh tối đa sử dụng `time.Time` struct hay chuỗi ISO8601 trừ khi làm tác vụ tính toán đặc thù cần tới múi giờ.
 
 ## Chỉ thị Tối cao (Critical System Directives)
 1. **Tham chiếu chuẩn mực (Golden Standard)**: Khi nhận yêu cầu tạo Module/Tính năng mới, BẮT BUỘC phải dùng module mẫu (Reference Module) làm chuẩn mực để sao chép cấu trúc, cách đặt tên, và kiến trúc.
