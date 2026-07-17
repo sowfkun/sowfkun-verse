@@ -18,6 +18,7 @@ Khi thiết kế và triển khai các tính năng tương tác với OpenSearch
 - **Tránh dùng Map Động không xác định:** KHÔNG BAO GIỜ định nghĩa các trường object động như `Payload map[string]any` trong Go Model để chứa các key JSON tuỳ ý. Việc này dẫn tới thảm họa "Mapping Explosion" (Nổ Mapping), khiến OpenSearch sinh ra hàng ngàn field rác và làm sập cụm server.
 - **Thiết kế Cấu trúc Phẳng (Generic Flat Schema):** Hãy thiết kế các trường chung, phẳng, có thể tái sử dụng cho nhiều loại log khác nhau. Ví dụ: `Action`, `Target`, `Source`, `Status`, `Duration`, `Message`, `Context`.
 - **Giải nghĩa theo Type:** Ý nghĩa của các trường Generic này sẽ được quyết định bởi trường `Type` (ví dụ: Nếu `Type="REQUEST"`, `Source` là IP; Nếu `Type="AUDIT"`, `Source` là UserID).
+- **Cảnh báo Đồng bộ (Sync Warning):** Bất kỳ Domain Entity nào (Go struct) được dùng để map trực tiếp xuống OpenSearch thì BẮT BUỘC phải có comment cảnh báo bự chà bá ở trên đầu struct đó (ví dụ: `// ⚠️ WARNING: ENTITY NÀY DÙNG OPENSEARCH. KHI ĐỔI MODEL PHẢI CẬP NHẬT MIGRATION TEMPLATE!`). Tuyệt đối không để xảy ra tình trạng sửa model Go mà quên sửa Template Mapping.
 
 ## 4. Phân mảnh Thời gian (UTC & Truncate)
 - **Luôn dùng UTC:** Khi sinh tên index theo Ngày/Tháng/Năm hoặc phân tích khoảng thời gian truy vấn, LUÔN LUÔN convert Unix Timestamp về `.UTC()`. Tuyệt đối không dùng `.Local()` vì ứng dụng phải đảm bảo tính nhất quán trên toàn cầu, bất kể Data Center đặt ở múi giờ nào.

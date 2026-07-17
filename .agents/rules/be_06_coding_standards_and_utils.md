@@ -1,4 +1,4 @@
-# 06. Coding Standards, Utils & Testing
+# 06. Coding Standards & Utils
 
 ## 1. Tiêu chuẩn Code & Đặt tên (Coding Standards & Naming Conventions)
 - **Idiomatic Go**: Tuân thủ chuẩn định dạng `gofmt`. Sử dụng `camelCase` cho biến/hàm nội bộ, `PascalCase` cho public.
@@ -22,5 +22,3 @@
   - Logic không chứa nghiệp vụ: Gom vào thư mục `pkg/utils/...`.
   - Logic liên quan tới nghiệp vụ nội bộ: Chuyển thành **Domain Service** hoặc hàm trong Entity. Không đặt ở Utils.
 
-## 4. Testing
-- Viết Unit Test cho các function cốt lõi và UseCase. Tạo Mock cho các Interface của Infrastructure, MQ, External APIs.
