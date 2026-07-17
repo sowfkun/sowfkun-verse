@@ -1,3 +1,5 @@
 .env
 .enb
 main.exe
+.codegraph/
+tmp/
