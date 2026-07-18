@@ -40,7 +40,9 @@
     ```
 - **Rule 3.3 - Đóng gói**: Kế thừa `abstract_repository` nhưng TUYỆT ĐỐI KHÔNG public các hàm nguyên thuỷ ra ngoài.
 - **Rule 3.4 - Build Query & Projection**: 
-  - Hàm Read/Update phải dùng hàm `buildQuery` chung (gọi `BuildCommonQuery` để xử lý `tenant_id`, `is_deleted`...).
+  - Hàm `buildQuery` của mỗi Repository CHỈ nhận duy nhất một tham số là struct Command Query của domain đó (ví dụ: `TenantQuery`, `EmployeeQuery` - struct này BẮT BUỘC kế thừa `appDto.CommonQuery`).
+  - Mỗi Domain chỉ có duy nhất 1 struct Command Query định nghĩa tất cả các filter có thể có. Hàm `buildQuery` sẽ tự động parse các trường này thành BSON.
+  - Tất cả các hàm Get/Find trong Repository có thể nhận tham số truyền vào tuỳ ý cho gọn (ví dụ: `email string`). Bên trong hàm, KHÔNG ĐƯỢC tự tạo BSON lẻ mà phải khởi tạo Command Query object và truyền vào `buildQuery`.
   - Mọi hàm GET/READ bắt buộc phải hỗ trợ Projection (chỉ lấy field cần thiết, cấm `SELECT *`).
 - **Rule 3.5 - Master Function (Add/Update/Delete)**: 
   - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
