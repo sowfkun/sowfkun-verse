@@ -17,3 +17,4 @@ Dù bạn là Agent làm ở phân hệ nào, bạn cũng phải tuân thủ:
 1. **Tham chiếu chuẩn mực (Golden Standard)**: Khi nhận yêu cầu tạo Module/Tính năng mới, BẮT BUỘC phải dùng module mẫu (Reference Module) làm chuẩn mực để sao chép cấu trúc, cách đặt tên, và kiến trúc.
    - **Đối với Backend**: Module `sowfkun-verse-api/internal/tenant` là **Golden Standard**. Tuyệt đối phải sao chép chính xác cấu trúc thư mục (Domain, Application, Infra, Presentation), các vùng comment (`// ================= READ ZONE =================`), và cơ chế nhúng DTO (CommonCommand/CommonQuery) của nó.
 2. **Nghiêm cấm sáng tạo kiến trúc (No Architecture Hallucination)**: KHÔNG tự ý đưa thêm các design pattern mới, thư viện bên ngoài mới, hoặc phá vỡ cấu trúc Layered/CQRS hiện tại mà không có sự cho phép rõ ràng từ User. Mọi dòng code sinh ra phải nhất quán 100% với form mẫu hiện có.
+3. **Codegraph:** Sử dụng tool codegraph để hiểu code 

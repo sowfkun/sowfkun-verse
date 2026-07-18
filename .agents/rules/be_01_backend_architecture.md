@@ -45,6 +45,9 @@
 - **Rule 3.5 - Master Function (Add/Update/Delete)**: 
   - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
   - `Update/Delete`: Hàm nghiệp vụ lẻ phải gom data rồi gọi về hàm **Master Update** / **Master Delete** để thực thi DB và kích hoạt `onChange()`.
+- **Rule 3.6 - Atlas Search Bulk Operations**:
+  - Atlas Search (stage `$search`) CHỈ hoạt động với Aggregate Pipeline (được dùng trong hàm `List/Count`) và KHÔNG thể dùng trực tiếp làm filter cho các hàm UpdateMany / DeleteMany của MongoDB.
+  - Mọi thao tác Bulk Update / Bulk Delete có điều kiện search phức tạp BẮT BUỘC thực hiện qua 2 bước: Bước 1 gọi `List()` (với projection chỉ lấy `_id`), Bước 2 truyền mảng `_id` đó vào hàm `UpdateManyIDs()` hoặc `DeleteManyIDs()`.
 
 ## 4. Presentation Layer (`presentation/`)
 - **Rule 4.1 - Controller "Ngu ngốc"**: Tầng này CHỈ được làm: Nhận HTTP Request -> Parse JWT gán vào DTO -> Gọi Application Layer -> Trả về HTTP Response. KHÔNG chứa business logic.
