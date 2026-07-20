@@ -21,5 +21,6 @@ Khi bạn nhận một task liên quan đến Backend, bạn **BẮT BUỘC** ph
 6. **Coding Standards & Utils:** `.agents/rules/be_06_coding_standards_and_utils.md`
 7. **OpenSearch & Time-Series:** `.agents/rules/be_07_opensearch.md`
 8. **Testing Workflow:** `.agents/rules/be_08_testing_workflow.md`
+9. **Database Indexing:** `.agents/rules/be_09_database_indexing.md`
 
 Hãy dùng tool `view_file` hoặc tương tự để đọc qua các tài liệu này, đảm bảo không vi phạm quy chuẩn dự án trước khi viết hoặc sửa đổi code Backend.
