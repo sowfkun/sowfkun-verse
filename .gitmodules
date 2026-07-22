@@ -4,3 +4,6 @@
 [submodule "sowfkun-verse-mobile"]
 	path = sowfkun-verse-mobile
 	url = https://github.com/sowfkun/sowfkun-verse-mobile
+[submodule "sowfkun-verse-web"]
+	path = sowfkun-verse-web
+	url = https://github.com/sowfkun/sowfkun-verse-web.git

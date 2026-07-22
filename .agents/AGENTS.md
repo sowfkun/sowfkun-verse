@@ -12,9 +12,9 @@ Dù bạn là Agent làm ở phân hệ nào, bạn cũng phải tuân thủ:
 5. **Thảo Luận Trước Khi Code:** Khi người dùng đặt câu hỏi, yêu cầu phân tích, hoặc yêu cầu lập kế hoạch (planning), PHẢI trả lời và thảo luận trước. KHÔNG được ngay lập tức bắt tay vào viết code.
 6. **Clean Up:** Tự động xóa bỏ mọi file/script tạm thời (scratch files) do Agent sinh ra sau khi hoàn thành mục đích sử dụng. Tự động thêm các file/thư mục không cần thiết (build folder, logs, temp files) vào `.gitignore` để tránh đẩy nhầm lên Git.
 7. **Tiêu chuẩn Thời gian & Đa quốc gia (Time Standard & Global Scale):** Bắt buộc mọi luồng xử lý/lưu trữ thời gian trong code (Model, Filter, API Payload, Database) phải sử dụng **Unix Timestamp (`int64`)** (mili-giây). Khi xử lý partition hay format ngày tháng, **tất cả đều phải quy về hệ quy chiếu `.UTC()`** để đảm bảo đồng nhất đa quốc gia.
+8. Trả lời ở khung chat ngắn gọn, vừa đủ để đỡ tốn token
 
 ## Chỉ thị Tối cao (Critical System Directives)
 1. **Tham chiếu chuẩn mực (Golden Standard)**: Khi nhận yêu cầu tạo Module/Tính năng mới, BẮT BUỘC phải dùng module mẫu (Reference Module) làm chuẩn mực để sao chép cấu trúc, cách đặt tên, và kiến trúc.
    - **Đối với Backend**: Module `sowfkun-verse-api/internal/tenant` là **Golden Standard**. Tuyệt đối phải sao chép chính xác cấu trúc thư mục (Domain, Application, Infra, Presentation), các vùng comment (`// ================= READ ZONE =================`), và cơ chế nhúng DTO (CommonCommand/CommonQuery) của nó.
 2. **Nghiêm cấm sáng tạo kiến trúc (No Architecture Hallucination)**: KHÔNG tự ý đưa thêm các design pattern mới, thư viện bên ngoài mới, hoặc phá vỡ cấu trúc Layered/CQRS hiện tại mà không có sự cho phép rõ ràng từ User. Mọi dòng code sinh ra phải nhất quán 100% với form mẫu hiện có.
-3. **Codegraph:** Sử dụng tool codegraph để hiểu code 
