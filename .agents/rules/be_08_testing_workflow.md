@@ -1,27 +1,31 @@
 # 08. Testing Workflow (Quy trình Test của Agent)
 
-Để đảm bảo mọi dòng code do Agent viết ra đều chạy đúng với luồng thực tế (đã được nạp đầy đủ Dependency Injection như Database, Redis, Kafka, OpenSearch...), Agent BẮT BUỘC tuân thủ quy trình kiểm thử (Testing Workflow) sau khi phát triển xong tính năng mới:
+Để đảm bảo các tính năng và API do Agent phát triển hoạt động chính xác và an toàn, Agent BẮT BUỘC tuân thủ quy trình kiểm thử (Testing Workflow) theo hai trường hợp sau:
 
-## 1. Môi trường Test (Directly on Main)
-- KHÔNG tạo các file script độc lập (như `test_mail.go` hoặc `main_test.go` tạm bợ) để test vì chúng sẽ bị thiếu context hạ tầng.
-- Bắt buộc phải test trực tiếp thông qua hàm `main()` của ứng dụng (`cmd/api/main.go`).
+---
 
-## 2. Hàm Test Tạm (Test Wrapper)
-- Tạo một hàm rỗng với tên chung chung không phụ thuộc vào bất kỳ domain nào, ví dụ: `func runAITest(ctx context.Context, ...) {}`. 
-- **Lưu ý quan trọng**: Phải note/comment rõ ràng trên hàm này đây là hàm dành riêng cho "AI test sau khi phát triển tính năng".
-- Gọi hàm `runAITest` này ở ngay cuối hàm `main()` (sau khi đã setup xong toàn bộ hạ tầng).
-- Chèn logic cần test vào bên trong hàm `runAITest`.
+## TRƯỜNG HỢP 1: Debug cục bộ một Function/Logic
+Dành riêng cho việc kiểm thử nhanh logic của một hàm hoặc thuật toán nội bộ:
 
-## 3. Quản lý Log Output
-- Mọi kết quả output (fmt.Println, log.Printf...) hoặc file sinh ra từ quá trình test bắt buộc phải được lưu vào thư mục `scratch/` **nằm ngay trong thư mục gốc của project** (ví dụ: `sowfkun-verse-api/scratch/`).
-- Điều này để đảm bảo rằng nếu Agent lỡ có quên xóa file thì file log cũng không bị Git track và đẩy lên repo (thư mục `scratch` đã được khai báo sẵn để ignore).
+1. **Hàm Test Tạm (`runAITest`)**:
+   - Định nghĩa hàm rỗng `func runAITest(ctx context.Context, db *mongo.Database, redisClient *redis.Client) {}` ở cuối file `cmd/api/main.go`.
+   - Gọi hàm này trước dòng `http.ListenAndServe`.
+2. **Quản lý log & Dọn dẹp**:
+   - Mọi log ghi nhận từ quá trình test phải xuất ra file trong thư mục `scratch/` ở thư mục gốc của project (ví dụ: `sowfkun-verse-api/scratch/`).
+   - Khi test thành công, dọn dẹp sạch ruột của hàm `runAITest` và xóa toàn bộ file log trong thư mục `scratch/`.
 
-## 4. Báo cáo Kết quả (Full Log)
-- Sau khi chạy test, Agent phải hiển thị **TOÀN BỘ LOG (Full Log)** cho User xem.
-- TUYỆT ĐỐI KHÔNG được tóm tắt (summarize) kết quả test. User cần nhìn thấy raw data để tự đánh giá luồng code.
+---
 
-## 5. Dọn dẹp (Cleanup)
-- CHỈ KHI NÀO User xác nhận (Confirm) test đã hoàn thành và thành công.
-- Agent BẮT BUỘC phải thực hiện dọn dẹp:
-  1. Xóa toàn bộ file log trong thư mục `scratch/` của project.
-  2. Dọn sạch ruột của hàm `runAITest()` (chỉ để lại hàm rỗng `func runAITest() {}` hoặc xóa luôn lệnh gọi đi) để giữ cho file `main.go` sạch sẽ.
+## TRƯỜNG HỢP 2: Kiểm thử tích hợp luồng API (API Flow Testing)
+Dành cho việc kiểm thử các API Endpoints hoàn chỉnh:
+
+1. **Khởi chạy API Server**:
+   - Thực hiện biên dịch và khởi chạy máy chủ API thật (không chèn code test debug vào `main.go`).
+2. **Tạo Script Test bên ngoài**:
+   - Tạo một script test độc lập bên ngoài thư mục src chính, lưu tại thư mục `scratch/` (Ví dụ: `scratch/api_test.go` hoặc `scratch/test.sh`).
+   - Script này sử dụng HTTP Client gửi request trực tiếp lên API Server đang chạy (ví dụ: `http://localhost:8080/api/v1/...`).
+3. **Thao tác & Khẳng định (Assert)**:
+   - Viết các kịch bản kiểm thử luồng thực tế: từ gọi API `/register`, nhận OTP, gọi `/verify-otp`, `/login`, và `/refresh-token`.
+   - Kiểm tra mã HTTP status, cấu trúc Response JSON, và các mã lỗi trả về.
+4. **Dọn dẹp**:
+   - Sau khi kiểm thử thành công và User xác nhận, Agent **bắt buộc** phải xóa hoàn toàn các file script test tạm nằm trong thư mục `scratch/`.
