@@ -12,9 +12,6 @@ description: Use this skill whenever the task involves backend development, Gola
 # Backend snapshot source 
 `snapshot_be_infrastructure.md` là file tóm tắt cấu trúc thư mục và các thành phần chính của backend, bạn bắt buộc phải đọc nó trước khi thực hiện bất kỳ task backend nào để nắm cấu trúc mà ko cần quét lại toàn source
 
-# Codegraph
-Sử dụng tool codegraph để hiểu code khi cần 
-
 # Backend Rules chi tiết
 Khi bạn nhận một task liên quan đến Backend, bạn **BẮT BUỘC** phải tự động tham chiếu (đọc) các quy tắc sau đây trước khi thực hiện:
 
