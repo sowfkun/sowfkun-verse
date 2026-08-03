@@ -97,3 +97,11 @@ type User struct {
 ```
 
 - **Đối với field chưa có trong bảng**: Tra cứu convention phổ biến trong ngành trước. Nếu không có, giữ tên đầy đủ và comment lý do.
+
+---
+
+## 5. Chuẩn hóa Enum & Const Values (UPPERCASE)
+- **BẮT BUỘC viết hoa toàn bộ (UPPERCASE)** đối với tất cả các giá trị string đại diện cho các trường kiểu Enum/Type (ví dụ: `Status`, `Type`, `Role`, `Module`, v.v.) trong cả mã nguồn Go và khi lưu trữ xuống Database MongoDB.
+- **Quy ước**: `ACTIVE`, `INACTIVE`, `CUSTOMER`, `TICKET`, `USER`, `ADMIN`.
+- Tránh việc đặt giá trị hỗn hợp chữ hoa, chữ thường hoặc kiểu CamelCase cho giá trị Enum thực tế để đảm bảo tính nhất quán trên toàn bộ hệ thống (ngoại trừ các chuẩn quốc tế bắt buộc viết thường như mã ngôn ngữ ISO `"vi"`, `"en"`).
+

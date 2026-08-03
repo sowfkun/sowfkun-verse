@@ -76,5 +76,10 @@ Khi review code, bạn BẮT BUỘC phải kiểm tra gắt gao các lỗi vi ph
 **Cách kiểm tra:** UseCase có dòng return nào dạng `return fmt.Errorf(...)` hoặc `return errors.New(...)` thay vì `return coreDomain.NewAppError(...)` không?
 **Cách sửa:** Thay thế bằng `coreDomain.NewAppError("MA_LOI")` chuẩn hóa phù hợp với i18n của hệ thống.
 
+### 14. Vi phạm quy tắc viết hoa Enum (BE 06)
+**Luật:** Toàn bộ các giá trị của Enum/Type (như Status, Type, Role, v.v.) dạng string trong code Go và DB phải viết hoa hoàn toàn (UPPERCASE).
+**Cách kiểm tra:** Quét các định nghĩa const và giá trị string gán cho các trường loại này. Có giá trị nào viết thường hoặc viết kiểu CamelCase không?
+**Cách sửa:** Đổi giá trị thành UPPERCASE (Ví dụ: `CUSTOMER`, `ACTIVE`).
+
 ## Thực thi
 Nếu bạn phát hiện bất kỳ vi phạm nào trong danh sách trên, hãy CHỈ TRÍCH thẳng thắn, trích dẫn đúng Rule bị vi phạm, và đưa ra giải pháp fix code chính xác. KHÔNG ĐƯỢC nương tay với bất kỳ lỗi kiến trúc nào.
