@@ -72,10 +72,10 @@ Khi review code, bạn BẮT BUỘC phải kiểm tra gắt gao các lỗi vi ph
 **Cách kiểm tra:** Có sử dụng `map[string]any` hoặc mock struct trực tiếp trong lệnh trả response không?
 **Cách sửa:** Khai báo DTO tường minh trong package `dto` của Presentation layer và truyền vào hàm Helper.
 
-### 13. Sử dụng `fmt.Errorf` thay vì `AppError` ở tầng Application (BE 06)
-**Luật:** Tầng Application/UseCase TUYỆT ĐỐI KHÔNG được trả về lỗi thô được format bằng `fmt.Errorf` hoặc `errors.New` ra ngoài. Mọi lỗi nghiệp vụ hoặc lỗi hệ thống định nghĩa cho Client phải được bọc qua `coreDomain.NewAppError("MA_LOI")`.
-**Cách kiểm tra:** UseCase có dòng return nào dạng `return fmt.Errorf(...)` hoặc `return errors.New(...)` thay vì `return coreDomain.NewAppError(...)` không?
-**Cách sửa:** Thay thế bằng `coreDomain.NewAppError("MA_LOI")` chuẩn hóa phù hợp với i18n của hệ thống.
+### 13. Sử dụng `errors.New` với hằng số lỗi chuẩn ở tầng Application (BE 06)
+**Luật:** Tầng Application/UseCase khi trả về lỗi nghiệp vụ (Domain/Business Error) bắt buộc phải sử dụng `errors.New(coreDomain.Err...)` (hoặc hằng số lỗi nghiệp vụ tương ứng). Tuyệt đối không dùng `errors.New` với chuỗi tự do (string literal) hoặc `fmt.Errorf` không khớp mã lỗi chuẩn để tránh làm mất khả năng dịch i18n và map HTTP status.
+**Cách kiểm tra:** UseCase có dòng return nào sử dụng `errors.New` với chuỗi tự định nghĩa (không dùng hằng số có tiền tố `ERR_`) hoặc `fmt.Errorf` mà không khớp mã lỗi chuẩn không?
+**Cách sửa:** Thay thế bằng `errors.New(coreDomain.Err...)` sử dụng hằng số chuẩn đã định nghĩa.
 
 ### 14. Vi phạm quy tắc viết hoa Enum (BE 06)
 **Luật:** Toàn bộ các giá trị của Enum/Type (như Status, Type, Role, v.v.) dạng string trong code Go và DB phải viết hoa hoàn toàn (UPPERCASE).

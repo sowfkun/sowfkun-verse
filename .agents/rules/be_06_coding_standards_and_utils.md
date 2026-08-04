@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # 06. Coding Standards & Utils
 
 ## 1. Tiêu chuẩn Code & Đặt tên (Coding Standards & Naming Conventions)

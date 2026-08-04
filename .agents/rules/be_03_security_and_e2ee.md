@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # 03. Security & E2EE Standards
 
 *Đây là tập hợp các quy tắc "Luật Thép" dành riêng cho Agent về kiến trúc bảo mật và luồng mã hoá đầu cuối (End-to-End Encryption - E2EE).*
@@ -12,10 +16,10 @@ Mọi kết nối API (ngoại trừ GET) đều phải được bảo vệ bằ
 3. **Handshake (Bắt tay)**: Frontend gửi chuỗi AES Key đã mã hóa lên `POST /api/v1/security/handshake`. Server sẽ lấy RSA Private Key của mình ra để giải mã, thu được AES Key gốc. Sau đó Server lưu AES Key vào Redis dưới dạng `session:[ID]` và trả về một `Session-ID` cho Frontend.
 4. **Bảo vệ Payload (Giao tiếp an toàn)**: Từ thời điểm này, mọi Request (Post/Put/Delete) Frontend gửi lên bắt buộc phải đính kèm `X-Session-ID` trong Header. Đồng thời, toàn bộ Request Body (chứa data JSON thật) phải bị mã hoá thành một chuỗi duy nhất bằng thuật toán AES. 
 5. **Mã hoá cục bộ Response (Partial Encryption)**: Ở phía Server, `PayloadCryptoMiddleware` sẽ chặn các Request này để giải mã. Khi trả Response về cho Frontend, **TUYỆT ĐỐI KHÔNG** mã hoá toàn bộ khối lượng JSON. Middleware bắt buộc phải:
-   - Parse JSON nhận được từ Handler (`{ "data": ..., "error_code": "...", "error_detail": "..." }`).
+   - Parse JSON nhận được từ Handler (`{ "data": ..., "error_code": "...", "message": "..." }`).
    - Bóc riêng trường `data` ra và mã hoá bằng AES.
    - Giữ nguyên `error_code` và `error_detail` ở dạng Plain Text để Frontend có thể đọc và render UI báo lỗi lập tức (cực kỳ hữu ích với lỗi 500 hoặc Rate Limit).
-   - Đắp chuỗi mã hoá vào trường `data` và trả về đúng Unified Model chuẩn: `{ "data": "<chuỗi_AES_Base64>", "error_code": "...", "error_detail": "..." }`.
+   - Đắp chuỗi mã hoá vào trường `data` và trả về đúng Unified Model chuẩn: `{ "data": "<chuỗi_AES_Base64>", "error_code": "...", "message": "..." }`.
 
 ## 3. Quản lý RSA Keys an toàn
 - **Không dùng file `.pem` tĩnh**: Key RSA **TUYỆT ĐỐI KHÔNG ĐƯỢC** đọc từ file `.pem` vật lý lưu cứng ở ổ đĩa (để tránh rủi ro bảo mật lộ Key qua hệ thống Git).
