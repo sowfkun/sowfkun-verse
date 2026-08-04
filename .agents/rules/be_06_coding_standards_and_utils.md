@@ -109,3 +109,10 @@ type User struct {
 - **Quy ước**: `ACTIVE`, `INACTIVE`, `CUSTOMER`, `TICKET`, `USER`, `ADMIN`.
 - Tránh việc đặt giá trị hỗn hợp chữ hoa, chữ thường hoặc kiểu CamelCase cho giá trị Enum thực tế để đảm bảo tính nhất quán trên toàn bộ hệ thống (ngoại trừ các chuẩn quốc tế bắt buộc viết thường như mã ngôn ngữ ISO `"vi"`, `"en"`).
 
+---
+
+## 6. Input Validation (Kiểm tra dữ liệu đầu vào)
+- **BẮT BUỘC** phải validate toàn bộ dữ liệu từ Client gửi lên (qua REST API, gRPC, MQ, v.v.).
+- Sử dụng thư viện `github.com/go-playground/validator/v10` thông qua wrapper `pkg/utils/validator`.
+- Khai báo các rule validate trực tiếp bằng struct tag `validate:"..."` trong các DTO / Request model (ví dụ: `validate:"required,max=100,email"`).
+- Khi gọi `validator.Validate(req)` trong Handler, nếu có lỗi phải trả về mã lỗi chung `coreDomain.ErrValidationFailed` cùng chi tiết lỗi `err.(validator.ValidationErrors)` thông qua hàm `response.AppErrorWithData` để Client có thể hiển thị thông báo lỗi tương ứng cho từng field.

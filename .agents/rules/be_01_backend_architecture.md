@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # 01. Backend Architecture (Golang)
 
 Đây là các "Luật Thép" về kiến trúc.
@@ -42,7 +46,7 @@
 - **Rule 3.4 - Build Query & Projection**: 
   - Hàm `buildQuery` của mỗi Repository CHỈ nhận duy nhất một tham số là struct Command Query của domain đó (ví dụ: `TenantQuery`, `EmployeeQuery` - struct này BẮT BUỘC kế thừa `appDto.CommonQuery`).
   - Mỗi Domain chỉ có duy nhất 1 struct Command Query định nghĩa tất cả các filter có thể có. Hàm `buildQuery` sẽ tự động parse các trường này thành BSON.
-  - Tất cả các hàm Get/Find trong Repository có thể nhận tham số truyền vào tuỳ ý cho gọn (ví dụ: `email string`). Bên trong hàm, KHÔNG ĐƯỢC tự tạo BSON lẻ mà phải khởi tạo Command Query object và truyền vào `buildQuery`.
+  - Tất cả các hàm Get trong Repository có thể nhận tham số truyền vào tuỳ ý cho gọn (ví dụ: `email string`). Bên trong hàm, KHÔNG ĐƯỢC tự tạo BSON lẻ mà phải khởi tạo Command Query object và truyền vào `buildQuery`.
   - Mọi hàm GET/READ bắt buộc phải hỗ trợ Projection (chỉ lấy field cần thiết, cấm `SELECT *`).
 - **Rule 3.5 - Master Function (Add/Update/Delete)**: 
   - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
@@ -50,6 +54,7 @@
 - **Rule 3.6 - Atlas Search Bulk Operations**:
   - Atlas Search (stage `$search`) CHỈ hoạt động với Aggregate Pipeline (được dùng trong hàm `List/Count`) và KHÔNG thể dùng trực tiếp làm filter cho các hàm UpdateMany / DeleteMany của MongoDB.
   - Mọi thao tác Bulk Update / Bulk Delete có điều kiện search phức tạp BẮT BUỘC thực hiện qua 2 bước: Bước 1 gọi `List()` (với projection chỉ lấy `_id`), Bước 2 truyền mảng `_id` đó vào hàm `UpdateManyIDs()` hoặc `DeleteManyIDs()`.
+- **Rule 3.7 - insert thì đặt tên là add, không dùng Find..., thay bằng Get...
 
 ## 4. Presentation Layer (`presentation/`)
 - **Rule 4.1 - Controller "Ngu ngốc"**: Tầng này CHỈ được làm: Nhận HTTP Request -> Parse JWT gán vào DTO -> Gọi Application Layer -> Trả về HTTP Response. KHÔNG chứa business logic.
