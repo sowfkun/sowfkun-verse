@@ -19,19 +19,21 @@ trigger: always_on
   - *Ví dụ:*
     ```go
     // ================= MODEL ZONE =================
-    type CreateXCommand struct { ... } // DTO
+    type AddXCommand struct { ... } // DTO
     // ================= TYPE ZONE =================
-    type ICreateXUseCase interface { ... }
-    type createXUseCase struct { ... }
+    type IAddXUseCase interface { ... }
+    type addXUseCase struct { ... }
     // ================= EXECUTION ZONE =================
-    func NewCreateXUseCase(...) ICreateXUseCase { ... }
-    func (uc *createXUseCase) Execute(...) error { ... }
+    func NewAddXUseCase(...) IAddXUseCase { ... }
+    func (uc *addXUseCase) Execute(...) error { ... }
     ```
 - **Rule 2.3 - DTO và Trả về**: 
   - Request DTO bắt buộc nhúng `appDto.CommonCommand` hoặc `appDto.CommonQuery`.
   - TUYỆT ĐỐI KHÔNG trả về thẳng Entity ra Controller, phải dùng Response DTO.
 - **Rule 2.4 - Audit Fields**: Dùng `utils.SetCommonEntityData(entity, command)` để set tự động thông tin Audit khi Create/Update.
-- **Rule 2.5 - Cấm lạm quyền**: TUYỆT ĐỐI KHÔNG gọi thẳng DB, Cache, ES ở layer này. Phải đi qua Interface của Repo. Xoá (Delete) thì gom list ID truyền xuống Repo.
+- **Rule 2.5 - Xử lí keyword nếu cần (text.BuildKeywords(cmd.Name)
+- **Rule 2.6 - Delete sẽ xử lí để hỗ trợ cả xoá 1 và xoá nhiều. bằng cách dùng CommonQuery giống list để hỗ trợ xoá theo filter (xem tag)
+- **Rule 2.7 - Cấm lạm quyền**: TUYỆT ĐỐI KHÔNG gọi thẳng DB, Cache, ES ở layer này. Phải đi qua Interface của Repo. 
 
 ## 3. Infrastructure Layer (`infrastructure/`)
 - **Rule 3.1 - Naming Convention**: Tên file BẮT BUỘC là tên Database engine (Ví dụ: `mongodb_repository.go`, `redis_repository.go`).
@@ -48,6 +50,7 @@ trigger: always_on
   - Mỗi Domain chỉ có duy nhất 1 struct Command Query định nghĩa tất cả các filter có thể có. Hàm `buildQuery` sẽ tự động parse các trường này thành BSON.
   - Tất cả các hàm Get trong Repository có thể nhận tham số truyền vào tuỳ ý cho gọn (ví dụ: `email string`). Bên trong hàm, KHÔNG ĐƯỢC tự tạo BSON lẻ mà phải khởi tạo Command Query object và truyền vào `buildQuery`.
   - Mọi hàm GET/READ bắt buộc phải hỗ trợ Projection (chỉ lấy field cần thiết, cấm `SELECT *`).
+  - Khi gọi hàm có projection phải đánh giá xem cần dùng field nào và truyền projection
 - **Rule 3.5 - Master Function (Add/Update/Delete)**: 
   - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
   - `Update/Delete`: Hàm nghiệp vụ lẻ phải gom data rồi gọi về hàm **Master Update** / **Master Delete** để thực thi DB và kích hoạt `onChange()`.

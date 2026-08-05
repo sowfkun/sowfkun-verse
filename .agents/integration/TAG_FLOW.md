@@ -79,8 +79,8 @@ interface UpdateTagRequest {
 #### Request Body
 ```typescript
 interface DeleteTagsRequest {
-  ids?: string[];       // Danh sách ID tag cần xóa (lưu tại CommonQuery)
-  modules?: string[];   // Phân hệ lọc xóa
+  include_ids?: string[]; // Danh sách ID tag cần xóa (CommonQuery.include_ids)
+  modules?: string[];     // Phân hệ lọc xóa để xóa toàn bộ tag thuộc phân hệ
 }
 ```
 
@@ -102,12 +102,15 @@ interface DeleteTagsRequest {
 #### Request Body
 ```typescript
 interface ListTagsRequest {
-  page?: number;        // Trang hiện tại (mặc định 1)
-  limit?: number;       // Số lượng trên mỗi trang (mặc định 10)
-  sort_by?: string;     // Trường sắp xếp (Ví dụ: "name")
-  sort_order?: string;  // Chiều sắp xếp ("ASC" | "DESC")
-  kws?: string;         // Từ khóa tìm kiếm (Keywords)
-  modules?: string[];   // Phạn hệ lọc danh sách (Ví dụ: ["CUSTOMER"])
+  page?: number;               // Trang hiện tại (mặc định 1)
+  size?: number;               // Số lượng trên mỗi trang (mặc định 10, tối đa 100)
+  keyword?: string;            // Từ khóa tìm kiếm (Atlas Search)
+  modules?: string[];          // Phân hệ lọc danh sách (Ví dụ: ["CUSTOMER"])
+  is_deleted?: boolean;        // Lọc theo trạng thái xóa
+  include_ids?: string[];      // Danh sách ID bắt buộc chứa
+  exclude_ids?: string[];      // Danh sách ID cần loại trừ
+  projection?: Record<string, number>; // Map các field cần lấy (Ví dụ: {"name": 1, "color": 1})
+  sort?: Record<string, number>; // Map sắp xếp (Ví dụ: {"name": 1, "c_at": -1})
 }
 ```
 
@@ -127,7 +130,7 @@ interface ListTagsRequest {
     ],
     "total": 1,
     "page": 1,
-    "limit": 10
+    "size": 10
   },
   "error_code": ""
 }
