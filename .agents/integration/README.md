@@ -12,6 +12,10 @@ This directory contains flows for integrating with the Sowfkun Verse API:
    - How to register and authenticate users.
 3. [Tenant Management Flow](./TENANT_FLOW.md)
    - How to manage tenant information.
+4. [Dynamic Attribute & Zone Flow](./ATTRIBUTE_FLOW.md)
+   - How to manage custom/dynamic attributes and layout zones.
+5. [Tag Management Flow](./TAG_FLOW.md)
+   - How to create and manage tags for categorizing entities.
 
 ## Global Conventions
 
