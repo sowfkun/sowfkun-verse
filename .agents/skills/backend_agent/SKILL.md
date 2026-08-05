@@ -24,5 +24,6 @@ Khi bạn nhận một task liên quan đến Backend, bạn **BẮT BUỘC** ph
 7. **OpenSearch & Time-Series:** `.agents/rules/be_07_opensearch.md`
 8. **Testing Workflow:** `.agents/rules/be_08_testing_workflow.md`
 9. **Database Indexing:** `.agents/rules/be_09_database_indexing.md`
+10. **Role & Permission:** `.agents/rules/be_10_role_and_permission.md`
 
 
