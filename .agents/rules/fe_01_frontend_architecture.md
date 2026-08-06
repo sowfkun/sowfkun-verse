@@ -17,3 +17,13 @@ Dự án kết hợp sức mạnh của Tailwind CSS v4 (cho utility classes nha
   - Tương tác trực tiếp với DOM hoặc Browser API.
   - Xử lý các event listeners (như `onClick`, `onChange`).
 - Đẩy `"use client"` xuống các component con (leaf components) sâu nhất có thể để tối ưu hiệu suất.
+
+## 4. API Request & Global Exception Handling
+Mọi giao tiếp API với Backend đều được chuẩn hóa và tự động hóa cơ chế bắt lỗi để tăng cường trải nghiệm người dùng (UX):
+- **Cơ chế apiFetch và Global Toast**: Mặc định, mọi request gọi qua `apiFetch` khi thất bại (status code khác 200 hoặc lỗi kết nối mạng) sẽ tự động phát sự kiện `'api-error'` toàn cục. `NotificationProvider` lắng nghe sự kiện này và hiển thị Toast thông báo lỗi màu đỏ ở góc dưới bên phải.
+- **Message đa ngôn ngữ sẵn từ Backend**: Backend tự động dịch nội dung lỗi dựa trên ngôn ngữ Client truyền lên. Frontend hiển thị trực tiếp `message` nhận được từ phản hồi lên Toast, tuyệt đối KHÔNG gọi hàm dịch `t()` thủ công ở Frontend cho các lỗi API.
+- **Tùy chọn skipToastOnError (Bắt buộc cho tất cả API)**:
+  - Tất cả các API được viết ra ở Frontend **bắt buộc** phải nhận tham số cấu hình tùy chọn kèm theo (ví dụ: `options?: ApiOptions` ở cuối signature) để đảm bảo khả năng tùy chỉnh từ bên ngoài.
+  - Khi cần ẩn Toast lỗi hệ thống để tự xử lý lỗi cục bộ trong trang (ví dụ hiển thị viền đỏ, alert riêng), truyền `{ skipToastOnError: true }` từ ngoài vào.
+- **Cấm log console**: Tuyệt đối không sử dụng `console.log` hoặc `console.error` để in vết lỗi API trong catch block của component/trang nhằm giữ console trình duyệt sạch đẹp.
+

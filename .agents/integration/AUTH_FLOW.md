@@ -130,7 +130,7 @@ interface RefreshSuccessResponse {
 
 ## 4. Cơ chế lưu trữ & Quản lý Session ở Client (FE)
 
-Để đáp ứng yêu cầu **"tắt trình duyệt mở lại dưới 15 phút không cần đăng nhập lại, quá 15 phút bắt buộc đăng nhập lại"**:
+Để đáp ứng yêu cầu **"TẮT TRÌNH DUYỆT mở lại dưới 15 phút không cần đăng nhập lại, quá 15 phút bắt buộc đăng nhập lại"**:
 
 1. **Vấn đề lưu trữ Refresh Token**:
    - Để session có thể khôi phục sau khi tắt hẳn trình duyệt, **Refresh Token TUYỆT ĐỐI không dùng Session Cookie** (vì Session Cookie bị xóa ngay khi tắt trình duyệt).
@@ -139,7 +139,7 @@ interface RefreshSuccessResponse {
 
 2. **Cơ chế Tracking Active & Kiểm tra 15 phút**:
    - Khi đăng nhập/refresh thành công, FE lưu biến `last_active_at` (Unix Timestamp milliseconds) vào `localStorage`.
-   - **Khi người dùng đang sử dụng (Active)**: Cứ mỗi 5 phút một lần, nếu có hoạt động (click, scroll, keypress), FE cập nhật lại `last_active_at = CurrentTime` trong `localStorage`.
+   - **Khi người dùng đang sử dụng (Active)**: Cứ mỗi 5 phút một lần, FE cập nhật lại `last_active_at = CurrentTime` trong `localStorage`.
    - **Khi tắt trình duyệt và mở lại**:
      - FE đọc `last_active_at` từ `localStorage`.
      - Tính toán khoảng thời gian rảnh: `diff = CurrentTime - last_active_at`.
