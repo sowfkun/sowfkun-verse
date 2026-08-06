@@ -16,6 +16,8 @@ This directory contains flows for integrating with the Sowfkun Verse API:
    - How to manage custom/dynamic attributes and layout zones.
 5. [Tag Management Flow](./TAG_FLOW.md)
    - How to create and manage tags for categorizing entities.
+6. [Role & Permission Flow](./ROLE_FLOW.md)
+   - How to create and manage roles and permissions (RBAC).
 
 ## Global Conventions
 
