@@ -14,14 +14,26 @@ Tuyệt đối không dùng trực tiếp các thẻ HTML (`h1`, `h2`, `p`, `spa
 *   **`Caption`**: Dùng cho timestamp, text lỗi (Error message của input), chú thích siêu nhỏ.
 *   **`Overline`**: (ALL CAPS) Bắt buộc dùng cho các nhãn phân loại, badge, hoặc các cụm từ nhấn mạnh đặc tính (như tag "TYPO" hoặc "LEVEL SECOND" trong palette).
 
-## B. Spacing (Hệ thống khoảng cách - 8pt Grid)
-Hệ thống sử dụng base 8px. Mọi khoảng cách đều phải là bội số của 8 (hoặc 4 đối với khoảng cách siêu nhỏ).
+## B. Spacing & Padding Tokens (Hệ thống khoảng cách - On-Premise Design Tokens)
+Hệ thống sử dụng base 8px (Grid 8pt). **BẮT BUỘC** sử dụng các biến CSS Design Tokens đã được định nghĩa trong `:root` của `globals.css`, tuyệt đối không hardcode khoảng cách tùy tiện:
 
-*   **Giữa các Zone (Khối lớn):** Dùng `40px` (`gap-10`) hoặc padding tương đương để tạo không gian thở (Breathing room) tối đa giữa các khối nội dung độc lập.
-*   **Bên trong Zone (Padding):** Sử dụng chuẩn Padding dọc `40px` (`py-10`) và ngang `32px` (`px-8`).
-*   **Giữa Tiêu đề Zone và Nội dung:** Khoảng cách tiêu chuẩn là `24px` (`gap-6`) hoặc `32px` (`gap-8`).
-*   **Giữa các thành phần nội dung nhỏ:** (ví dụ các Row trong form, các nút bấm): Dùng `16px` (`gap-4`).
-*   **Khoảng cách nhóm sát nhau:** (ví dụ Label và Input): Dùng `8px` (`gap-2`) hoặc `4px` (`gap-1`).
+### 1. Spacing Scale Tokens (Max 24px Compact Style)
+*   `var(--spacing-xs)`: `4px` - Khoảng cách siêu nhỏ (icon và text, nhãn và dấu hoa thị `*`).
+*   `var(--spacing-sm)`: `8px` - Khoảng cách nhóm sát nhau (Label và Input, padding dọc input).
+*   `var(--spacing-md)`: `12px` - Khoảng cách trung bình (padding ngang input `px-[var(--padding-input-x)]`).
+*   `var(--spacing-base)`: `16px` - Khoảng cách giữa các row trong form, padding nút nhỏ `sm`.
+*   `var(--spacing-lg)`: `24px` - Khoảng cách lớn nhất (Padding Card/Form `p-[var(--padding-card)]`, padding `Zone`, padding ngang nút `md`/`lg`, lề tiêu đề).
+
+### 2. Component Specific Tokens (Padding & Dimensions)
+*   **Card / Form / Zone:** `var(--padding-card)`: Mặc định trỏ về `var(--spacing-lg)` (`24px`).
+*   **Input Field:**
+    *   Padding dọc: `var(--padding-input-y)`: `var(--spacing-sm)` (`8px`).
+    *   Padding ngang: `var(--padding-input-x)`: `var(--spacing-md)` (`12px`).
+    *   Chiều cao chuẩn: `var(--height-input)`: `40px`.
+*   **Button Dimensions (Chiều cao & Padding ngang):**
+    *   `var(--height-btn-sm)`: `32px` (Đi kèm padding ngang `var(--spacing-base)` - `16px`).
+    *   `var(--height-btn-md)`: `40px` (Đi kèm padding ngang `var(--spacing-lg)` - `24px`).
+    *   `var(--height-btn-lg)`: `48px` (Đi kèm padding ngang `var(--spacing-lg)` - `24px`).
 
 ## C. Color & Design Tokens (Biến màu sắc)
 Tuyệt đối không dùng mã màu Hex (VD: `#fff`, `#333`). Bắt buộc dùng biến CSS để đảm bảo khả năng đổi Theme dễ dàng (On-Premise Ready):
