@@ -9,9 +9,9 @@ trigger: always_on
 ## 1. Quản lý Redis Keys (Registry Pattern)
 Tuyệt đối **NGHIÊM CẤM** hành vi nối chuỗi cứng (hardcode string concatenation) như `key := "session:" + id` rải rác ở khắp các file Handler hay Middleware. Bắt buộc phải sử dụng **Key Builder / Key Registry**:
 - **Cấp độ Hệ thống (Cross-Cutting Concerns)**: Các Key dùng chung cho toàn bộ App (như Session, Rate Limit) **BẮT BUỘC** phải được định nghĩa trong `pkg/cache/redis/keys.go`.
-- **Cấp độ Domain (Nghiệp vụ)**: Các Key liên quan trực tiếp đến một Domain cụ thể (như `tenant:profile:123`) **BẮT BUỘC** phải được định nghĩa trong thư mục hạ tầng của Domain đó: `internal/[domain_name]/infrastructure/
-- Đối với cache của entity thì định nghĩa trong entity_cache.go. ví dụ cache by id.
-- Đối với cache về nghiệp vụ của domain ko liên quan đến entity thì định nghĩa trong business_cache.go. (xem auth)
+- **Cấp độ Domain (Nghiệp vụ)**: Các Key liên quan trực tiếp đến một Domain cụ thể (như `tenant:profile:123`) BẮT BUỘC phải được định nghĩa trong thư mục hạ tầng của Domain đó: `internal/[domain_name]/infrastructure/cache/` (đặt trong package `cache` độc lập để tránh lỗi vòng lặp import (import cycle) trong Go).
+  - Đối với cache của entity thì định nghĩa trong `entity_cache.go` (ví dụ: `tenant/infrastructure/cache/entity_cache.go`).
+  - Đối với cache về nghiệp vụ của domain không liên quan đến entity thì định nghĩa trong `business_cache.go` (ví dụ: `auth/infrastructure/cache/business_cache.go`).
 
 ## 2. Rate Limiting
 - **Cơ chế**: Sử dụng thuật toán **Token Bucket** được thực thi nguyên tử (Atomic) qua Lua Script trên Redis.
