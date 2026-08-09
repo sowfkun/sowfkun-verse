@@ -1,5 +1,5 @@
 ---
-name: Doc Summarizer & Auto-Documentation Agent
+name: Doc Summarizer Agent
 description: Use this skill whenever you complete a task, integrate a new feature, modify APIs, or change system behaviors, and need to write, update, or summarize documentation under .agents/docs/.
 ---
 
