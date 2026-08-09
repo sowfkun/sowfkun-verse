@@ -14,7 +14,6 @@ sequenceDiagram
     actor Client as Client (Frontend)
     participant API as API Server (Gateway)
     participant Hub as Global Hub (RAM)
-    participant Redis as Redis Agent Business
 
     Client->>API: HTTP GET /api/v1/ws?token=<JWT_TOKEN> (Upgrade to WebSocket)
     Note over API: Parse JWT & Validate Signature
@@ -22,7 +21,6 @@ sequenceDiagram
         API->>Client: Trả về HTTP 101 Switching Protocols (Upgrade thành công)
         Note over API, Client: Thiết lập kết nối TCP WebSocket vật lý
         API->>Hub: Đăng ký Client vào Hub (map theo TenantID & UserID)
-        API->>Redis: Cập nhật online status (user:online:{UserID} = 1, TTL=120s)
         API-->>Client: Kích hoạt Read/Write Pumps bất đồng bộ
     else JWT Token không hợp lệ hoặc thiếu
         API->>Client: Trả về HTTP 401 Unauthorized / HTTP 400 Bad Request
@@ -36,24 +34,25 @@ sequenceDiagram
 
 ---
 
-## 2. Luồng Heartbeat & Ping/Pong (Heartbeat Lifecycle)
+## 2. Luồng Heartbeat & Ping/Pong (TCP Connection Keep-Alive)
 
-Để duy trì kết nối TCP và cập nhật trạng thái hoạt động (online status) của người dùng lên Redis, hệ thống sử dụng cơ chế Heartbeat định kỳ.
+Để duy trì kết nối TCP không bị ngắt bởi Nginx/Proxy do rảnh (Idle), server định kỳ gửi gói tin Ping ở cấp mạng.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Server as WebSocket Server (Write Pump)
     actor Client as Client (Browser)
-    participant Hub as Hub Core (Read Pump)
-    participant Redis as Redis Agent Business
 
     Note over Server, Client: Kết nối rảnh (Idle)
     Server->>Client: Bắn WebSocket Ping Frame (mỗi 54 giây)
     Client->>Server: Tự động phản hồi Pong Frame
-    Server->>Hub: Pong Handler được kích hoạt
-    Hub->>Redis: Gia hạn TTL status user:online:{UserID} (Set TTL = 120 giây)
+    Note over Server: Nhận Pong -> Gia hạn Read Deadline của connection thêm 60 giây
 ```
+
+> [!NOTE]
+> Gói tin Ping/Pong ở cấp mạng (WebSocket Control Frames) chỉ có tác dụng giữ kết nối TCP không bị Timeout. 
+> Trạng thái online thực tế (`user:online:{UserID}`) trên Redis được quản lý riêng biệt bởi ứng dụng thông qua tin nhắn text frame `CLIENT_PING` (Xem chi tiết tại Mục 4).
 
 ---
 
