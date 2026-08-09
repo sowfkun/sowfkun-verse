@@ -13,6 +13,8 @@
     - Nút bấm: Gọi `<Button>`
     - Khối layout / Card: Gọi `<Zone>`
     - Ô nhập liệu: Gọi `<TextInput>`
+    - Điều hướng tab: Gọi `<Tabs>`
+    - Danh sách chi tiết Key-Value: Gọi `<DescriptionList>`
 
 ## 3. Form & Input Standards (ForwardRef)
 - Tất cả các component đóng vai trò nhập liệu (Input, Checkbox, Select, Textarea) bắt buộc phải được bọc qua `React.forwardRef`.
@@ -21,3 +23,22 @@
 ## 4. UI Separation (Divider)
 - Để phân tách các khối nội dung, tuyệt đối tránh dùng các class `border-t`, `border-b` nội tuyến nếu không thật sự cần thiết.
 - Khuyến khích tận dụng tối đa `<Divider />` component để phân tách nội dung rõ ràng và nhất quán trên toàn hệ thống. Mặc định dùng `<Divider />` (chạy ngang). Nếu phân chia cột dọc, truyền prop hướng `vertical` tương ứng nếu component có hỗ trợ.
+
+## 6. Cấu Trúc Phân Nhóm Thư Mục (Component Directory Taxonomy)
+Mọi component trong thư mục `src/components/` bắt buộc phải được phân loại vào đúng nhóm chức năng tương ứng:
+- **`cards/`**: Các loại thẻ hiển thị dữ liệu (`<Zone>`, `<DescriptionList>`, `<StatCard>`, v.v.).
+- **`forms/`**: Các thành phần biểu mẫu & nhập liệu (`<TextInput>`, `<Form>`, `<Select>`, v.v.).
+- **`navigation/`**: Các thành phần điều hướng (`<Tabs>`, `<Breadcrumbs>`, v.v.).
+- **`primitives/`**: Các thành phần nguyên tử nền tảng (`<Button>`, `<Typo>`, `<Divider>`, `<BrandLogo>`).
+- **`guards/`**: Các wrapper bảo mật & phân quyền route (`<RouteGuard>`).
+- **`layout/`**: Khung sườn ứng dụng (`<AppLayout>`, `<Header>`, `<Sidebar>`).
+- **`icons/`**: Hệ thống SVG icon.
+
+> **Quy tắc Barrel Export**: Mọi component BẮT BUỘC phải được re-export tại `src/components/index.ts`. Các trang (pages) và components khác khi sử dụng BẮT BUỘC phải import tập trung từ `@/components` (Ví dụ: `import { Button, Typo, Tabs, Zone } from '@/components'`).
+
+## 7. Tuân Thủ Tham Số Mặc Định (Default Parameter Compliance)
+- **Tôn trọng Style mặc định**: Khi sử dụng các Core Component (như `<Typo>`, `<Button>`, `<TextInput>`, `<Tabs>`), **TUYỆT ĐỐI TRÁNH** việc đè kích thước (font-size), màu sắc hoặc font-family bằng CSS tùy biến bên ngoài hoặc bằng các class cưỡng ép (`!text-xs`, `!text-sm`, `!font-bold` v.v.) trừ trường hợp có yêu cầu nghiệp vụ cực kỳ đặc thù.
+- **Để Component tự quyết định**: Hãy luôn để component tự cấu hình hiển thị dựa trên props định danh truyền vào của nó (Ví dụ: `variant="body"` đã tự động có size `14px` và màu sắc `var(--text-secondary)`, không cần đè thêm kích thước hay màu sắc thủ công). Điều này giúp toàn bộ ứng dụng giữ đúng tỷ lệ thiết kế (Design Ratio) và tính nhất quán tuyệt đối.
+
+
+
