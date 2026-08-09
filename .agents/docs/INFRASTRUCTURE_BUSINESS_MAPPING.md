@@ -68,7 +68,7 @@ Dự án chia nhỏ Redis thành 4 cụm độc lập (logical connections) đ�
 | `REDIS_AGENT_BUSINESS_URL` | **Agent Business** | `role:profile:{roleID}` | Cache thông tin chi tiết quyền hạn của một Role. | 24 giờ. Bị xóa chủ động khi Role được cập nhật qua Kafka. |
 | | | `user:acc_users:{userID}:{permission}` | Cache danh sách IDs các user cấp dưới/cùng bộ phận mà user hiện tại có quyền truy cập. | 24 giờ. Bị xóa hàng loạt khi User đổi phân cấp/chức vụ qua Kafka. |
 | | | `user:activation:{token}` | Cache token tạm thời khi mời nhân viên mới làm việc. | 24 giờ. Xóa ngay khi kích hoạt xong. |
-| | | `user:online:{userID}` | Lưu trạng thái online của user phục vụ websocket ping/pong và kiểm tra trạng thái online. | 60 giây (tự động gia hạn khi nhận Pong). |
+| | | `user:online:{userID}` | Lưu trạng thái online của user phục vụ websocket ping/pong và kiểm tra trạng thái online. | 120 giây (tự động gia hạn bởi sự kiện CLIENT_PING hoặc nhận Pong). |
 
 ---
 
@@ -86,7 +86,8 @@ Hệ thống sử dụng **3 cụm Kafka vật lý độc lập** để tách bi
 ### 3.2. Cụm 2: General Kafka Cluster 2 (`KAFKA_GENERAL2_BROKERS`)
 *   *Mục đích:* Xử lý các sự kiện truyền thông tin thời gian thực qua socket (realtime socket progress synchronization).
 *   *Các Topics:*
-    *   `socket-progress` (FIFO per Key - Ordered): Đồng bộ trạng thái và nội dung tin nhắn socket trên toàn hệ thống đa server, đảm bảo thứ tự gói tin theo trình tự thời gian.
+    *   `send-socket-progress` (FIFO per Key - Ordered): Chiều Server phát tin xuống Client. Đồng bộ trạng thái và nội dung tin nhắn socket trên toàn hệ thống đa server, đảm bảo thứ tự gói tin theo trình tự thời gian.
+    *   `receive-socket-progress` (FIFO per Key - Ordered): Chiều Client gửi tin lên Server. Thu nhận các sự kiện như ping/heartbeat hoặc các action từ client đẩy qua socket để đưa lên Kafka xử lý nghiệp vụ bất đồng bộ.
 
 ### 3.3. Cụm 3: Entity Sync Kafka Cluster (`KAFKA_ENTITY_SYNC_BROKERS`)
 *   *Mục đích:* Truyền tải luồng thay đổi dữ liệu thời gian thực (CDC - Change Data Capture) từ MongoDB phục vụ việc cập nhật và dọn dẹp cache.
@@ -108,13 +109,16 @@ graph TD
     end
 
     subgraph General Kafka Cluster 2
-        TopicSocket[Topic: socket-progress]
+        TopicSend[Topic: send-socket-progress]
+        TopicReceive[Topic: receive-socket-progress]
     end
     
     subgraph MQ Consumers
         UserConsumer[User MQ Handler]
         RoleConsumer[Role MQ Handler]
         EmailConsumer[Email Template MQ Handler]
+        SocketSendConsumer[Socket Hub Dispatcher]
+        SocketReceiveConsumer[User Online Status Handler]
     end
 
     A -->|Push Entity Changed Event| TopicSync
@@ -124,6 +128,11 @@ graph TD
     AuthCmd[Auth/User Command Layer] -->|Push EmailSendRequested Event| TopicGeneral
     TopicGeneral -->|Consume| EmailConsumer
     EmailConsumer -->|Call Resend API| ResendSDK[Resend Platform]
+
+    TopicSend -->|Consume| SocketSendConsumer
+    ClientWS[Client WebSocket] -->|Relay client ping/msg| TopicReceive
+    TopicReceive -->|Consume| SocketReceiveConsumer
+    SocketReceiveConsumer -->|Update user online status| Redis[Redis Agent Business]
 ```
 
 ### 3.4. Ánh xạ Event & MQ Handlers
@@ -135,10 +144,12 @@ graph TD
     *   *Nơi tiêu thụ:* 
         *   **User MQ Handler:** Lọc tin nhắn của collection `users`, tiến hành dọn dẹp hoặc invalidate cache hierarchy phân cấp của user bị ảnh hưởng.
         *   **Role MQ Handler:** Lọc tin nhắn của collection `roles`, tự động gọi `redisClient.Del` xóa key cache `role:profile:{roleID}` để buộc lần truy vấn sau phải đọc lại quyền mới nhất từ MongoDB.
-3.  **Sự kiện Socket Progress (`TopicSocketProgress`) (General Cluster 2)**
+3.  **Sự kiện Socket Progress (`SOCKET_PROGRESS_DISPATCH`) (General Cluster 2 - Topic `send-socket-progress`)**
     *   *Nguồn phát:* Các nghiệp vụ phát thông báo realtime (Chat, Notification, Progress update).
-    *   *Nơi tiêu thụ:* WebSocket MQ Consumer lắng nghe tin nhắn trên Kafka, phân giải Client/Tenant và gọi APIs của `GlobalHub` để push tin nhắn xuống WebSockets tương ứng.
-
+    *   *Nơi tiêu thụ:* Đăng ký trực tiếp `GlobalHub.HandleKafkaMessage` vào Event Dispatcher. Consumer của `send-socket-progress` nhận được tin nhắn và dispatch xuống các local WebSocket connection tương ứng.
+4.  **Sự kiện Client Ping (`CLIENT_PING`) (General Cluster 2 - Topic `receive-socket-progress`)**
+    *   *Nguồn phát:* Client gửi sự kiện `"CLIENT_PING"` lên qua WebSocket connection. Gateway Server nhận được sẽ tự động gán `Source = "CLIENT:" + UserID` và relay lên Kafka.
+    *   *Nơi tiêu thụ:* `HandleClientPing` của `UserMQHandler` lắng nghe sự kiện này và cập nhật TTL online status của User lên Redis Agent Business.
 
 ---
 
