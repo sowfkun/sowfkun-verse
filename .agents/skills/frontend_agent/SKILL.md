@@ -15,3 +15,4 @@ Khi bạn nhận một task liên quan đến Frontend, bạn **BẮT BUỘC** p
 1. **Architecture & Framework:** `.agents/rules/fe_01_frontend_architecture.md`
 2. **Design System & Typography:** `.agents/rules/fe_02_design_system_and_typography.md`
 3. **Component Standards:** `.agents/rules/fe_03_component_standards.md`
+4. **Icon Standards:** `.agents/rules/fe_04_icon_standards.md`

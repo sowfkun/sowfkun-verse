@@ -39,9 +39,13 @@ Hệ thống sử dụng base 8px (Grid 8pt). **BẮT BUỘC** sử dụng các 
 Tuyệt đối không dùng mã màu Hex (VD: `#fff`, `#333`). Bắt buộc dùng biến CSS để đảm bảo khả năng đổi Theme dễ dàng (On-Premise Ready):
 
 *   `var(--bg-primary)`: Nền tổng thể của toàn trang web (Page Background).
-*   `var(--bg-zone)` / `var(--bg-secondary)`: Nền của component `<Zone />`, Card, Modal.
+*   `var(--bg-secondary)`: Nền của Sidebar, thanh điều hướng, card phụ.
+*   `var(--bg-zone)`: Nền của component `<Zone />`, Card, Modal.
+*   `var(--bg-active)`: Nền trạng thái Active của Menu/Tabs (`rgba(99, 102, 241, 0.22)`).
+*   `var(--bg-active-hover)`: Nền trạng thái Active khi hover (`rgba(99, 102, 241, 0.32)`).
 *   `var(--text-primary)`: Dành cho text chính (H1-H4 và Body text).
 *   `var(--text-secondary)`: Dành cho text phụ (Body-sm, Caption, mô tả phụ, placeholder của Input).
 *   `var(--border-color)`: Màu viền tiêu chuẩn cho Input, Divider, viền của Zone/Card.
-*   `var(--primary-color)`: Màu thương hiệu chính, dùng cho Button chính, text link, trạng thái Focus/Active.
+*   `var(--border-active)`: Màu viền trạng thái Active (`rgba(99, 102, 241, 0.45)`).
+*   `var(--primary-color)` / `var(--accent-primary)`: Màu thương hiệu chính, dùng cho Button chính, text link, trạng thái Focus/Active.
 *   `var(--error-color)`: Dùng cho trạng thái lỗi (Border lỗi, Caption báo lỗi).
