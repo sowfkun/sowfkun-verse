@@ -71,7 +71,7 @@ sequenceDiagram
     actor Client as Client Browser
 
     App->>App: Tạo SocketMessagePayload (Target, Event, Data)
-    App->>Kafka: Publish event SOCKET_PROGRESS_DISPATCH (Partition Key = TargetID)
+    App->>Kafka: Publish event SOCKET_PROGRESS_SEND (Partition Key = TargetID)
     Note over Kafka: Đảm bảo FIFO (tuần tự) cho cùng 1 TargetID
     Kafka->>APINode: Phân phối (fan-out) sự kiện đến tất cả API instances
     Note over APINode: Giải mã Event Envelope lấy SocketMessagePayload
@@ -138,4 +138,4 @@ sequenceDiagram
 | Tên Event (payload.Event) | Chiều (Direction) | Logic Xử Lý Ở Backend |
 | :--- | :--- | :--- |
 | `CLIENT_PING` | Client $\rightarrow$ Server | Trigger `HandleClientPing` của User MQ Handler gia hạn trạng thái online (`user:online:{UserID}`) trên Redis Agent Business. |
-| `SOCKET_PROGRESS_DISPATCH` | Server $\rightarrow$ Client | Topic `send-socket-progress` dùng event type này làm envelope điều hướng dispatcher toàn cục chuyển tin cho Hub. |
+| `SOCKET_PROGRESS_SEND` | Server $\rightarrow$ Client | Topic `send-socket-progress` dùng event type này làm envelope điều hướng dispatcher toàn cục chuyển tin cho Hub. |
