@@ -1,5 +1,5 @@
 ---
-name: Backend Code Agent
+name: Backend Review Agent
 description: Skill chuyên dùng để review code Backend Go, đảm bảo tuân thủ nghiêm ngặt Clean Architecture, CQRS, và các nguyên tắc Golden Standard của dự án.
 ---
 

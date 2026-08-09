@@ -68,22 +68,27 @@ Dự án chia nhỏ Redis thành 4 cụm độc lập (logical connections) đ�
 | `REDIS_AGENT_BUSINESS_URL` | **Agent Business** | `role:profile:{roleID}` | Cache thông tin chi tiết quyền hạn của một Role. | 24 giờ. Bị xóa chủ động khi Role được cập nhật qua Kafka. |
 | | | `user:acc_users:{userID}:{permission}` | Cache danh sách IDs các user cấp dưới/cùng bộ phận mà user hiện tại có quyền truy cập. | 24 giờ. Bị xóa hàng loạt khi User đổi phân cấp/chức vụ qua Kafka. |
 | | | `user:activation:{token}` | Cache token tạm thời khi mời nhân viên mới làm việc. | 24 giờ. Xóa ngay khi kích hoạt xong. |
-| | | *`user:online:{userID}`* | *Chuẩn bị tích hợp:* Lưu trạng thái online của user phục vụ websocket ping/pong. | 60 giây (tự động gia hạn khi ping). |
+| | | `user:online:{userID}` | Lưu trạng thái online của user phục vụ websocket ping/pong và kiểm tra trạng thái online. | 60 giây (tự động gia hạn khi nhận Pong). |
 
 ---
 
 ## 3. Apache Kafka (Event-Driven Broker)
 
-Hệ thống sử dụng **2 cụm Kafka vật lý độc lập** để tách biệt luồng xử lý nghiệp vụ thông thường và luồng đồng bộ trạng thái thực thể tải cao:
+Hệ thống sử dụng **3 cụm Kafka vật lý độc lập** để tách biệt luồng xử lý nghiệp vụ thông thường, luồng truyền tin socket thời gian thực và luồng đồng bộ trạng thái thực thể tải cao:
 
-### 3.1. Cụm 1: General Kafka Cluster (`KAFKA_GENERAL_BROKERS`)
+### 3.1. Cụm 1: General Kafka Cluster 1 (`KAFKA_GENERAL1_BROKERS`)
 *   *Mục đích:* Trao đổi sự kiện nội bộ giữa các module nghiệp vụ (bất đồng bộ hóa các tác vụ gửi email, logging, hoặc job nền).
 *   *Các Topics:*
     *   `low-traffics-order-progress` (FIFO per Key): Xử lý các sự kiện yêu cầu độ tuần tự chính xác cao, lưu lượng thấp.
     *   `single-parallel-progress` (Parallel High-throughput): Xử lý các sự kiện song song hiệu suất cao, không yêu cầu chặt chẽ về thứ tự.
     *   `batch-progress` (Batching): Gom nhóm sự kiện (tối đa 50 tin nhắn hoặc 2 giây timeout) để xử lý hàng loạt nhằm giảm tải database/API ngoài.
 
-### 3.2. Cụm 2: Entity Sync Kafka Cluster (`KAFKA_ENTITY_SYNC_BROKERS`)
+### 3.2. Cụm 2: General Kafka Cluster 2 (`KAFKA_GENERAL2_BROKERS`)
+*   *Mục đích:* Xử lý các sự kiện truyền thông tin thời gian thực qua socket (realtime socket progress synchronization).
+*   *Các Topics:*
+    *   `socket-progress` (FIFO per Key - Ordered): Đồng bộ trạng thái và nội dung tin nhắn socket trên toàn hệ thống đa server, đảm bảo thứ tự gói tin theo trình tự thời gian.
+
+### 3.3. Cụm 3: Entity Sync Kafka Cluster (`KAFKA_ENTITY_SYNC_BROKERS`)
 *   *Mục đích:* Truyền tải luồng thay đổi dữ liệu thời gian thực (CDC - Change Data Capture) từ MongoDB phục vụ việc cập nhật và dọn dẹp cache.
 *   *Các Topics:*
     *   `low-entity-sync-order-progress`: Nơi `ChangeStreamWatcher` đẩy các sự kiện thay đổi dữ liệu từ MongoDB `tenant1`.
@@ -98,8 +103,12 @@ graph TD
         TopicSync[Topic: low-entity-sync-order-progress]
     end
 
-    subgraph General Kafka Cluster
+    subgraph General Kafka Cluster 1
         TopicGeneral[Topic: single-parallel-progress / batch-progress]
+    end
+
+    subgraph General Kafka Cluster 2
+        TopicSocket[Topic: socket-progress]
     end
     
     subgraph MQ Consumers
@@ -117,8 +126,8 @@ graph TD
     EmailConsumer -->|Call Resend API| ResendSDK[Resend Platform]
 ```
 
-### 3.3. Ánh xạ Event & MQ Handlers
-1.  **Sự kiện `EMAIL_SEND_REQUESTED` (General Cluster)**
+### 3.4. Ánh xạ Event & MQ Handlers
+1.  **Sự kiện `EMAIL_SEND_REQUESTED` (General Cluster 1)**
     *   *Nguồn phát (Publishers):* Các usecase gửi email (`auth.Register`, `auth.ForgotPassword`, `user.AddEmployee`).
     *   *Nơi tiêu thụ (Consumers):* `internal/email_template/presentation/mq/handler.go` lắng nghe, phân giải template HTML từ DB `system1.email_templates`, binding data và gọi Resend SDK để gửi mail thật.
 2.  **Sự kiện Thay đổi Thực thể (`ENTITY_CHANGED:USERS`, `ENTITY_CHANGED:TENANTS`, `ENTITY_CHANGED:ROLES`) (Entity Sync Cluster)**
@@ -126,6 +135,9 @@ graph TD
     *   *Nơi tiêu thụ:* 
         *   **User MQ Handler:** Lọc tin nhắn của collection `users`, tiến hành dọn dẹp hoặc invalidate cache hierarchy phân cấp của user bị ảnh hưởng.
         *   **Role MQ Handler:** Lọc tin nhắn của collection `roles`, tự động gọi `redisClient.Del` xóa key cache `role:profile:{roleID}` để buộc lần truy vấn sau phải đọc lại quyền mới nhất từ MongoDB.
+3.  **Sự kiện Socket Progress (`TopicSocketProgress`) (General Cluster 2)**
+    *   *Nguồn phát:* Các nghiệp vụ phát thông báo realtime (Chat, Notification, Progress update).
+    *   *Nơi tiêu thụ:* WebSocket MQ Consumer lắng nghe tin nhắn trên Kafka, phân giải Client/Tenant và gọi APIs của `GlobalHub` để push tin nhắn xuống WebSockets tương ứng.
 
 
 ---
