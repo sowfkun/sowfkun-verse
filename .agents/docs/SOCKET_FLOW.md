@@ -139,3 +139,86 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | `CLIENT_PING` | Client $\rightarrow$ Server | Trigger `HandleClientPing` của User MQ Handler gia hạn trạng thái online (`user:online:{UserID}`) trên Redis Agent Business. |
 | `SOCKET_PROGRESS_SEND` | Server $\rightarrow$ Client | Topic `send-socket-progress` dùng event type này làm envelope điều hướng dispatcher toàn cục chuyển tin cho Hub. |
+
+---
+
+## 6. Hướng Dẫn Tích Hợp Client (Frontend Integration Guide)
+
+### 6.1. Thiết Lập Kết Nối (Connection Setup)
+Client sử dụng thư viện WebSocket chuẩn của trình duyệt (hoặc các wrapper) để bắt đầu kết nối. Token JWT bắt buộc phải được truyền qua query parameter `token`.
+
+```javascript
+const JWT_TOKEN = "your_jwt_token_here";
+const socketUrl = `ws://localhost:8080/api/v1/ws?token=${JWT_TOKEN}`;
+
+const ws = new WebSocket(socketUrl);
+
+ws.onopen = () => {
+    console.log("🔌 WebSocket connected successfully!");
+    // Khởi động gửi Ping định kỳ để duy trì online status
+    startHeartbeat();
+};
+
+ws.onmessage = (event) => {
+    try {
+        const payload = JSON.parse(event.data);
+        console.log(`📩 Nhận sự kiện [${payload.event}]:`, payload.data);
+        
+        // Xử lý logic theo từng sự kiện nhận được
+        if (payload.event === "NOTIFICATION_RECEIVED") {
+            showNotification(payload.data);
+        }
+    } catch (e) {
+        console.error("❌ Lỗi parse JSON socket frame:", e);
+    }
+};
+
+ws.onclose = (event) => {
+    console.log("🔌 WebSocket disconnected. Reason:", event.reason);
+    stopHeartbeat();
+    // Thực hiện logic tự động kết nối lại (Auto Reconnect) sau 3-5 giây
+};
+```
+
+### 6.2. Giao Thức Gửi Tin (Client-to-Server)
+Khi client gửi tin nhắn lên, do các tag JSON của `SocketMessagePayload` ở server đã được bổ sung `omitempty`, client chỉ cần gửi đúng schema tối thiểu có chứa `event` và `data`. Backend sẽ tự động điền `source` ở gateway.
+
+#### A. Gửi Ping Duy Trì Kết Nối (CLIENT_PING)
+Client nên gửi Ping định kỳ mỗi **54 giây** (theo cấu hình `pingPeriod` của server) để đảm bảo TTL `user:online` trên Redis luôn được gia hạn và tránh bị gateway ngắt kết nối do Idle timeout.
+
+```javascript
+let heartbeatInterval;
+
+function startHeartbeat() {
+    heartbeatInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+            const pingFrame = {
+                event: "CLIENT_PING",
+                data: {} // data có thể để trống
+            };
+            ws.send(JSON.stringify(pingFrame));
+            console.log("🛰️ Heartbeat CLIENT_PING sent.");
+        }
+    }, 54000); // 54 giây
+}
+
+function stopHeartbeat() {
+    clearInterval(heartbeatInterval);
+}
+```
+
+#### B. Gửi Tin Nhắn Nghiệp Vụ Khác (Ví dụ gửi Chat)
+```javascript
+function sendChatMessage(recipientUserId, text) {
+    const chatFrame = {
+        target_type: "USER",
+        target_id: recipientUserId,
+        event: "CHAT_MESSAGE_SENT",
+        data: {
+            content: text,
+            sent_at: new Date().toISOString()
+        }
+    };
+    ws.send(JSON.stringify(chatFrame));
+}
+```
