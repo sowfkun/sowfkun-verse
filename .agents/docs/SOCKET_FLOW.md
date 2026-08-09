@@ -34,7 +34,28 @@ sequenceDiagram
 
 ---
 
-## 2. Luồng Heartbeat & Ping/Pong (TCP Connection Keep-Alive)
+## 2. Quy tắc Nghiệp vụ Đặc thù (Business Rules)
+
+### 2.1. Chu kỳ Ping Duy trì Trạng thái (Heartbeat & Activity Ping)
+- **Chu kỳ gửi:** Client định kỳ gửi gói tin `CLIENT_PING` mỗi **5 phút** một lần (được cài đặt trong `RouteGuard.tsx`). *Lưu ý: Trong quá trình phát triển/kiểm thử, chu kỳ này có thể được cấu hình tạm thời là **5 giây** để theo dõi dòng tin nhắn trực quan.*
+- **Dữ liệu tươi (Fresh Data):** Client phải lấy đường dẫn thực tế hiện tại ứng dụng đang hiển thị bằng `window.location.pathname` để truyền trong payload `active_path`.
+- **Cấu trúc validate bắt buộc:** Tin nhắn gửi lên bắt buộc phải đính kèm đầy đủ `target_type: "USER"` và `target_id` là User ID của chính client đang kết nối để vượt qua lớp kiểm tra kiểu dữ liệu của Backend.
+
+### 2.2. Cơ chế Lưu trữ & Quản lý TTL Online trên Cache
+- **Cấu trúc Key:** Trạng thái online của người dùng được lưu trên Redis Agent Business dưới dạng `user:online:{UserID}`.
+- **Thời gian hết hạn (TTL):** Thời gian sống (TTL) của Key online được cấu hình là **10 phút** (gấp 2 lần chu kỳ Ping 5 phút của Client). Điều này giúp tránh hiện tượng trạng thái chập chờn (toggled online/offline liên tục) khi xảy ra trễ mạng cục bộ hoặc mất gói tin ping đơn lẻ.
+
+### 2.3. Xác nhận Phản hồi 2 chiều (Bidirectional Acknowledgement)
+- **Cơ chế Pong:** Khi Backend MQ Handler tiêu thụ sự kiện `CLIENT_PING` và ghi Redis thành công, nó sẽ tự động gửi ngược gói tin xác nhận `CLIENT_PONG` thông qua Kafka `send-socket-progress` để Server WebSocket Node đẩy xuống kết nối vật lý của Client.
+- **Phản hồi phía Client:** Khi nhận được sự kiện `CLIENT_PONG`, Frontend sẽ ghi vết và hiển thị phản hồi thành công (Toast thông báo màu xanh lá) để kiểm chứng kết nối thời gian thực thông suốt.
+
+### 2.4. Bảo vệ Phòng vệ Máy chủ (Defensive Boot Sequence)
+- **Thứ tự khởi chạy:** WebSocket Global Hub bắt buộc phải được khởi tạo trước khi khởi chạy các Kafka Consumers để đảm bảo việc đăng ký lắng nghe dispatcher trên topic `send-socket-progress` thành công.
+- **Tránh lỗi Panic:** Handler nâng cấp `/api/v1/ws` tích hợp chốt chặn kiểm tra `GlobalHub == nil`. Nếu server chạy ở chế độ worker (hoặc không hỗ trợ socket), request nâng cấp sẽ bị từ chối với HTTP `503 Service Unavailable` thay vì gây ra lỗi panic làm tắt server.
+
+---
+
+## 3. Luồng Heartbeat & Ping/Pong (TCP Connection Keep-Alive)
 
 Để duy trì kết nối TCP không bị ngắt bởi Nginx/Proxy do rảnh (Idle), server định kỳ gửi gói tin Ping ở cấp mạng.
 
@@ -52,11 +73,11 @@ sequenceDiagram
 
 > [!NOTE]
 > Gói tin Ping/Pong ở cấp mạng (WebSocket Control Frames) chỉ có tác dụng giữ kết nối TCP không bị Timeout. 
-> Trạng thái online thực tế (`user:online:{UserID}`) trên Redis được quản lý riêng biệt bởi ứng dụng thông qua tin nhắn text frame `CLIENT_PING` (Xem chi tiết tại Mục 4).
+> Trạng thái online thực tế (`user:online:{UserID}`) trên Redis được quản lý riêng biệt bởi ứng dụng thông qua tin nhắn text frame `CLIENT_PING` (Xem chi tiết tại Mục 2).
 
 ---
 
-## 3. Chiều Gửi Tin Nhắn Từ Server Xuống Client (Send Flow - Server-to-Client)
+## 4. Chiều Gửi Tin Nhắn Từ Server Xuống Client (Send Flow - Server-to-Client)
 
 Luồng gửi tin nhắn xuống client hoạt động theo mô hình **Fan-out qua Kafka**. Bất kỳ node nào trong hệ thống cũng có thể publish tin nhắn, Kafka sẽ phân phối đến toàn bộ API Nodes để tìm kết nối vật lý.
 
@@ -82,7 +103,7 @@ sequenceDiagram
     end
 ```
 
-### 3.1. Định dạng JSON Frame Server phát xuống:
+### 4.1. Định dạng JSON Frame Server phát xuống:
 ```json
 {
   "event": "NOTIFICATION_RECEIVED",
@@ -95,7 +116,7 @@ sequenceDiagram
 
 ---
 
-## 4. Chiều Client Gửi Tin Nhắn Lên Server (Receive Flow - Client-to-Server)
+## 5. Chiều Client Gửi Tin Nhắn Lên Server (Receive Flow - Client-to-Server)
 
 Khi client gửi tin nhắn lên WebSocket, server sẽ nhận được, đóng gói và đẩy lên Kafka chiều nhận để các consumer nghiệp vụ tiêu thụ bất đồng bộ nhằm phân rã liên kết (decoupling).
 
@@ -117,10 +138,10 @@ sequenceDiagram
     
     Note over Kafka: Phân phối sự kiện đến Consumer tương ứng
     Kafka->>MQ: Consume event CLIENT_PING
-    MQ->>Redis: Cập nhật online status (Set key user:online:{UserID} = 1, TTL=120s)
+    MQ->>Redis: Cập nhật online status (Set key user:online:{UserID} = 1, TTL=10m)
 ```
 
-### 4.1. Định dạng JSON Client gửi lên:
+### 5.1. Định dạng JSON Client gửi lên:
 ```json
 {
   "target_type": "USER",
@@ -132,7 +153,7 @@ sequenceDiagram
 
 ---
 
-## 5. Danh Sách Các Event Định Sẵn (Built-in Events)
+## 6. Danh Sách Các Event Định Sẵn (Built-in Events)
 
 | Tên Event (payload.Event) | Chiều (Direction) | Logic Xử Lý Ở Backend |
 | :--- | :--- | :--- |
@@ -141,9 +162,9 @@ sequenceDiagram
 
 ---
 
-## 6. Hướng Dẫn Tích Hợp Client (Frontend Integration Guide)
+## 7. Hướng Dẫn Tích Hợp Client (Frontend Integration Guide)
 
-### 6.1. Thiết Lập Kết Nối (Connection Setup)
+### 7.1. Thiết Lập Kết Nối (Connection Setup)
 Client sử dụng thư viện WebSocket chuẩn của trình duyệt (hoặc các wrapper) để bắt đầu kết nối. Token JWT bắt buộc phải được truyền qua query parameter `token`.
 
 ```javascript
@@ -179,11 +200,11 @@ ws.onclose = (event) => {
 };
 ```
 
-### 6.2. Giao Thức Gửi Tin (Client-to-Server)
+### 7.2. Giao Thức Gửi Tin (Client-to-Server)
 Khi client gửi tin nhắn lên, do các tag JSON của `SocketMessagePayload` ở server đã được bổ sung `omitempty`, client chỉ cần gửi đúng schema tối thiểu có chứa `event` và `data`. Backend sẽ tự động điền `source` ở gateway.
 
 #### A. Gửi Ping Duy Trì Kết Nối (CLIENT_PING)
-Client nên gửi Ping định kỳ mỗi **54 giây** (theo cấu hình `pingPeriod` của server) để đảm bảo TTL `user:online` trên Redis luôn được gia hạn và tránh bị gateway ngắt kết nối do Idle timeout.
+Client nên gửi Ping định kỳ mỗi **5 phút** (hoặc **5 giây** để test kết nối nhanh chóng) để đảm bảo TTL `user:online` trên Redis luôn được gia hạn.
 
 ```javascript
 let heartbeatInterval;
@@ -192,13 +213,17 @@ function startHeartbeat() {
     heartbeatInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
             const pingFrame = {
+                target_type: "USER",
+                target_id: "your_user_id",
                 event: "CLIENT_PING",
-                data: {} // data có thể để trống
+                data: {
+                    active_path: window.location.pathname
+                }
             };
             ws.send(JSON.stringify(pingFrame));
             console.log("🛰️ Heartbeat CLIENT_PING sent.");
         }
-    }, 54000); // 54 giây
+    }, 300000); // 5 phút (hoặc 5000 cho 5 giây test)
 }
 
 function stopHeartbeat() {
