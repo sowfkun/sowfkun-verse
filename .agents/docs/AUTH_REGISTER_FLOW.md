@@ -237,6 +237,22 @@ Dùng Refresh Token hợp lệ để đổi lấy cặp Access/Refresh Token m�
 * **Tham số Request:** `{ "refresh_token": "eyJhbGciOi..." }`
 * **Cấu trúc Response:** Tương tự API **Login** (cấp lại cặp token mới).
 
+### 4.7 Cấu hình & Cơ chế Refresh Token (Smart Sliding Expiration)
+Hệ thống sử dụng cơ chế gia hạn trượt thông minh để tối ưu tài nguyên mạng và bảo vệ chống race condition trên môi trường multi-tab:
+
+* **Thời gian hiệu lực (Lifespans):**
+  * `AccessToken`: **15 phút** (Lưu trong RAM ở client).
+  * `RefreshToken` (User): **3 ngày** (Lưu trong `localStorage` để duy trì phiên).
+  * `RefreshToken` (Admin): **12 giờ**.
+  * `RefreshToken` (Mobile): **30 ngày**.
+* **Ngưỡng Xoay vòng (Rotation Threshold - 24 giờ):**
+  * Khi client gửi request refresh lên:
+    * Nếu thời hạn còn lại của `RefreshToken` cũ **>= 24 giờ**: Server chỉ cấp `AccessToken` mới và **giữ nguyên** `RefreshToken` cũ (không cập nhật Redis).
+    * Nếu thời hạn còn lại của `RefreshToken` cũ **< 24 giờ**: Server thực hiện xoay vòng, sinh `RefreshToken` mới trượt thêm 3 ngày và lưu vào Redis.
+* **Thời gian ân hạn (Grace Period - 30 giây):**
+  * Khi xoay vòng token, `RefreshToken` cũ được chuyển trạng thái thành `"rotated:<timestamp>"` thay vì xóa ngay.
+  * Các tab khác hoặc request song song sử dụng token cũ này trong vòng **30 giây** vẫn được chấp nhận hợp lệ để tránh bị logout oan khi F5 hoặc mở nhiều tab cùng lúc.
+
 ---
 
 ## 5. Các Mã lỗi Thường gặp (Common Error Codes)
