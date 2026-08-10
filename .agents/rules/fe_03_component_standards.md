@@ -32,6 +32,7 @@ Mọi component trong thư mục `src/components/` bắt buộc phải được 
 - **`primitives/`**: Các thành phần nguyên tử nền tảng (`<Button>`, `<Typo>`, `<Divider>`, `<BrandLogo>`).
 - **`guards/`**: Các wrapper bảo mật & phân quyền route (`<RouteGuard>`).
 - **`layout/`**: Khung sườn ứng dụng (`<AppLayout>`, `<Header>`, `<Sidebar>`).
+- **`tables/`**: Các thành phần hiển thị bảng dữ liệu (`<DataTable>`, bộ render cell `<TableCells>`, v.v.).
 - **`icons/`**: Hệ thống SVG icon.
 
 > **Quy tắc Barrel Export**: Mọi component BẮT BUỘC phải được re-export tại `src/components/index.ts`. Các trang (pages) và components khác khi sử dụng BẮT BUỘC phải import tập trung từ `@/components` (Ví dụ: `import { Button, Typo, Tabs, Zone } from '@/components'`).
@@ -39,6 +40,11 @@ Mọi component trong thư mục `src/components/` bắt buộc phải được 
 ## 7. Tuân Thủ Tham Số Mặc Định (Default Parameter Compliance)
 - **Tôn trọng Style mặc định**: Khi sử dụng các Core Component (như `<Typo>`, `<Button>`, `<TextInput>`, `<Tabs>`), **TUYỆT ĐỐI TRÁNH** việc đè kích thước (font-size), màu sắc hoặc font-family bằng CSS tùy biến bên ngoài hoặc bằng các class cưỡng ép (`!text-xs`, `!text-sm`, `!font-bold` v.v.) trừ trường hợp có yêu cầu nghiệp vụ cực kỳ đặc thù.
 - **Để Component tự quyết định**: Hãy luôn để component tự cấu hình hiển thị dựa trên props định danh truyền vào của nó (Ví dụ: `variant="body"` đã tự động có size `14px` và màu sắc `var(--text-secondary)`, không cần đè thêm kích thước hay màu sắc thủ công). Điều này giúp toàn bộ ứng dụng giữ đúng tỷ lệ thiết kế (Design Ratio) và tính nhất quán tuyệt đối.
+
+## 8. Table & Data Grid Standards
+- **Schema-Driven Column Definition**: Mọi cấu hình cột cho `<DataTable>` bắt buộc phải được khai báo dưới dạng cấu hình schema metadata thông qua các thuộc tính của `Column<T>` (`type`, `getSubtitle`, `getIndex`, `getLine2`, `getBadgeVariant`).
+- **Nghiêm cấm viết logic JSX thủ công hoặc switch-case màu sắc trực tiếp trong `render` của cột** ở các file Page (trừ trường hợp tuỳ biến giao diện đặc biệt).
+- **Đóng gói Table Cells**: Các kiểu hiển thị cell chuẩn (`title-subtitle`, `double-text`, `badge`) bắt buộc phải được gom chung và đóng gói xử lý tự động trong lõi Table để tái sử dụng ở mọi module, đảm bảo tính đóng gói và tối ưu hiệu năng.
 
 
 

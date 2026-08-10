@@ -114,8 +114,13 @@ const sampleDateRangePickerProps: DateRangePickerProps = {
 interface Column<T> {
   key: string;
   header: string;
-  render?: (item: T) => React.ReactNode;
   initialWidth?: number;
+  type?: 'text' | 'title-subtitle' | 'double-text' | 'badge';
+  getSubtitle?: (item: T) => string;
+  getIndex?: (item: T) => string | number;
+  getLine2?: (item: T) => string;
+  getBadgeVariant?: (val: any) => BadgeVariant;
+  render?: (item: T) => React.ReactNode;
 }
 
 interface DataTableProps<T> {
@@ -143,9 +148,28 @@ interface DataTableProps<T> {
 // Ví dụ mock data truyền vào DataTable trong trang Employees
 const sampleDataTableProps: DataTableProps<any> = {
   columns: [
-    { key: "name", header: "Nhân viên", initialWidth: 240 },
-    { key: "email", header: "Liên hệ", initialWidth: 260 },
-    { key: "role", header: "Vai trò", initialWidth: 120 }
+    {
+      key: "name",
+      header: "Nhân viên",
+      type: "title-subtitle",
+      getSubtitle: (emp) => `ID: ${emp.id}`,
+      getIndex: (emp) => emp.name.replace('Nhân viên số ', ''),
+      initialWidth: 240
+    },
+    {
+      key: "email",
+      header: "Liên hệ",
+      type: "double-text",
+      getLine2: (emp) => emp.phone,
+      initialWidth: 260
+    },
+    {
+      key: "role",
+      header: "Vai trò",
+      type: "badge",
+      getBadgeVariant: (role) => role === "OWNER" ? "warning" : role === "ADMIN" ? "info" : "neutral",
+      initialWidth: 120
+    }
   ],
   data: [
     { id: "emp-1", name: "Nhân viên số 1", email: "employee.1@verse.com", role: "OWNER" },
