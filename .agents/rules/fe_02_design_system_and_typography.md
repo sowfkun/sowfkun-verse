@@ -13,6 +13,7 @@ Tuyệt đối không dùng trực tiếp các thẻ HTML (`h1`, `h2`, `p`, `spa
 *   **`Body-sm`**: Dùng cho các mô tả phụ, text hỗ trợ dưới label, nội dung không quá quan trọng.
 *   **`Caption`**: Dùng cho timestamp, text lỗi (Error message của input), chú thích siêu nhỏ.
 *   **`Overline`**: (ALL CAPS) Bắt buộc dùng cho các nhãn phân loại, badge, hoặc các cụm từ nhấn mạnh đặc tính (như tag "TYPO" hoặc "LEVEL SECOND" trong palette).
+*   **Quy tắc Không Đè Style Tuỳ Tiện**: Tuyệt đối không được phép sử dụng class CSS (như `!text-[var(--text-secondary)]`, `!text-xs`, v.v.) nhằm ghi đè trực tiếp kích thước font hoặc màu sắc của component `<Typo>`. Mọi cấu hình hiển thị phải sử dụng đúng variant/level đã được quy chuẩn để đảm bảo tính nhất quán của hệ thống.
 
 ## B. Spacing & Padding Tokens (Hệ thống khoảng cách - On-Premise Design Tokens)
 Hệ thống sử dụng base 8px (Grid 8pt). **BẮT BUỘC** sử dụng các biến CSS Design Tokens đã được định nghĩa trong `:root` của `globals.css`, tuyệt đối không hardcode khoảng cách tùy tiện:
@@ -49,3 +50,4 @@ Tuyệt đối không dùng mã màu Hex (VD: `#fff`, `#333`). Bắt buộc dùn
 *   `var(--border-active)`: Màu viền trạng thái Active (`rgba(99, 102, 241, 0.45)`).
 *   `var(--primary-color)` / `var(--accent-primary)`: Màu thương hiệu chính, dùng cho Button chính, text link, trạng thái Focus/Active.
 *   `var(--error-color)`: Dùng cho trạng thái lỗi (Border lỗi, Caption báo lỗi).
+*   **Quy tắc màu sắc Badge/Tag**: Tuyệt đối không được phép hardcode màu sắc Hex hoặc mã màu RGBA cụ thể cho các Badge vai trò hay trạng thái (như `text-[#fbbf24]`, `bg-[rgba(251,191,36,0.12)]`). Bắt buộc phải sử dụng component `<Badge variant="...">` chung để tự động ánh xạ theo hệ màu Semantic Status Colors (`success`, `danger`, `warning`, `info`, `neutral`) thông qua các biến CSS (`--color-success`, `--color-danger`, `--color-warning`, `--color-info`, `--text-muted`).

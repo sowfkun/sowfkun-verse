@@ -131,6 +131,13 @@ interface DataTableProps<T> {
   searchPlaceholder?: string;
   filterComponent?: React.ReactNode; // Nơi truyền FilterRow chứa các Pill lọc
   actionComponent?: React.ReactNode; // Nút tạo mới hoặc export
+
+  // Cấu hình ẩn hiện các thành phần (Visibility Config)
+  hideSearch?: boolean;          // Ẩn thanh tìm kiếm (SearchBar) - Mặc định: false
+  hidePagination?: boolean;      // Ẩn thanh phân trang (Pagination Footer) - Mặc định: false
+  hideColumnSettings?: boolean;  // Ẩn nút quản lý ẩn hiện cột (⚙️ Settings) - Mặc định: false
+  hideFilterRow?: boolean;       // Ẩn hàng chứa các Pill lọc (FilterRow) - Mặc định: false
+  hideAction?: boolean;          // Ẩn nút hành động (actionComponent) - Mặc định: false
 }
 
 // Ví dụ mock data truyền vào DataTable trong trang Employees
@@ -162,7 +169,122 @@ const sampleDataTableProps: DataTableProps<any> = {
     <button className="px-4 h-10 bg-indigo-600 text-white rounded font-semibold text-xs">
       + Thêm nhân viên
     </button>
-  )
+  ),
+  // Cấu hình ẩn/hiện mặc định để test hoặc sử dụng thực tế
+  hideSearch: false,
+  hidePagination: false,
+  hideColumnSettings: false,
+  hideFilterRow: false,
+  hideAction: false
+};
+```
+
+### 2.3 Cấu Hình Ẩn Hiện Các Thành Phần (Component Visibility Options)
+
+Để tối ưu không gian hiển thị và đáp ứng linh hoạt các nghiệp vụ khác nhau (ví dụ: màn hình mini-list, xem nhanh không phân trang, hoặc danh sách tĩnh không tìm kiếm), `DataTable` hỗ trợ các props tuỳ chọn ẩn hiện sau:
+
+*   **`hideSearch` (boolean):** Khi nhận giá trị `true`, thanh tìm kiếm (`SearchBar`) sẽ bị ẩn khỏi giao diện.
+*   **`hidePagination` (boolean):** Khi nhận giá trị `true`, phần phân trang cuối bảng (`Pagination Footer`) bao gồm cả dropdown size và ô page jump sẽ bị ẩn hoàn toàn.
+*   **`hideColumnSettings` (boolean):** Khi nhận giá trị `true`, biểu tượng bánh răng cài đặt ẩn hiện cột (⚙️) sẽ không được hiển thị.
+*   **`hideFilterRow` (boolean):** Khi nhận giá trị `true`, hàng chứa `filterComponent` (hoặc các capsule lọc) sẽ bị ẩn khỏi giao diện.
+*   **`hideAction` (boolean):** Khi nhận giá trị `true`, nút hành động (`actionComponent`) sẽ bị ẩn khỏi giao diện.
+
+### 2.4 Ví Dụ Tích Hợp Nút Bật/Tắt Để Kiểm Thử Tại Page Component (Page Component Toggles Example)
+
+Trong quá trình phát triển và kiểm thử, Page Component (component cha quản lý trang danh sách) có thể định nghĩa các state điều khiển (toggles) hiển thị trực tiếp để tester hoặc developer dễ dàng kiểm thử hành vi giao diện của DataTable:
+
+```typescript
+import React, { useState } from 'react';
+
+const EmployeePage: React.FC = () => {
+  // 1. State quản lý ẩn hiện để kiểm thử
+  const [hideSearch, setHideSearch] = useState(false);
+  const [hidePagination, setHidePagination] = useState(false);
+  const [hideColumnSettings, setHideColumnSettings] = useState(false);
+  const [hideFilterRow, setHideFilterRow] = useState(false);
+  const [hideAction, setHideAction] = useState(false);
+
+  // 2. Mock các props dữ liệu khác
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(10);
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* KHU VỰC ĐIỀU KHIỂN ĐỂ TEST (Developer & Tester Console) */}
+      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg dark:bg-zinc-900 dark:border-zinc-800">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          Bảng Điều Khiển Kiểm Thử Ẩn/Hiện (DataTable Visibility Toggles)
+        </h4>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={hideSearch} 
+              onChange={(e) => setHideSearch(e.target.checked)} 
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Ẩn Tìm kiếm (hideSearch)</span>
+          </label>
+          
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={hidePagination} 
+              onChange={(e) => setHidePagination(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Ẩn Phân trang (hidePagination)</span>
+          </label>
+          
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={hideColumnSettings} 
+              onChange={(e) => setHideColumnSettings(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Ẩn Cài đặt cột (hideColumnSettings)</span>
+          </label>
+          
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={hideFilterRow} 
+              onChange={(e) => setHideFilterRow(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Ẩn Bộ lọc (hideFilterRow)</span>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input 
+              type="checkbox" 
+              checked={hideAction} 
+              onChange={(e) => setHideAction(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Ẩn Nút (hideAction)</span>
+          </label>
+        </div>
+      </div>
+
+      {/* DANH SÁCH CHÍNH */}
+      <DataTable
+        {...sampleDataTableProps}
+        page={page}
+        size={size}
+        onPageChange={setPage}
+        onSizeChange={setSize}
+        
+        // Truyền các state kiểm thử vào DataTable
+        hideSearch={hideSearch}
+        hidePagination={hidePagination}
+        hideColumnSettings={hideColumnSettings}
+        hideFilterRow={hideFilterRow}
+        hideAction={hideAction}
+      />
+    </div>
+  );
 };
 ```
 
