@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # 05. Message Queue & Kafka Architecture
 
 ## 1. Giới hạn Hạ Tầng (Cloud Free Tier constraints)
@@ -57,3 +61,6 @@ type CommonEvent struct {
 - Đăng ký hàm xử lý bằng Dispatcher sử dụng hằng số đã tạo ở Bước 1. 
 - Ví dụ: `dispatcher.Register(constant.EventEmailSendRequested, emailHandler.HandleEmailRequested)`.
 - Tuyệt đối không hardcode chuỗi string trực tiếp vào hàm `Register()`.
+
+## 7. Socket & Realtime Message Queue Rules
+- **Model dùng chung**: Mọi tin nhắn truyền qua Socket cho Client bắt buộc phải được đóng gói qua struct `socket.SocketMessagePayload` và được publish qua hàm `socket.PublishSocketMessage` (với tham số `isSend bool`). Nghiêm cấm việc gửi trực tiếp JSON thủ công không qua schema định sẵn.
