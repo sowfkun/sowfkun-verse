@@ -1,4 +1,4 @@
-# Bản Đồ Ánh Xạ Hạ Tầng & Nghiệp Vụ (Infrastructure to Business Mapping)
+# Thiết Kế & Ánh Xạ Hạ Tầng Hệ Thống (System Infrastructure Design & Mapping)
 
 Tài liệu này tổng hợp toàn bộ các kết nối hạ tầng (Databases, Caches, Event Brokers, Search/Logging Engines) tương ứng với các nghiệp vụ hiện tại đang vận hành trong dự án `core-backend`.
 
@@ -162,3 +162,70 @@ OpenSearch được cấu hình làm nơi thu thập log tập trung và hỗ tr
     *   *Infrastructure Repository:* `openSearchLogRepository` kế thừa `AbstractOpenSearchRepository`.
 *   **Job dọn dẹp log (`cleanup_os_indices`)**
     *   *Nghiệp vụ:* Một background job lập lịch chạy định kỳ (qua Asynq Task Manager) để xóa các index log quá cũ (ví dụ: log lưu trữ quá 30 ngày) nhằm giải phóng không gian ổ đĩa của cụm OpenSearch.
+
+---
+
+## 5. Cơ Chế Tối Ưu Hóa Kết Nối Hạ Tầng (Connection Pooling Reuse)
+
+Nhằm tối ưu hóa tài nguyên mạng và tương thích linh hoạt giữa môi trường phát triển local (On-Premise) và môi trường production đám mây, hệ thống triển khai cơ chế **Connection Pooling Reuse** tự động ở tầng Infrastructure Manager của cả 4 phân hệ (MongoDB, Redis, OpenSearch, Kafka).
+
+### 5.1. Triết lý Thiết kế
+
+*   **Logical Clusters (Aliases)**: Tầng Application/Presentation luôn nhìn hệ thống dưới dạng các alias độc lập (như `tenant1`, `system1`, `general1`, `general2`, `logging`, `gateway`, `agent_business`,...) để phục vụ các nghiệp vụ cô lập.
+*   **Physical Connections (Pooling)**: Tầng Infrastructure sẽ tự động quản lý các kết nối vật lý thực tế.
+    *   **Cơ chế Tách (Phân tán tải)**: Khi cấu hình các biến môi trường (như các biến `_URI` hay `_URL`) trỏ tới các **địa chỉ host khác nhau**, Connection Manager sẽ tự động khởi tạo các Connection Pool riêng biệt độc lập cho từng cluster vật lý.
+    *   **Cơ chế Gộp (Tối ưu tài nguyên)**: Khi cấu hình các biến môi trường trỏ chung về **một địa chỉ host duy nhất** (ví dụ: `localhost:27017` khi chạy local dev), Connection Manager sẽ tự động phát hiện sự trùng khớp này và chỉ khởi tạo đúng **1 Connection Pool duy nhất** để dùng chung, giúp giảm đáng kể số lượng socket kết nối TCP vật lý.
+
+```mermaid
+graph TD
+    subgraph Tầng Nghiệp Vụ (Aliases)
+        A1[Tenant DB Alias]
+        A2[System DB Alias]
+        A3[Config DB Alias]
+    end
+
+    subgraph Môi Trường Development (Chung Host)
+        ManagerDev[ConnectionManager]
+        PoolDev[1 Connection Pool Vật Lý]
+        ServerDev[MongoDB Local Server]
+        
+        A1 & A2 & A3 --> ManagerDev
+        ManagerDev -->|Tái sử dụng Client| PoolDev
+        PoolDev --> ServerDev
+    end
+
+    subgraph Môi Trường Production (Khác Host)
+        ManagerProd[ConnectionManager]
+        PoolT[Pool Tenant Cluster]
+        PoolS[Pool System Cluster]
+        PoolC[Pool Config Cluster]
+        ServerT[MongoDB Tenant Server]
+        ServerS[MongoDB System Server]
+        ServerC[MongoDB Config Server]
+        
+        A1 --> ManagerProd
+        A2 --> ManagerProd
+        A3 --> ManagerProd
+        
+        ManagerProd -->|Tạo riêng lẻ| PoolT & PoolS & PoolC
+        PoolT --> ServerT
+        PoolS --> ServerS
+        PoolC --> ServerC
+    end
+```
+
+### 5.2. Nguyên lý hoạt động chi tiết
+
+1.  **Cache theo địa chỉ vật lý (Unique Key)**:
+    *   **MongoDB**: Cache client dựa trên `Connection URI` làm khóa key.
+    *   **Redis**: Cache client dựa trên `Redis URL` làm khóa key.
+    *   **Kafka**: Cache `Producer` và `Dialer` dựa trên danh sách `Brokers` (`brokersStr`) làm khóa key (do dự án cấu hình duy nhất một tài khoản credentials trên mỗi cụm).
+    *   **OpenSearch**: Cache HTTP client dựa trên `OpenSearch URL` làm khóa key.
+2.  **Khởi tạo kết nối (`Connect`)**:
+    *   Khi nhận yêu cầu kết nối cho một alias mới, Manager kiểm tra trong Map Cache xem địa chỉ vật lý đã được kết nối hay chưa.
+    *   Nếu **đã tồn tại**, Manager lấy đối tượng client/producer từ cache gán trực tiếp cho alias mới và ghi nhận log `Reused`.
+    *   Nếu **chưa tồn tại**, Manager thực hiện bắt tay (handshake/ping) kết nối, lưu client mới tạo vào cache và map alias, ghi nhận log `Connected/Created`.
+3.  **Giải phóng tài nguyên (`DisconnectAll` / `CloseAll`)**:
+    *   Khi ứng dụng tắt hoặc restart, Manager sẽ lặp qua Map Cache (các kết nối vật lý độc nhất) thay vì lặp qua Map Alias để đóng kết nối.
+    *   Điều này đảm bảo mỗi socket pool chỉ được gọi Close/Disconnect đúng **1 lần duy nhất**, tránh lỗi đóng trùng lặp (double-close socket panic).
+
