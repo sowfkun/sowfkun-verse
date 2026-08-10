@@ -19,6 +19,10 @@ API cập nhật thông tin doanh nghiệp (`/api/v1/tenant/update-info`) áp d�
 ### 1.3 Bảo mật E2EE Hybrid Encryption
 - API áp dụng mã hóa E2EE khi cờ `ENABLE_PAYLOAD_ENCRYPTION=true` được bật. Yêu cầu Header chứa `X-Session-ID` hợp lệ và body được mã hóa AES-256-GCM.
 
+### 1.4 Đồng bộ hóa thời gian thực (Real-time WebSocket Synchronization)
+- **Tự động cập nhật không tải lại trang**: Khi thông tin Tenant được lưu xuống MongoDB thành công, trigger `onChange()` ở backend và Mongo ChangeStreamWatcher sẽ đồng bộ sự kiện qua Kafka Event Bus. Backend MQ Handler bắn sự kiện `ENTITY_CHANGED` (với payload `entity_type = TENANT`, `op_type = UPDATE`, và chứa `data` mới) qua WebSocket.
+- **Phía Frontend**: Lớp handler toàn cục (`useGlobalSocketHandlers.ts`) bắt sự kiện `ENTITY_CHANGED` này. Nếu `entity_id` trùng khớp với Tenant ID hiện tại đang đăng nhập, Frontend tự động gọi hàm `updateTenant` của `AuthContext` để cập nhật nóng lại State và `localStorage` ngay lập tức, đảm bảo giao diện luôn hiển thị dữ liệu mới nhất mà không cần tải lại trang.
+
 ---
 
 ## 2. Quy trình Từng bước (Step-by-Step Flow)
@@ -31,6 +35,7 @@ sequenceDiagram
     participant DB as MongoDB
     participant Redis as Redis Cache
     participant Stream as MongoDB Change Stream
+    participant WS as WebSocket Hub / MQ
 
     Client->>Client: 1. Kiểm tra Dirty State (Có thay đổi so với initial value?)
     Client->>BE: 2. POST /api/v1/tenant/update-info (Encrypted payload + Bearer Token)
@@ -53,6 +58,8 @@ sequenceDiagram
     end
 
     Note over Stream: 10. ChangeStreamWatcher phát hiện thay đổi trên collection tenants,<br/>đồng bộ dữ liệu sang các phân hệ liên quan qua Kafka Event Bus
+    Stream->>WS: 11. MQ Handler nhận event và gửi sự kiện ENTITY_CHANGED qua WebSocket
+    WS->>Client: 12. WebSocket nhận ENTITY_CHANGED (Tenant) & tự động gọi updateTenant() cập nhật UI
 ```
 
 ---

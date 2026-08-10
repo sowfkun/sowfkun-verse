@@ -27,3 +27,11 @@ Mọi giao tiếp API với Backend đều được chuẩn hóa và tự độn
   - Khi cần ẩn Toast lỗi hệ thống để tự xử lý lỗi cục bộ trong trang (ví dụ hiển thị viền đỏ, alert riêng), truyền `{ skipToastOnError: true }` từ ngoài vào.
 - **Cấm log console**: Tuyệt đối không sử dụng `console.log` hoặc `console.error` để in vết lỗi API trong catch block của component/trang nhằm giữ console trình duyệt sạch đẹp.
 
+## 5. Socket Event Standards & Conventions
+Hệ thống WebSocket sử dụng mô hình sự kiện 2 chiều (Bidirectional) thống nhất. Để tránh sự tùy tiện khi tích hợp:
+- **Định nghĩa tập trung**: Toàn bộ Socket Event và data type payload bắt buộc phải được khai báo tập trung trong `src/lib/socket/events.ts`. Nghiêm cấm hardcode chuỗi sự kiện ở các components/hooks.
+- **Unified Payload Model**: Tất cả các gói tin gửi đi hay nhận về đều phải bọc qua struct `SocketMessagePayload<T>` chuẩn (gồm các field `event`, `data`, `target_type`, `target_id`, `source`).
+- **Phân tách xử lý (Clean Dispatching)**:
+  - **Global/System events**: Các sự kiện ảnh hưởng diện rộng hoặc trạng thái kết nối chung (như `CLIENT_PONG`, `NOTIFICATION_RECEIVED`) được quản lý thông qua custom hook `useGlobalSocketHandlers.ts` và tích hợp tại `SocketProvider`.
+  - **Local/Domain-specific events**: Các sự kiện đặc thù (ví dụ: Chat, Task, Project changes) **không được** gọi `subscribe` trực tiếp từ giao diện (Component View). Chúng phải được bọc trong một Custom Hook riêng biệt của Domain tương ứng (ví dụ: `useChatSocket`), chịu trách nhiệm subscribe, cập nhật state/cache, và tự động cleanup khi unmount.
+- **Tránh kết nối lại vô hạn (Connection Loop Protection)**: Khi viết callback socket hoặc handler, bắt buộc sử dụng cơ chế `useRef` hoặc dependency array rỗng để giữ hàm ổn định, không đưa các hàm động thay đổi liên tục vào dependency array của `connect` / `SocketProvider`.
