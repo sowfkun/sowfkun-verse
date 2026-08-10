@@ -28,20 +28,20 @@ Mỗi khi hệ thống thay đổi mã nguồn, tích hợp tính năng mới ho
 
 # Tiêu chuẩn Trình bày Tài liệu (Documentation Standards)
 
-Mỗi tài liệu hướng dẫn tích hợp / đặc tả luồng bắt buộc phải tuân thủ cấu trúc chuẩn hóa sau:
+Mỗi tài liệu hướng dẫn tích hợp / đặc tả luồng (ví dụ: `TÊN_TÍNH_NĂNG_FLOW.md`) **bắt buộc** phải tuân thủ cấu trúc 4 phần chuẩn hóa của [AUTH_REGISTER_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/AUTH_REGISTER_FLOW.md):
 
-1. **Tổng quan & Bảo mật (Overview & Security):**
-   - Đặc tả tính năng và các lớp bảo mật (ví dụ: có yêu cầu mã hóa E2EE, có đi qua middleware giải mã hay kiểm tra quyền hạn hay không).
+1. **Tổng quan & Quy tắc Nghiệp vụ Đặc thù (Overview & Business Rules):**
+   - Đặc tả tính năng, quy trình kiểm soát logic nghiệp vụ và các lớp bảo mật (E2EE, JWT, check quyền hạn, Middleware).
 2. **Quy trình từng bước (Step-by-Step Flow):**
    - Mô tả chi tiết vòng đời dữ liệu đi qua các tầng kiến trúc Clean Architecture.
    - **Bắt buộc dùng Sơ đồ Mermaid** (`mermaid sequenceDiagram` hoặc `graph TD`) để minh họa luồng đi trực quan giữa Client, Gateway/Backend, Caches, Event Brokers (Kafka), Database và các nền tảng thứ ba.
 3. **Đặc tả kỹ thuật API (API Specification):**
    - **Endpoint & Method:** (ví dụ: `POST /api/v1/auth/verify-otp`)
    - **Headers required:** (ví dụ: `X-Session-ID`, `Authorization`)
-   - **Request Payload Parameters Table:** Gồm Tên trường, Kiểu dữ liệu, Ràng buộc validate, và Mô tả.
-   - **Response Payload Structures:** Cả định dạng Thành công (`200 OK`) và các mã lỗi tương ứng.
-4. **Bảng mã lỗi chi tiết (Error Registry):**
-   - Liệt kê bảng ánh xạ mã lỗi giữa HTTP Status, `error_code` của API và thông điệp dịch i18n của Frontend.
+   - **Request Payload Parameters Table:** Bảng chi tiết gồm Tên trường, Kiểu dữ liệu, Ràng buộc validate, và Mô tả.
+   - **Response Payload Structures:** Ví dụ JSON cấu trúc phản hồi Thành công (`200 OK`) và lỗi.
+4. **Các Mã lỗi Thường gặp (Common Error Codes):**
+   - Liệt kê bảng ánh xạ mã lỗi giữa HTTP Status, `error_code` của API và mô tả ý nghĩa/hướng xử lý.
 
 ---
 
