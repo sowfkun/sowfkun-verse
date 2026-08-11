@@ -20,3 +20,11 @@ Tuyệt đối **NGHIÊM CẤM** hành vi nối chuỗi cứng (hardcode string 
 ## 3. Kháng lỗi Cache (Cache Miss & Volatility)
 - **Redis KHÔNG phải là Source of Truth**: Dự án đang sử dụng gói Redis Free (có giới hạn dung lượng và tự động eviction/xóa key cũ). Vì vậy, **TUYỆT ĐỐI KHÔNG** được coi Redis là nơi lưu trữ dữ liệu vĩnh viễn (Persistent Storage).
 - **Cơ chế Fallback**: Bất kỳ logic nghiệp vụ nào đọc dữ liệu từ Redis đều **BẮT BUỘC** phải có cơ chế Fallback (tự động truy vấn xuống Database (MongoDB) nếu Cache bị miss hoặc Redis chết ngang). Sự cố mất dữ liệu trên Redis tuyệt đối không được phép làm sập (Crash) hoặc gián đoạn chức năng của App.
+
+## 4. Thiết kế Cache Model / Cache DTO & Đồng bộ Trường (Field Synchronization)
+Khi sử dụng Cache Model/DTO (ví dụ: `TenantCacheModel`) thay vì lưu trực tiếp Entity gốc để giảm dung lượng Redis:
+- **Bắt buộc viết Comment cảnh báo** tại định nghĩa hàm trong Repo (ví dụ: `GetCachedByID`): Nhắc nhở rõ ràng rằng hàm này trả về thực thể dựng lại từ Cache DTO (có thể bị khuyết một số trường không được cache).
+- **Quy tắc Kiểm tra tại nơi gọi:** Lập trình viên hoặc Agent khi gọi các hàm Get Cached **BẮT BUỘC** phải kiểm tra xem các trường dữ liệu mình chuẩn bị sử dụng đã được map trong Cache DTO hay chưa. Nếu thiếu:
+  1. Tiến hành cập nhật Cache DTO để bổ sung trường đó.
+  2. Hoặc sử dụng hàm Get trực tiếp từ Database (`GetByID`, `GetByEmail`) kèm theo Projection phù hợp nếu trường đó quá lớn và không phù hợp để cache.
+
