@@ -10,13 +10,7 @@ trigger: always_on
 - **Error Handling**: Xử lý lỗi tường minh, gói lỗi (wrap errors). Tuyệt đối không lạm dụng `panic()`.
 - **Concurrency**: Sử dụng goroutines/channels an toàn, có cơ chế timeout/cancellation qua `context.Context`.
 
-## 2. Phân chia Use Case & Tách Hàm (Application Layer)
-- **Thiết kế Use Case (Application)**: Không dồn tất cả nghiệp vụ phức tạp vào một Application/UseCase khổng lồ.
-  - Ở giai đoạn đầu, nếu chỉ là các thao tác CRUD cơ bản, hệ thống cho phép gom chung vào một Application Service cho gọn.
-  - Tuy nhiên, đối với các nghiệp vụ phức tạp hoặc có ngữ cảnh khác nhau (Ví dụ: Việc tạo User có thể đến từ `Register`, `AdminCreate`, hoặc `PublicAPI`), **phải tách riêng** thành các Application/UseCase riêng biệt thay vì dồn chung và dùng `if/else` để kiểm tra role/ngữ cảnh.
-- **Quy tắc tách hàm (Function Splitting)**: Không lạm dụng việc tách hàm (over-engineering). **Hạn chế việc tách hàm** đối với những đoạn code chỉ có vài dòng và chỉ được sử dụng duy nhất ở một nơi. Hãy giữ code liền mạch (inline) để tăng tính dễ đọc (readability) và dễ theo dõi luồng thực thi từ trên xuống dưới.
-
-## 3. Quản lý Constants, Cấu hình & Utils
+## 2. Quản lý Constants, Cấu hình & Utils
 - **Cấu hình & Biến môi trường (Environment Variables)**: Tuyệt đối **không được hardcode** các thông tin kết nối (Connection URLs, Port), thông tin nhạy cảm (API Keys, Secrets, Passwords) trong source code. Bắt buộc phải inject thông qua biến môi trường (`.env`, env vars) hoặc các trình quản lý config (VD: `Viper`).
   - **Đồng bộ đặt tên (Naming Consistency):** Khi khai báo các biến môi trường cho cùng một hệ thống hạ tầng (Infrastructure) cụ thể, bắt buộc phải đồng bộ prefix/suffix theo mục đích sử dụng. Ví dụ: Nếu là Redis dùng cho "general", các biến phải được đặt tên đồng nhất như `REDIS_GENERAL_URL`. Tuyệt đối không đặt tên lộn xộn, thiếu tính liên kết.
 - **Constants (Hằng số tĩnh)**:
@@ -26,7 +20,7 @@ trigger: always_on
   - Logic không chứa nghiệp vụ: Gom vào thư mục `pkg/utils/...`.
   - Logic liên quan tới nghiệp vụ nội bộ: Chuyển thành **Domain Service** hoặc hàm trong Entity. Không đặt ở Utils.
 
-## 4. Đặt Tên Field trong Entity (BSON/JSON Tag Abbreviation)
+## 3. Đặt Tên Field trong Entity (BSON/JSON Tag Abbreviation)
 
 > **Triết lý**: Viết tắt khi nó **tiết kiệm thực sự** và **không làm mờ nghĩa**. Giữ nguyên khi viết tắt chỉ gây khó đọc mà không mang lại lợi ích đáng kể. Readability > Storage optimization ở scale vừa.
 
@@ -104,14 +98,14 @@ type User struct {
 
 ---
 
-## 5. Chuẩn hóa Enum & Const Values (UPPERCASE)
+## 4. Chuẩn hóa Enum & Const Values (UPPERCASE)
 - **BẮT BUỘC viết hoa toàn bộ (UPPERCASE)** đối với tất cả các giá trị string đại diện cho các trường kiểu Enum/Type (ví dụ: `Status`, `Type`, `Role`, `Module`, v.v.) trong cả mã nguồn Go và khi lưu trữ xuống Database MongoDB.
 - **Quy ước**: `ACTIVE`, `INACTIVE`, `CUSTOMER`, `TICKET`, `USER`, `ADMIN`.
 - Tránh việc đặt giá trị hỗn hợp chữ hoa, chữ thường hoặc kiểu CamelCase cho giá trị Enum thực tế để đảm bảo tính nhất quán trên toàn bộ hệ thống (ngoại trừ các chuẩn quốc tế bắt buộc viết thường như mã ngôn ngữ ISO `"vi"`, `"en"`).
 
 ---
 
-## 6. Input Validation (Kiểm tra dữ liệu đầu vào)
+## 5. Input Validation (Kiểm tra dữ liệu đầu vào)
 - **BẮT BUỘC** phải validate toàn bộ dữ liệu từ Client gửi lên (qua REST API, gRPC, MQ, v.v.).
 - Sử dụng thư viện `github.com/go-playground/validator/v10` thông qua wrapper `pkg/utils/validator`.
 - Khai báo các rule validate trực tiếp bằng struct tag `validate:"..."` trong các DTO / Request model (ví dụ: `validate:"required,max=100,email"`).

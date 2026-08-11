@@ -1,4 +1,4 @@
-# 08. Testing Workflow (Quy trình Test của Agent)
+# Testing (Quy trình Test của Agent)
 
 Để đảm bảo các tính năng và API do Agent phát triển hoạt động chính xác và an toàn, Agent BẮT BUỘC tuân thủ quy trình kiểm thử (Testing Workflow) theo hai trường hợp sau:
 
