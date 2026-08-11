@@ -16,11 +16,14 @@ trigger: always_on
 - **Context Injection:** Claims của token sau khi validate thành công bắt buộc phải được inject vào Request Context, truy xuất qua `auth.GetClaimsFromContext(r.Context())`.
 
 ## 2. Phân quyền & Quản lý Quyền hạn (Authorization & Permissions)
+- **Sử dụng Constant Quyền (Permission Constants):** Tuyệt đối **NGHIÊM CẤM** hardcode chuỗi định danh quyền (như `"CONFIG_MANAGE"`) trong code. Mọi quyền phải khai báo dưới dạng kiểu dữ liệu `PermissionKey` trong `internal/role/domain/permission_keys.go`. Khi cấu hình router, bắt buộc ép kiểu: `string(domain.PermX)`.
+- **Quản lý Route & Phân Quyền API (CUD vs R):**
+  - **API Ghi dữ liệu (CUD - Create/Update/Delete):** Bắt buộc đi qua cả 2 lớp middleware: `middleware.RequireAuth(middleware.RequirePermission(string(domain.PermX))(handler.Y))`.
+  - **API Đọc dữ liệu (R - Read/Get/View/List):** Chỉ cần `middleware.RequireAuth` để xác thực người dùng đăng nhập nhằm hiển thị nhanh (Get to Show), trừ trường hợp yêu cầu bảo mật đặc biệt nâng cao.
 - **Cơ chế:** Phân quyền theo vai trò (RBAC) kết hợp phạm vi truy cập (Scopes: `ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWN_ONLY`, `NONE`).
-- **Middleware kiểm tra quyền:** Sử dụng `middleware.RequirePermission(string(domain.PermKey))`.
 - **Quy trình phân giải Scope:**
-  - `GlobalPermissionChecker.ResolveScopes` sẽ quét danh sách `RoleIDs` của user từ cache/DB, lấy danh sách `scopes` của mã quyền tương ứng để gộp lại.
-  - **Đặc quyền Owner:** Nếu `isOwner = true`, hệ thống luôn tự động cấp scope cao nhất `ALL` đối với mọi quyền.
+  - `GlobalPermissionChecker.ResolveScopes` quét danh sách `RoleIDs` của user từ cache/DB, lấy danh sách `scopes` của mã quyền tương ứng để gộp lại.
+  - **Đặc quyền Owner:** Nếu `isOwner = true`, tài khoản luôn được mặc định gán toàn quyền cao nhất với phạm vi `ALL` (Scope `ALL`) đối với mọi tính năng.
   - **Context Injection:** Danh sách scopes giải mã được lưu vào context dưới key `PermissionScopesKey`, truy xuất qua `middleware.GetPermissionScopesFromContext(r.Context())`.
 
 ## 3. Mã hoá đầu cuối (E2EE) - Cơ chế rút gọn

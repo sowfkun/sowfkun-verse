@@ -34,6 +34,7 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 3.1 | **Security & E2EE** | Mã hoá payload (POST/PUT/DELETE) qua AES. Key RSA nạp từ Env hoặc RAM Fallback, không dùng pem tĩnh. |
 | 3.2 | **Thiếu Xác Thực (Auth)** | Các API yêu cầu đăng nhập bắt buộc phải đi qua Middleware xác thực tương ứng (`RequireAuth`, `RequireUserAuth`, v.v.). |
 | 3.3 | **Thiếu Phân Quyền (Permission)** | Các API thay đổi dữ liệu (CUD) tài nguyên hệ thống bắt buộc phải bọc qua `RequirePermission(string(domain.PermKey))`. |
+| 3.4 | **Hardcode Quyền** | Cấm hardcode string permission key. Phải dùng kiểu `PermissionKey` định nghĩa tại `internal/role/domain/permission_keys.go` và ép kiểu khi truyền. |
 
 ### 📂 Zone 4: BE_04 Pkg & Shared Libraries
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
@@ -55,23 +56,18 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 6.2 | **Hardcode Cấu Hình** | Mọi cấu hình (port, url, key) bắt buộc nạp qua env/config. |
 | 6.3 | **Mã Lỗi Nghiệp Vụ Tự Do** | UseCase trả về lỗi nghiệp vụ bắt buộc dùng hằng số `errors.New(coreDomain.Err...)`. |
 | 6.4 | **Enum Không Viết Hoa** | Các giá trị string đại diện cho Enum/Type phải viết hoa hoàn toàn (UPPERCASE). |
+| 6.5 | **Thiếu Validate đầu vào** | DTO request từ Client bắt buộc khai báo tag `validate:"..."`. Khi kiểm tra thất bại phải trả về `coreDomain.ErrValidationFailed` cùng chi tiết lỗi. |
+| 6.6 | **Utils chứa nghiệp vụ** | Cấm đặt logic nghiệp vụ trong `pkg/utils/`. Các helper nghiệp vụ phải chuyển thành Domain Service hoặc hàm trong Entity. |
 
-### 📂 Zone 8: BE_07 OpenSearch
+
+### 📂 Zone 7: BE_07 OpenSearch
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
 |---|---|---|
 | 7.1 | **Nổ OpenSearch Mapping** | Cấm dùng `map[string]any` động dưới OpenSearch. Phải dùng flat schema và thêm warning struct nếu entity lưu trực tiếp xuống OpenSearch. |
 
-### 📂 Zone 8: BE_08 Testing Workflow
-*(Không có quy tắc checklist trực tiếp trên code tĩnh)*
-
-### 📂 Zone 9: BE_09 Database Indexing
+### 📂 Zone 8: BE_09 Database Indexing
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
 |---|---|---|
 | 9.1 | **Thiếu Atlas Search Warning** | Khi thêm field query MongoDB/Atlas Search, phải cập nhật index template ở `cmd/indexer/main.go` và thêm warning `// ⚠️ WARNING: THIS ENTITY USES ATLAS SEARCH...` trên Entity. |
 | 9.2 | **Text Search không qua kws** | Tất cả text search gom về field `kws` (Keywords). Hàm Add/Update phải dùng `text.BuildKeywords()` để chuẩn hóa và gán cho `kws`. |
 
-### 📂 Zone 10: BE_10 Role & Permission
-| STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
-|---|---|---|
-| 10.1 | **Hardcode Quyền** | Cấm hardcode string permission key. Phải dùng kiểu `PermissionKey` định nghĩa tại `internal/role/domain/permission_keys.go`. |
-| 10.2 | **Thiếu Route Permission Check** | API thay đổi dữ liệu (CUD) bắt buộc đi qua `RequirePermission(...)`. API đọc (R) chỉ cần `RequireAuth`. |
