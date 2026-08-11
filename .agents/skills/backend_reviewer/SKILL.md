@@ -43,7 +43,10 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 ### 📂 Zone 5: BE_05 Message Queue Kafka
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
 |---|---|---|
-| 5.1 | **Kafka Topic & Dispatcher** | Tối đa 5 topics. Đăng ký qua Global Event Dispatcher. Handler đặt tên: `[DomainName]MQHandler`. |
+| 5.1 | **Kafka Topic & Dispatcher** | Cấm tự ý tạo topic mới ngoài danh mục quy định. Đăng ký nhận tin qua Global Event Dispatcher. |
+| 5.2 | **Sai cách khai báo Event Type** | Event type constant bắt buộc đặt tại `pkg/core/domain/event.go`. Tên biến bắt đầu bằng `Event[Domain]`, giá trị string dạng `UPPER_SNAKE_CASE`. |
+| 5.3 | **Sai tên MQ Handler / Constructor** | MQ Handler struct bắt buộc là `[DomainName]MQHandler` và constructor là `New[DomainName]MQHandler()`. |
+| 5.4 | **Hardcode Event khi đăng ký** | Cấm hardcode chuỗi string trực tiếp khi đăng ký dispatcher (phải dùng hằng số đã khai báo ở `pkg/core/domain/event.go`). |
 
 ### 📂 Zone 6: BE_06 Coding Standards & Utils
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |

@@ -1,36 +1,35 @@
----
-trigger: always_on
----
-
 # 05. Message Queue & Kafka Architecture
 
-## 1. Giới hạn Hạ Tầng (Cloud Free Tier constraints)
-- **Aiven Kafka Free Tier**: Hệ thống bị giới hạn tối đa **5 Topics** và mỗi Topic chỉ có tối đa **2 Partitions**.
-- Vì giới hạn này, tuyệt đối KHÔNG quy hoạch Topic theo từng Domain (VD: `tenant-topic`, `noti-topic`) vì sẽ cạn kiệt tài nguyên ngay lập tức.
-- Thay vào đó, Topic phải được quy hoạch theo **Chiến lược xử lý (Processing Strategy)** dùng chung cho toàn hệ thống.
+## 1. Kiểm soát Topic Nghiêm ngặt (Strict Topic Control)
+- Hệ thống kiểm soát và quản lý cực kỳ chặt chẽ danh sách các Kafka Topics. Nhà phát triển và Agent **TUYỆT ĐỐI KHÔNG** được tự ý tạo thêm topic mới khi chưa có sự chỉ định hoặc phê duyệt từ người quản trị / Platform Architect.
+- Các topic được phân hoạch theo **Chiến lược xử lý (Processing Strategy)** dùng chung trên toàn hệ thống để tối ưu hóa hiệu năng và quản lý kết nối.
 
 ## 2. Hệ Sinh Thái Topic Toàn Cục
-Hệ thống duy trì 3 Topic chính (khai báo tại `pkg/mq/kafka/topics.go`):
-1. `low-traffics-order-progress`: Dành cho các event cần chạy tuần tự, đảm bảo đúng thứ tự xử lý (FIFO) cho một đối tượng (Dựa vào Routing Key).
-2. `single-parallel-progress`: Dành cho các event độc lập, cường độ cao. Hệ thống sẽ cày cuốc bằng Worker Pool đa luồng (Multi-threading).
-3. `batch-progress`: Dành cho các event gom lô. Phù hợp để xả Bulk Write (InsertMany, UpdateMany) xuống MongoDB để giảm số lượng Query.
+Hệ thống duy trì các Topic chính (được khai báo tại `pkg/mq/kafka/topics.go`):
+1. `low-traffics-order-progress`: Dành cho các event cần chạy tuần tự, bảo đảm đúng thứ tự xử lý (FIFO) cho cùng một đối tượng (Dựa vào Routing Key).
+2. `single-parallel-progress`: Dành cho các event độc lập, xử lý song song với hiệu năng cao bằng Worker Pool.
+3. `batch-progress`: Dành cho các event gom lô (batching) để ghi hàng loạt (Bulk Write) xuống Database.
+4. `send-socket-progress`: Dành cho việc phân phối tin nhắn socket gửi đi từ hệ thống xuống Client qua Hub.
+5. `receive-socket-progress`: Dành cho việc nhận tin nhắn socket gửi lên từ Client để xử lý bất đồng bộ.
+6. `low-entity-sync-order-progress`: Dành cho việc đồng bộ thực thể dựa trên MongoDB Change Stream.
 
 ## 3. Kiến Trúc Global Event Dispatcher
 Để tiết kiệm tối đa số lượng Connection Consumer Group tới Kafka:
 - **KHÔNG**: Không được phép cho các Domain tự mở Consumer hay tự khai báo Group ID riêng lẻ (Sẽ gây Duplicate Connection hoặc Load-Balancing sai lệch).
 - **CÓ**: Hệ thống sử dụng mô hình **Global Event Dispatcher** (Centralized In-memory Pub/Sub).
-  - Có đúng 3 Consumer chạy ngầm ở `main.go` (Ordered, Parallel, Batch) với 3 Group ID toàn cục (`global-ordered-group`, v.v.).
-  - Các Domain (VD: Tenant) chỉ việc viết hàm Handler và đăng ký với Dispatcher thông qua: `dispatcher.Register("EVENT_TYPE", handlerFunc)`.
-  - Dispatcher sẽ tự động bóc vỏ JSON, đọc trường `Type` và định tuyến (Route) Message xuống đúng cho Domain cần thiết.
+  - Các Domain (VD: Tenant) chỉ việc viết hàm Handler và đăng ký với Dispatcher thông qua: `dispatcher.Register(coreDomain.EventX, handlerFunc)`.
+  - Dispatcher sẽ tự động bóc vỏ JSON, đọc trường `Type` và định tuyến (Route) Message xuống đúng cho Domain cần xử lý.
 
 ## 4. Quy tắc Publish Message (Producer)
-Mọi Message được đẩy lên Kafka bắt buộc phải tuân thủ chặt chẽ định dạng của `CommonEvent`:
+Mọi Message được đẩy lên Kafka bắt buộc phải tuân thủ chặt chẽ định dạng của `Event` (định nghĩa tại `pkg/core/domain/event.go`):
 ```go
-type CommonEvent struct {
-	Key    string `json:"-"` // Dùng để định tuyến Partition. BẮT BUỘC có nếu đẩy lên Ordered Topic (VD: ID của User/Tenant).
-	Source string `json:"source"`
-	Type   string `json:"type"` // Dùng để Dispatcher phân loại (VD: "TENANT_CREATED")
-	Data   any    `json:"data"` // Truyền Struct/Map thoải mái, hệ thống tự động Serialize thành JSON
+type Event struct {
+	Key         string    `json:"-"`               // Dùng để định tuyến Partition (VD: TenantID), không lưu vào JSON
+	Topic       string    `json:"topic,omitempty"` // Đích đến trên Kafka (Topic name), chỉ dùng cho job
+	Source      string    `json:"source"`          // Nguồn phát sinh sự kiện (ví dụ: "auth", "user")
+	Type        string    `json:"type"`            // Loại sự kiện (ví dụ: EventEmailSendRequested)
+	MessageTime time.Time `json:"message_time"`    // Thời điểm publish (UTC)
+	Data        any       `json:"data"`            // Payload dữ liệu (Struct/Map tự do)
 }
 ```
 - Nếu dùng `low-traffics-order-progress`: **Bắt buộc** truyền `Key` để đảm bảo 2 event của cùng 1 đối tượng rớt vào chung 1 Partition.
@@ -45,10 +44,9 @@ type CommonEvent struct {
 Để đảm bảo tính nhất quán (Consistency) trong việc đặt tên và khởi tạo luồng Kafka mới cho bất kỳ Domain nào, Agent BẮT BUỘC phải tuân theo các bước sau:
 
 **Bước 1: Khai báo Event Type Constant**
-- Mọi tên Event (Ví dụ: "TENANT_ORDERED_EVENT", "EMAIL_SEND_REQUESTED") **BẮT BUỘC** phải được định nghĩa thành biến hằng số trong file `pkg/constant/[domain_name].go`. 
-- Cú pháp tên biến (Golang Variable): Bắt đầu bằng chữ `Event`, tiếp theo là Tên Domain, rồi đến hành động. 
+- Mọi tên Event (Ví dụ: `EventEmailSendRequested`, `EventSocketProgressSend`) **BẮT BUỘC** phải được định nghĩa tập trung thành biến hằng số trong file `pkg/core/domain/event.go`.
+- Cú pháp tên biến (Golang Variable): Bắt đầu bằng chữ `Event`, tiếp theo là Tên Domain, rồi đến hành động (Ví dụ: `EventEmailSendRequested`).
 - Cú pháp giá trị String (Kafka Event Type): Bắt buộc dùng `UPPER_SNAKE_CASE` (Toàn bộ viết hoa, cách nhau bởi dấu gạch dưới).
-- Ví dụ: `constant.EventTenantOrdered = "TENANT_ORDERED_EVENT"`, `constant.EventEmailSendRequested = "EMAIL_SEND_REQUESTED"`.
 
 **Bước 2: Tạo MQ Handler cho Domain**
 - Tại thư mục `internal/[domain_name]/presentation/mq/`, tạo file `handler.go`.
@@ -58,8 +56,7 @@ type CommonEvent struct {
 **Bước 3: Đăng ký Handler với Global Dispatcher**
 - Mở file `cmd/api/setup_kafka.go`.
 - Trong hàm `startGlobalConsumers`, tiến hành khởi tạo UseCase (nếu cần) và gọi Constructor của MQ Handler.
-- Đăng ký hàm xử lý bằng Dispatcher sử dụng hằng số đã tạo ở Bước 1. 
-- Ví dụ: `dispatcher.Register(constant.EventEmailSendRequested, emailHandler.HandleEmailRequested)`.
+- Đăng ký hàm xử lý bằng Dispatcher sử dụng hằng số đã tạo ở Bước 1 (Ví dụ: `dispatcher.Register(domain.EventEmailSendRequested, emailHandler.HandleEmailRequested)`).
 - Tuyệt đối không hardcode chuỗi string trực tiếp vào hàm `Register()`.
 
 ## 7. Socket & Realtime Message Queue Rules
