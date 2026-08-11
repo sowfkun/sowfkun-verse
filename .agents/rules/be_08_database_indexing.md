@@ -1,4 +1,4 @@
-# BE 09: Database Indexing & Atlas Search
+# BE 08: Database Indexing & Atlas Search
 
 1. **Atlas Search & Indexing:** 
    Khi thêm mới thuộc tính (field) vào Entity để dùng cho mục đích Query/Filter/Search qua MongoDB, BẮT BUỘC phải:

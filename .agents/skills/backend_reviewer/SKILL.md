@@ -65,9 +65,9 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 |---|---|---|
 | 7.1 | **Nổ OpenSearch Mapping** | Cấm dùng `map[string]any` động dưới OpenSearch. Phải dùng flat schema và thêm warning struct nếu entity lưu trực tiếp xuống OpenSearch. |
 
-### 📂 Zone 8: BE_09 Database Indexing
+### 📂 Zone 8: BE_08 Database Indexing
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
 |---|---|---|
-| 9.1 | **Thiếu Atlas Search Warning** | Khi thêm field query MongoDB/Atlas Search, phải cập nhật index template ở `cmd/indexer/main.go` và thêm warning `// ⚠️ WARNING: THIS ENTITY USES ATLAS SEARCH...` trên Entity. |
-| 9.2 | **Text Search không qua kws** | Tất cả text search gom về field `kws` (Keywords). Hàm Add/Update phải dùng `text.BuildKeywords()` để chuẩn hóa và gán cho `kws`. |
+| 8.1 | **Thiếu Atlas Search Warning** | Khi thêm field query MongoDB/Atlas Search, phải cập nhật index template ở `cmd/indexer/main.go` và thêm warning `// ⚠️ WARNING: THIS ENTITY USES ATLAS SEARCH...` trên Entity. |
+| 8.2 | **Text Search không qua kws** | Tất cả text search gom về field `kws` (Keywords). Hàm Add/Update phải dùng `text.BuildKeywords()` để chuẩn hóa và gán cho `kws`. |
 
