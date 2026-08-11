@@ -50,7 +50,10 @@ trigger: always_on
   - Mỗi Domain chỉ có duy nhất 1 struct Command Query định nghĩa tất cả các filter có thể có. Hàm `buildQuery` sẽ tự động parse các trường này thành BSON.
   - Tất cả các hàm Get trong Repository có thể nhận tham số truyền vào tuỳ ý cho gọn (ví dụ: `email string`). Bên trong hàm, KHÔNG ĐƯỢC tự tạo BSON lẻ mà phải khởi tạo Command Query object và truyền vào `buildQuery`.
   - Mọi hàm GET/READ bắt buộc phải hỗ trợ Projection (chỉ lấy field cần thiết, cấm `SELECT *`).
-  - Khi gọi hàm có projection phải đánh giá xem cần dùng field nào và truyền projection
+  - **Quy tắc gán & truyền Projection:**
+    - Đối với các hàm List nhận vào đối tượng Query (kế thừa từ `CommonQuery`), tham số `projection` sẽ được trích xuất trực tiếp từ trong `CommonQuery.Projection` (không cần tham số projection riêng biệt ở chữ ký hàm).
+    - Đối với các hàm Get nhận đối số projection riêng biệt, bắt buộc phải truyền projection map cụ thể.
+    - Khi gọi bất kỳ hàm Get/List nào, Agent/Reviewer bắt buộc phải đối chiếu và đánh giá xem projection đã được gán/truyền đi hay chưa. Nếu truyền `nil` để lấy đầy đủ document (Full Document), **BẮT BUỘC** phải có comment giải thích rõ lý do.
 - **Rule 3.5 - Master Function (Add/Update/Delete)**: 
   - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
   - `Update/Delete`: Hàm nghiệp vụ lẻ phải gom data rồi gọi về hàm **Master Update** / **Master Delete** để thực thi DB và kích hoạt `onChange()`. Các hàm update phải nhận model update đã được xử lí ở usecases. Chỉ check field giá trị để build data và gọi master update. được được xử lí logic gì trong này

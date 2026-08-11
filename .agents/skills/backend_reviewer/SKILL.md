@@ -18,7 +18,7 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 |---|---|---|
 | 1.1 | **DTO Leakage** | Tầng Application (UseCases) không được import DTO từ tầng Presentation. |
 | 1.2 | **Thiếu Zone Comments** | Mọi file Application UseCase bắt buộc chứa đủ comment zone (`MODEL`, `TYPE`, `EXECUTION`). |
-| 1.3 | **Thiếu/Không Truyền Projection** | Định nghĩa Repo bắt buộc nhận `projection map[string]any`. Nơi gọi Repo bắt buộc truyền projection; nếu bắt buộc lấy full (`nil` projection) phải có comment giải thích rõ lý do. |
+| 1.3 | **Thiếu/Không Truyền Projection** | Mọi cuộc gọi Get/List bắt buộc phải có projection (truyền qua đối số riêng biệt hoặc gán vào `CommonQuery.Projection`). Nếu lấy full (nil projection) phải có comment giải thích rõ lý do. Reviewer bắt buộc kiểm tra các hàm Get/List để đánh giá xem đã truyền projection chưa. |
 | 1.4 | **Interface sai Layer** | Các interface side-effects (Email, Publisher) để ở `application/` thay vì `domain/`. |
 | 1.5 | **Bọc Interface Dư Thừa** | Không bọc lại standard library/third-party interface (ví dụ: bọc `kafkaPkg.Producer`). |
 | 1.6 | **Response Không Chuẩn** | Presentation Handler phải dùng `response.Success(w, dto)` hoặc bọc qua `response.BaseResponse[T]`. |
