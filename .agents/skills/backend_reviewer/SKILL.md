@@ -70,4 +70,5 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 |---|---|---|
 | 8.1 | **Thiếu Atlas Search Warning** | Khi thêm field query MongoDB/Atlas Search, phải cập nhật index template ở `cmd/indexer/main.go` và thêm warning `// ⚠️ WARNING: THIS ENTITY USES ATLAS SEARCH...` trên Entity. |
 | 8.2 | **Text Search không qua kws** | Tất cả text search gom về field `kws` (Keywords). Hàm Add/Update phải dùng `text.BuildKeywords()` để chuẩn hóa và gán cho `kws`. |
+| 8.3 | **Lệch index với trường query** | Khi check hàm tạo index, phải vào repository đối chiếu xem các trường đang được dùng để truy vấn/filter (bao gồm cả các trường trong `CommonQuery` như `tid`, `is_del`, v.v.) có khớp hoàn toàn với cấu hình index không. |
 
