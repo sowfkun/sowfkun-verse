@@ -34,6 +34,7 @@ trigger: always_on
 - **Rule 2.5 - Xử lí keyword nếu cần (text.BuildKeywords(cmd.Name)
 - **Rule 2.6 - Delete sẽ xử lí để hỗ trợ cả xoá 1 và xoá nhiều. bằng cách dùng CommonQuery giống list để hỗ trợ xoá theo filter (xem tag)
 - **Rule 2.7 - Cấm lạm quyền**: TUYỆT ĐỐI KHÔNG gọi thẳng DB, Cache, ES ở layer này. Phải đi qua Interface của Repo. 
+- **Rule 2.8 - Soft Delete Data Tracking**: Khi thực hiện xóa (Delete UseCase), bắt buộc chuẩn bị `updateData` chứa thông tin actor (`u_by`) và `tracking_id` (nếu có từ `cmd.TrackingID`) truyền vào `SoftDeleteManyIDs` của Repository để lưu vết dữ liệu thao tác.
 
 ## 3. Infrastructure Layer (`infrastructure/`)
 - **Rule 3.1 - Naming Convention**: Tên file BẮT BUỘC là tên Database engine (Ví dụ: `mongodb_repository.go`, `redis_repository.go`).
@@ -68,6 +69,7 @@ trigger: always_on
 - **Rule 4.3 - Route & URL Prefix**: BẮT BUỘC dùng hàm `getRoutePrefix() string`. Tuyệt đối không dùng Dynamic Path Parameter (`/:id`), phải dùng Query Parameter.
 - **Rule 4.4 - Tách biệt DTOs**: Các Request/Response struct (DTO) dùng cho API Endpoint hoặc Swagger Docs bắt buộc phải được đặt ở thư mục `presentation/dto/`, TUYỆT ĐỐI KHÔNG khai báo struct inline trong file Handler.
 - **Rule 4.5 - DTO & BaseResponse**: Tất cả API trả về thành công đều phải bọc qua Generic `response.BaseResponse[T]`. Handler phải khởi tạo trực tiếp instance của DTO và truyền vào `response.Success(w, dto)`, KHÔNG dùng `map[string]string` hay anonymous struct để mock. Lỗi dùng `response.BaseResponse[any]`.
+- **Rule 4.6 - RequestID / Tracking Middleware**: Đối với các API nhạy cảm / nguy hiểm (như Delete, Purge, Bulk Update), bắt buộc bọc `middleware.RequestIDMiddleware` tại từng route tương ứng để nhận/sinh `X-Request-ID` / `X-Tracking-ID`, đưa vào Context và tự động gắn `TrackingID` vào `CommonCommand`.
 
 ## 5. Dependency Injection & Infrastructure (Root Level)
 - **Rule 5.1 - Shared Infra Khởi tạo 1 lần**: Tại `cmd/api/setup_xxx.go`. Hỗ trợ kết nối Multi-server (nhiều DB, Redis cluster), cấm hardcode 1 connection Singleton.
