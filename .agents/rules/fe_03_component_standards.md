@@ -29,7 +29,7 @@ Mọi component trong thư mục `src/components/` bắt buộc phải được 
 - **`cards/`**: Các loại thẻ hiển thị dữ liệu (`<Zone>`, `<DescriptionList>`, `<StatCard>`, v.v.).
 - **`forms/`**: Các thành phần biểu mẫu & nhập liệu (`<TextInput>`, `<Form>`, `<Select>`, v.v.).
 - **`navigation/`**: Các thành phần điều hướng (`<Tabs>`, `<Breadcrumbs>`, v.v.).
-- **`primitives/`**: Các thành phần nguyên tử nền tảng (`<Button>`, `<Typo>`, `<Divider>`, `<BrandLogo>`).
+- **`primitives/`**: Các thành phần nguyên tử nền tảng (`<Button>`, `<Typo>`, `<Divider>`, `<Badge>`, `<BrandLogo>`).
 - **`guards/`**: Các wrapper bảo mật & phân quyền route (`<RouteGuard>`).
 - **`layout/`**: Khung sườn ứng dụng (`<AppLayout>`, `<Header>`, `<Sidebar>`).
 - **`tables/`**: Các thành phần hiển thị bảng dữ liệu (`<DataTable>`, bộ render cell `<TableCells>`, v.v.).
