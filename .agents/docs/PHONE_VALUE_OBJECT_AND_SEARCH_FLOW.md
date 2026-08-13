@@ -1,0 +1,127 @@
+# Phone Value Object & Searchable Encryption Flow
+
+*Tài liệu đặc tả toàn diện về cấu trúc dữ liệu PhoneNumber (Value Object), quy trình tự động chuẩn hoá (Auto-Normalization), xác thực (Validation) và tìm kiếm mã hoá an toàn (Searchable Encryption Blind Indexing) trong hệ thống.*
+
+---
+
+## 1. Tổng quan & Quy tắc Nghiệp vụ Đặc thù (Overview & Business Rules)
+
+### 1.1. Triết lý Thiết kế Value Object
+- **Cấu trúc dữ liệu**: `PhoneNumber` là một Value Object bất biến (Immutable Value Object) gồm 2 thuộc tính:
+  - `country_code`: Mã quốc gia theo chuẩn viễn thông quốc tế (VD: `"+84"`, `"+1"`).
+  - `number`: Số điện thoại nội địa (VD: `"0901234567"`, `"4155552671"`).
+- **On-Premise & Country-Agnostic**: Hệ thống không hardcode quốc gia mặc định, tự động phân tích và áp dụng định dạng viễn thông của 200+ quốc gia thông qua Google `libphonenumber`.
+- **Lưu trữ chuẩn (Storage Standard)**:
+  - Số điện thoại được lưu với số `0` ở đầu (đối với các quốc gia dùng tiền tố nội địa trunk prefix như Việt Nam, Anh, Úc).
+  - BSON tag trên MongoDB là `phone`, JSON tag là `phone`.
+
+### 1.2. Tìm kiếm Mã Hóa An Toàn (Searchable Encryption)
+- Thay vì lưu bản rõ số điện thoại vào chỉ mục tìm kiếm thông thường (dễ bị lộ dữ liệu nhạy cảm nếu rò rỉ cơ sở dữ liệu), hệ thống áp dụng cơ chế **HMAC-SHA256 Blind Indexing** với Pepper Key bí mật (`BLIND_INDEX_PEPPER`).
+- Mỗi số điện thoại khi lưu xuống được băm thành 3 tokens an toàn lưu vào mảng `kws` (Keywords) của Document:
+  1. `Hash(Full Number)` (VD: Hash của `"0901234567"`)
+  2. `Hash(Prefix 4 Digits)` (VD: Hash của `"0901"`)
+  3. `Hash(Suffix 4 Digits)` (VD: Hash của `"4567"`)
+- Khi Client tìm kiếm theo 4 số đầu, 4 số cuối hoặc toàn bộ số điện thoại, hệ thống sẽ băm từ khóa và khớp chính xác trên chỉ mục Atlas Search.
+
+---
+
+## 2. Quy trình Từng bước (Step-by-Step Flow)
+
+### 2.1. Sơ đồ Luồng Xử lý Toàn trình (End-to-End Sequence Diagram)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client App (Web / Mobile)
+    participant Controller as Presentation (Handler)
+    participant Unmarshal as PhoneNumber.UnmarshalJSON
+    participant LibPhone as libphonenumber (Google)
+    participant Validator as Validator (Struct-Level)
+    participant UseCase as Application (UseCase)
+    participant Security as pkg/core/security (BlindIndex)
+    participant Mongo as MongoDB (Atlas Search)
+
+    Client->>Controller: POST /api/v1/... (JSON Payload with phone object)
+    Note over Controller,Unmarshal: json.NewDecoder(r.Body).Decode(&req)
+    Controller->>Unmarshal: Kích hoạt UnmarshalJSON()
+    Unmarshal->>LibPhone: Parse(CountryCode + Number) & Format(NATIONAL)
+    LibPhone-->>Unmarshal: Trả về SĐT đã làm sạch & thêm số 0 đầu
+    Unmarshal-->>Controller: Gán đối tượng PhoneNumber đã chuẩn hóa vào req.Phone
+
+    Controller->>Validator: validator.Validate(req)
+    Validator->>LibPhone: IsValidNumber() kiểm tra theo Telco Dialing Plan
+    alt SĐT không hợp lệ
+        Validator-->>Controller: Báo lỗi Validation
+        Controller-->>Client: 400 Bad Request (ErrValidationFailed)
+    else SĐT hợp lệ
+        Validator-->>Controller: Validation PASS
+    end
+
+    Controller->>UseCase: Execute(ctx, cmd)
+    Note over UseCase: Dirty Check: !cmd.Phone.Equal(existing.Phone)
+    
+    UseCase->>Security: BuildPhoneKeywords(phone)
+    Security->>Security: ComputeBlindIndex(Full, Prefix4, Suffix4)
+    Security-->>UseCase: Trả về danh sách blind index tokens
+    
+    UseCase->>Mongo: Lưu entity với phone và kws đã băm
+    Mongo-->>UseCase: Document Saved
+    UseCase-->>Controller: Thành công
+    Controller-->>Client: 200 OK
+```
+
+---
+
+## 3. Đặc tả Kỹ thuật API (API Specification)
+
+### 3.1. Cấu trúc Object Phone trong Payload Request
+
+Mọi API nhận số điện thoại (như Đăng ký, Cập nhật thông tin Tenant, Thêm nhân viên) đều nhận object `phone` theo cấu trúc:
+
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc Validate | Mô tả & Ví dụ |
+| :--- | :--- | :---: | :--- | :--- |
+| `country_code` | `string` | Có | `+` kèm mã vùng quốc tế | Ví dụ: `"+84"`, `"+1"`, `"84"` (tự bù `+`) |
+| `number` | `string` | Có | Chuỗi số thuê bao | Ví dụ: `"0901234567"`, `"981341899"` (tự bù `0`), `"098-134-1899"` (tự làm sạch) |
+
+#### Ví dụ JSON Request (Cập nhật Tenant Info):
+```json
+{
+  "name": "Sowfkun Technology Corp",
+  "phone": {
+    "country_code": "+84",
+    "number": "0981341899"
+  },
+  "language": "vi"
+}
+```
+
+#### Ví dụ JSON Response (Đăng nhập / Xem thông tin):
+```json
+{
+  "data": {
+    "id": "66b1a9f...",
+    "name": "Sowfkun Technology Corp",
+    "email": "admin@sowfkun.com",
+    "phone": {
+      "country_code": "+84",
+      "number": "0981341899"
+    },
+    "status": "ACTIVE",
+    "tier": "FREE",
+    "language": "vi"
+  },
+  "error_code": 0,
+  "error_detail": ""
+}
+```
+
+---
+
+## 4. Các Mã Lỗi Thường Gặp (Common Error Codes)
+
+| HTTP Status | Mã Lỗi (`error_code`) | Nguyên nhân | Hướng xử lý cho Client |
+| :--- | :--- | :--- | :--- |
+| `400 Bad Request` | `VALIDATION_FAILED` | Định dạng số điện thoại không hợp lệ (không đúng chuẩn viễn thông của quốc gia đó). | Kiểm tra lại độ dài, mã vùng quốc gia và đầu số viễn thông. |
+| `400 Bad Request` | `BAD_REQUEST` | Payload JSON bị sai định dạng cú pháp. | Kiểm tra cú pháp JSON gửi lên. |
+| `401 Unauthorized` | `UNAUTHORIZED` | Token xác thực hết hạn hoặc không hợp lệ. | Đăng nhập lại hoặc làm mới Access Token qua Refresh Token. |
+| `403 Forbidden` | `FORBIDDEN` | Tài khoản không có quyền thao tác (chỉ Owner mới được cập nhật SĐT Tenant). | Đăng nhập bằng tài khoản Owner hoặc yêu cầu cấp quyền. |
