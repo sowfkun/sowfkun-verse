@@ -69,3 +69,25 @@
 - **Hỗ trợ tìm kiếm phía Client (Tự động đa lớp)**:
   - Để hỗ trợ cả tìm kiếm text thường chứa số (VD: `"Sowfkun 123"`) lẫn băm SĐT/Email, hệ thống sử dụng hàm `text.TransformSearchKeywords(keyword)` để phân tích ra danh sách các token tìm kiếm (bao gồm cả plain-text lẫn hash blind index).
   - Phía Query Builder / UseCase gán danh sách tokens này vào BSON query và Atlas Search sẽ khớp đồng thời cả plain-text lẫn hash.
+
+---
+
+## 6. Chỉ mục Duy Nhất Email (`e_hash`) & Chống mã hoá đè (Safeguards)
+- **Cột chỉ mục chuyên biệt `e_hash`**:
+  - Mọi thực thể cần truy vấn chính xác qua Email và bắt buộc ràng buộc duy nhất (như `User`, `Tenant`) **BẮT BUỘC** khai báo thêm trường `EmailHash` với tag `bson:"e_hash" json:"-"`.
+  - Giá trị `e_hash` được tính bằng hàm `security.ComputeBlindIndex(email)` trên bản rõ trước khi mã hóa và tự động lưu/ghi ở Repository.
+  - **Đánh index Unique:** Cần khai báo unique index cho cột `e_hash` trong indexer (`cmd/indexer/main.go`) để đảm bảo tính duy nhất ở mức DB. Cấm đánh unique trên cột `email` đã mã hóa ngẫu nhiên.
+  - **Truy vấn GetByEmail:** Trong hàm `buildQuery`, truy vấn theo `Email` phải chuyển đổi thành so khớp chính xác trên cột `e_hash`:
+    ```go
+    if cq.Email != "" {
+        baseQuery["e_hash"] = security.ComputeBlindIndex(cq.Email)
+    }
+    ```
+- **Cơ chế Chống mã hoá đè (Idempotent Encryption Safeguard)**:
+  - Khi triển khai hàm `Encrypt` cho các Value Object (`Email` và `PhoneNumber`), bắt buộc phải tích hợp bước **thử giải mã trước**:
+    ```go
+    if _, err := security.DecryptAES(value, key); err == nil {
+        return value, nil // Đã mã hoá rồi -> Trả về nguyên bản
+    }
+    ```
+  - Cơ chế này giúp bảo vệ tính toàn vẹn dữ liệu trong các trường hợp cập nhật trùng lặp (Double Save) hoặc gọi đè phương thức.

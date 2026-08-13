@@ -1,29 +1,37 @@
-# Phone Value Object & Searchable Encryption Flow
+# Phone & Email Encryption & Searchable Encryption Flow
 
-*Tài liệu đặc tả toàn diện về cấu trúc dữ liệu PhoneNumber (Value Object), quy trình tự động chuẩn hoá (Auto-Normalization), xác thực (Validation) và tìm kiếm mã hoá an toàn (Searchable Encryption Blind Indexing) trong hệ thống.*
+*Tài liệu đặc tả toàn diện về cấu trúc dữ liệu PhoneNumber (Value Object), Email (Value Object), quy trình tự động chuẩn hoá (Auto-Normalization), xác thực (Validation) và mã hóa an toàn (AES-256-GCM + e_hash + Searchable Encryption Blind Indexing) trong hệ thống.*
 
 ---
 
 ## 1. Tổng quan & Quy tắc Nghiệp vụ Đặc thù (Overview & Business Rules)
 
 ### 1.1. Triết lý Thiết kế Value Object
-- **Cấu trúc dữ liệu**: `PhoneNumber` là một Value Object bất biến (Immutable Value Object) gồm 2 thuộc tính:
+- **Cấu trúc dữ liệu SĐT**: `PhoneNumber` là một Value Object bất biến (Immutable Value Object) gồm 2 thuộc tính:
   - `country_code`: Mã quốc gia theo chuẩn viễn thông quốc tế (VD: `"+84"`, `"+1"`).
   - `number`: Số điện thoại nội địa (VD: `"0901234567"`, `"4155552671"`).
 - **On-Premise & Country-Agnostic**: Hệ thống không hardcode quốc gia mặc định, tự động phân tích và áp dụng định dạng viễn thông của 200+ quốc gia thông qua Google `libphonenumber`.
-- **Lưu trữ chuẩn (Storage Standard)**:
+- **Lưu trữ SĐT chuẩn (Storage Standard)**:
   - Số điện thoại được lưu với số `0` ở đầu (đối với các quốc gia dùng tiền tố nội địa trunk prefix như Việt Nam, Anh, Úc).
   - BSON tag trên MongoDB là `phone`, JSON tag là `phone`.
-  - **Mã hoá bảo mật (AES Encryption)**: Dữ liệu SĐT gốc và Email gốc được mã hoá tự động bằng **AES-256-GCM** thông qua khoá `DATABASE_ENCRYPTION_KEY` tại tầng Repository trước khi lưu xuống MongoDB. Tầng Domain và UseCase luôn làm việc với bản rõ nhờ cơ chế tự giải mã trong suốt khi đọc lên.
+- **Value Object Email (`coreDomain.Email`)**:
+  - Tự động chuyển về dạng viết thường (lowercase) và làm sạch khoảng trắng (trim whitespace) tại cửa ngõ API (`UnmarshalJSON`).
+  - Underlying type là `string` để lưu trữ native BSON string trong MongoDB.
+- **Mã hoá bảo mật dữ liệu gốc (AES Encryption)**: Dữ liệu SĐT gốc (`number`) và Email gốc (`email`) được mã hoá tự động bằng **AES-256-GCM** thông qua khoá `DATABASE_ENCRYPTION_KEY` tại tầng Repository trước khi lưu xuống MongoDB. Tầng Domain và UseCase luôn làm việc với bản rõ nhờ cơ chế tự giải mã trong suốt khi đọc lên.
+- **Chống mã hóa đè (Idempotent Encryption Safeguard)**: Cả `Email` và `PhoneNumber` đều tích hợp bước thử giải mã trước khi thực thi mã hóa mới. Nếu giải mã thành công, trả về nguyên bản để tránh lỗi dữ liệu rác.
 
-### 1.2. Tìm kiếm Mã Hóa An Toàn (Searchable Encryption)
-- Hệ thống áp dụng cơ chế **HMAC-SHA256 Blind Indexing** với Pepper Key bí mật (`BLIND_INDEX_PEPPER`) để băm các trường nhạy cảm (SĐT, Email) trước khi lưu vào chỉ mục tìm kiếm `kws` (Keywords):
-- **Đối với Số điện thoại** (3 tokens):
-  1. `Hash(Full Number)` (VD: `"0901234567"`)
-  2. `Hash(Prefix 4 Digits)` (VD: `"0901"`)
-  3. `Hash(Suffix 4 Digits)` (VD: `"4567"`)
-- **Đối với Email** (1 token):
-  1. `Hash(Full Email)` (VD: `"admin@sowfkun.com"`)
+### 1.2. Tìm kiếm Mã Hóa An Toàn (Searchable Encryption) & Chỉ mục Duy nhất (e_hash)
+- **Mảng tìm kiếm keywords (`kws`)**: Hệ thống áp dụng cơ chế **HMAC-SHA256 Blind Indexing** với Pepper Key bí mật (`BLIND_INDEX_PEPPER`) để băm các trường nhạy cảm (SĐT, Email) bản rõ trước khi lưu vào chỉ mục tìm kiếm `kws` (Keywords):
+  - **Đối với Số điện thoại** (3 tokens):
+    1. `Hash(Full Number)` (VD: `"0901234567"`)
+    2. `Hash(Prefix 4 Digits)` (VD: `"0901"`)
+    3. `Hash(Suffix 4 Digits)` (VD: `"4567"`)
+  - **Đối với Email** (1 token):
+    1. `Hash(Full Email)` (VD: `"admin@sowfkun.com"`)
+- **Chỉ mục Duy nhất Email (`e_hash`)**:
+  - Do trường `email` lưu chuỗi AES-GCM ngẫu nhiên không thể đặt unique index, hệ thống khai báo thêm trường `e_hash` (BSON tag `e_hash`, JSON tag `"-"`) lưu trữ duy nhất mã băm Blind Index của email.
+  - Cấu hình chỉ mục `unique index` trên cột `e_hash` ở MongoDB để thực thi kiểm tra trùng lặp mức Database.
+  - Các truy vấn tìm chính xác (`GetByEmail`) sẽ tự động so khớp trên `e_hash` thay vì quét mảng `kws`.
 - **Luồng tìm kiếm (Search Flow)**: Khi Client gửi từ khóa tìm kiếm lên, hệ thống gọi hàm `text.TransformSearchKeywords(keyword)` để tự động phân tích và trả về danh sách các token tìm kiếm (bao gồm cả plain-text và băm Blind Index của SĐT/Email nếu khớp định dạng). Nhờ đó, người dùng vừa có thể tìm kiếm tên có chứa số, vừa có thể tìm kiếm SĐT/Email bằng cơ chế băm an toàn.
 
 ---
