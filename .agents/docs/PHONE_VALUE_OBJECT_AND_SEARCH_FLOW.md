@@ -16,12 +16,14 @@
   - BSON tag trên MongoDB là `phone`, JSON tag là `phone`.
 
 ### 1.2. Tìm kiếm Mã Hóa An Toàn (Searchable Encryption)
-- Thay vì lưu bản rõ số điện thoại vào chỉ mục tìm kiếm thông thường (dễ bị lộ dữ liệu nhạy cảm nếu rò rỉ cơ sở dữ liệu), hệ thống áp dụng cơ chế **HMAC-SHA256 Blind Indexing** với Pepper Key bí mật (`BLIND_INDEX_PEPPER`).
-- Mỗi số điện thoại khi lưu xuống được băm thành 3 tokens an toàn lưu vào mảng `kws` (Keywords) của Document:
-  1. `Hash(Full Number)` (VD: Hash của `"0901234567"`)
-  2. `Hash(Prefix 4 Digits)` (VD: Hash của `"0901"`)
-  3. `Hash(Suffix 4 Digits)` (VD: Hash của `"4567"`)
-- Khi Client tìm kiếm theo 4 số đầu, 4 số cuối hoặc toàn bộ số điện thoại, hệ thống sẽ băm từ khóa và khớp chính xác trên chỉ mục Atlas Search.
+- Hệ thống áp dụng cơ chế **HMAC-SHA256 Blind Indexing** với Pepper Key bí mật (`BLIND_INDEX_PEPPER`) để băm các trường nhạy cảm (SĐT, Email) trước khi lưu vào chỉ mục tìm kiếm `kws` (Keywords):
+- **Đối với Số điện thoại** (3 tokens):
+  1. `Hash(Full Number)` (VD: `"0901234567"`)
+  2. `Hash(Prefix 4 Digits)` (VD: `"0901"`)
+  3. `Hash(Suffix 4 Digits)` (VD: `"4567"`)
+- **Đối với Email** (1 token):
+  1. `Hash(Full Email)` (VD: `"admin@sowfkun.com"`)
+- **Luồng tìm kiếm (Search Flow)**: Khi Client gửi từ khóa tìm kiếm lên, hệ thống gọi hàm `text.TransformSearchKeywords(keyword)` để tự động phân tích và trả về danh sách các token tìm kiếm (bao gồm cả plain-text và băm Blind Index của SĐT/Email nếu khớp định dạng). Nhờ đó, người dùng vừa có thể tìm kiếm tên có chứa số, vừa có thể tìm kiếm SĐT/Email bằng cơ chế băm an toàn.
 
 ---
 

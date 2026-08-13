@@ -60,6 +60,9 @@
     1. **Full National Number**: SĐT đầy đủ (VD: `"0901234567"` $\rightarrow$ hash).
     2. **Prefix 4 Digits**: 4 số đầu (VD: `"0901"` $\rightarrow$ hash).
     3. **Suffix 4 Digits**: 4 số cuối (VD: `"4567"` $\rightarrow$ hash).
-- **Hỗ trợ tìm kiếm phía Client**:
-  - Người dùng có thể tìm kiếm theo: toàn bộ số điện thoại, 4 số đầu, hoặc 4 số đuôi.
-  - Phía Query Builder / UseCase sẽ băm từ khóa tìm kiếm (`ComputeBlindIndex(keyword)`) và đối chiếu khớp chính xác trên trường `kws` của Atlas Search MongoDB.
+- **Phân tách Token Tìm kiếm Email**:
+  - Khi tạo mới hoặc cập nhật entity có chứa Email, BẮT BUỘC gọi `text.BuildEmailKeywords(email)` nạp vào mảng từ khóa `kws` (Keywords):
+    1. **Full Email**: Email đầy đủ ở dạng chữ thường (VD: `"admin@sowfkun.com"` $\rightarrow$ hash).
+- **Hỗ trợ tìm kiếm phía Client (Tự động đa lớp)**:
+  - Để hỗ trợ cả tìm kiếm text thường chứa số (VD: `"Sowfkun 123"`) lẫn băm SĐT/Email, hệ thống sử dụng hàm `text.TransformSearchKeywords(keyword)` để phân tích ra danh sách các token tìm kiếm (bao gồm cả plain-text lẫn hash blind index).
+  - Phía Query Builder / UseCase gán danh sách tokens này vào BSON query và Atlas Search sẽ khớp đồng thời cả plain-text lẫn hash.
