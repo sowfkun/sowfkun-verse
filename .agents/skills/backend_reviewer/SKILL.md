@@ -35,9 +35,9 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 3.2 | **Thiếu Xác Thực (Auth)** | Các API yêu cầu đăng nhập bắt buộc phải đi qua Middleware xác thực tương ứng (`RequireAuth`, `RequireUserAuth`, v.v.). |
 | 3.3 | **Thiếu Phân Quyền (Permission)** | Các API thay đổi dữ liệu (CUD) tài nguyên hệ thống bắt buộc phải bọc qua `RequirePermission(string(domain.PermKey))`. |
 | 3.4 | **Hardcode Quyền** | Cấm hardcode string permission key. Phải dùng kiểu `PermissionKey` định nghĩa tại `internal/role/domain/permission_keys.go` và ép kiểu khi truyền. |
-| 3.5 | **Encrypt/Decrypt Sai Layer** | TUYỆT ĐỐI không gọi `Encrypt()`/`Decrypt()` của Email/PhoneNumber ở ngoài Repository layer (như UseCases, Controllers, Services). |
-| 3.6 | **Thiếu e_hash hoặc Unique Index** | Thực thể cần email duy nhất phải dùng cột `e_hash` (Blind Index) kèm standard unique index ở indexer. Cấm unique index trên trường `email` đã mã hóa. |
-| 3.7 | **Mã hoá đè (Double Encrypt)** | Hàm `Encrypt()` của Email/PhoneNumber phải bọc kiểm tra giải mã trước (idempotency) để tránh mã hoá lồng nhau. |
+| 3.5 | **Encrypt/Decrypt Sai Layer** | TUYỆT ĐỐI không gọi `Encrypt()`/`Decrypt()` của các trường nhạy cảm (Email, Phone, v.v.) ngoài Repository layer (như UseCases, Controllers, Services). |
+| 3.6 | **Thiếu Blind Index hoặc Unique Index** | Thực thể cần ràng buộc duy nhất trên trường nhạy cảm phải dùng cột Blind Index hash tương ứng (VD: `e_hash`) kèm standard unique index. Cấm unique index trên trường gốc đã mã hóa. |
+| 3.7 | **Mã hoá đè (Double Encrypt)** | Hàm `Encrypt()` của các trường/Value Objects nhạy cảm phải bọc kiểm tra giải mã trước (idempotency) để tránh mã hoá lồng nhau. |
 
 ### 📂 Zone 4: BE_04 Pkg & Shared Libraries
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
