@@ -52,16 +52,19 @@
 
 ---
 
-## 5. Tìm Kiếm & Mã Hóa An Toàn (Searchable Encryption & Blind Indexing)
+## 5. Tìm Kiếm & Mã Hóa An Toàn (Searchable Encryption, Blind Indexing & AES Encryption)
+- **Mã hoá Dữ liệu Gốc (Raw Fields Encryption)**:
+  - Các trường dữ liệu gốc SĐT (`PhoneNumber.Number`) và Email (`Email`) BẮT BUỘC phải được mã hoá bằng thuật toán **AES-256-GCM** sử dụng khoá `DATABASE_ENCRYPTION_KEY` trước khi lưu vào cơ sở dữ liệu MongoDB.
+  - Quá trình mã hoá (khi ghi) và giải mã (khi đọc) diễn ra tự động và trong suốt (transparently) ở tầng **Repository (Infrastructure)** để các tầng bên trên (UseCase/Domain) không bị ảnh hưởng và vẫn làm việc với bản rõ.
 - **Nguyên lý Blind Index**:
   - Để bảo mật dữ liệu nhạy cảm nhưng vẫn cho phép tìm kiếm nhanh qua Atlas Search, hệ thống sử dụng thuật toán HMAC-SHA256 Blind Indexing (`pkg/core/security/blind_index.go`) kết hợp với khóa bí mật `BLIND_INDEX_PEPPER`.
 - **Phân tách Token Tìm kiếm SĐT**:
-  - Khi tạo mới (`Add`) hoặc cập nhật (`UpdateInfo`) entity có chứa SĐT, tầng UseCase/Repository BẮT BUỘC gọi `text.BuildPhoneKeywords(phone)` nạp vào mảng từ khóa `kws` (Keywords):
+  - Khi tạo mới (`Add`) hoặc cập nhật (`UpdateInfo`) entity có chứa SĐT, tầng UseCase/Repository BẮT BUỘC gọi `text.BuildPhoneKeywords(phone)` nạp vào mảng từ khóa `kws` (Keywords) bằng **bản rõ** (trước khi bản gốc bị mã hoá):
     1. **Full National Number**: SĐT đầy đủ (VD: `"0901234567"` $\rightarrow$ hash).
     2. **Prefix 4 Digits**: 4 số đầu (VD: `"0901"` $\rightarrow$ hash).
     3. **Suffix 4 Digits**: 4 số cuối (VD: `"4567"` $\rightarrow$ hash).
 - **Phân tách Token Tìm kiếm Email**:
-  - Khi tạo mới hoặc cập nhật entity có chứa Email, BẮT BUỘC gọi `text.BuildEmailKeywords(email)` nạp vào mảng từ khóa `kws` (Keywords):
+  - Khi tạo mới hoặc cập nhật entity có chứa Email, BẮT BUỘC gọi `text.BuildEmailKeywords(email)` nạp vào mảng từ khóa `kws` (Keywords) bằng **bản rõ**:
     1. **Full Email**: Email đầy đủ ở dạng chữ thường (VD: `"admin@sowfkun.com"` $\rightarrow$ hash).
 - **Hỗ trợ tìm kiếm phía Client (Tự động đa lớp)**:
   - Để hỗ trợ cả tìm kiếm text thường chứa số (VD: `"Sowfkun 123"`) lẫn băm SĐT/Email, hệ thống sử dụng hàm `text.TransformSearchKeywords(keyword)` để phân tích ra danh sách các token tìm kiếm (bao gồm cả plain-text lẫn hash blind index).

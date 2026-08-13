@@ -14,6 +14,7 @@
 - **Lưu trữ chuẩn (Storage Standard)**:
   - Số điện thoại được lưu với số `0` ở đầu (đối với các quốc gia dùng tiền tố nội địa trunk prefix như Việt Nam, Anh, Úc).
   - BSON tag trên MongoDB là `phone`, JSON tag là `phone`.
+  - **Mã hoá bảo mật (AES Encryption)**: Dữ liệu SĐT gốc và Email gốc được mã hoá tự động bằng **AES-256-GCM** thông qua khoá `DATABASE_ENCRYPTION_KEY` tại tầng Repository trước khi lưu xuống MongoDB. Tầng Domain và UseCase luôn làm việc với bản rõ nhờ cơ chế tự giải mã trong suốt khi đọc lên.
 
 ### 1.2. Tìm kiếm Mã Hóa An Toàn (Searchable Encryption)
 - Hệ thống áp dụng cơ chế **HMAC-SHA256 Blind Indexing** với Pepper Key bí mật (`BLIND_INDEX_PEPPER`) để băm các trường nhạy cảm (SĐT, Email) trước khi lưu vào chỉ mục tìm kiếm `kws` (Keywords):

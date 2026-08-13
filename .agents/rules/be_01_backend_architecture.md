@@ -37,7 +37,7 @@ trigger: always_on
 - **Rule 2.8 - Soft Delete Data Tracking**: Khi thực hiện xóa (Delete UseCase), bắt buộc chuẩn bị `updateData` chứa thông tin actor (`u_by`) và `tracking_id` (nếu có từ `cmd.TrackingID`) truyền vào `SoftDeleteManyIDs` của Repository để lưu vết dữ liệu thao tác.
 
 ## 3. Infrastructure Layer (`infrastructure/`)
-- **Rule 3.1 - Naming Convention**: Tên file BẮT BUỘC là tên Database engine (Ví dụ: `mongodb_repository.go`, `redis_repository.go`).
+- **Rule 3.1 - Naming Convention**: Tên file BẮT BUỘC là `repository.go` (Ví dụ: `internal/[domain]/infrastructure/repository.go`). Trong trường hợp có caching (Redis), caching logic sẽ được tích hợp trực tiếp vào trong file repository này để làm cổng Gateway dữ liệu hợp nhất.
 - **Rule 3.2 - Phân Zone Repository**: File repository BẮT BUỘC chia 3 zone.
   - *Ví dụ:*
     ```go
