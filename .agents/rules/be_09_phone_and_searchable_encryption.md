@@ -56,6 +56,7 @@
 - **Mã hoá Dữ liệu Gốc (Raw Fields Encryption)**:
   - Các trường dữ liệu gốc SĐT (`PhoneNumber.Number`) và Email (`Email`) BẮT BUỘC phải được mã hoá bằng thuật toán **AES-256-GCM** sử dụng khoá `DATABASE_ENCRYPTION_KEY` trước khi lưu vào cơ sở dữ liệu MongoDB.
   - Quá trình mã hoá (khi ghi) và giải mã (khi đọc) diễn ra tự động và trong suốt (transparently) ở tầng **Repository (Infrastructure)** để các tầng bên trên (UseCase/Domain) không bị ảnh hưởng và vẫn làm việc với bản rõ.
+  - **Giới hạn ranh giới (Security Boundary):** TUYỆT ĐỐI KHÔNG thực hiện gọi các phương thức `Encrypt()` hay `Decrypt()` của Email/PhoneNumber ở các lớp bên ngoài Repository (như UseCases, Handlers, Controllers, Services). Mọi hành vi mã hoá/giải mã bản rõ BẮT BUỘC chỉ được diễn ra khép kín trong Repository layer.
 - **Nguyên lý Blind Index**:
   - Để bảo mật dữ liệu nhạy cảm nhưng vẫn cho phép tìm kiếm nhanh qua Atlas Search, hệ thống sử dụng thuật toán HMAC-SHA256 Blind Indexing (`pkg/core/security/blind_index.go`) kết hợp với khóa bí mật `BLIND_INDEX_PEPPER`.
 - **Phân tách Token Tìm kiếm SĐT**:

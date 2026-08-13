@@ -18,6 +18,7 @@
   - Tự động chuyển về dạng viết thường (lowercase) và làm sạch khoảng trắng (trim whitespace) tại cửa ngõ API (`UnmarshalJSON`).
   - Underlying type là `string` để lưu trữ native BSON string trong MongoDB.
 - **Mã hoá bảo mật dữ liệu gốc (AES Encryption)**: Dữ liệu SĐT gốc (`number`) và Email gốc (`email`) được mã hoá tự động bằng **AES-256-GCM** thông qua khoá `DATABASE_ENCRYPTION_KEY` tại tầng Repository trước khi lưu xuống MongoDB. Tầng Domain và UseCase luôn làm việc với bản rõ nhờ cơ chế tự giải mã trong suốt khi đọc lên.
+- **Ranh giới Bảo mật (Security Boundary):** TUYỆT ĐỐI KHÔNG gọi các hàm mã hoá/giải mã (`Encrypt()` / `Decrypt()`) của Email/SĐT ở bên ngoài tầng Repository (như UseCase, Handler, Controller). Tầng Domain & UseCase chỉ tương tác với dữ liệu bản rõ; việc mã hóa/giải mã là nhiệm vụ khép kín bên trong lớp Repository.
 - **Chống mã hóa đè (Idempotent Encryption Safeguard)**: Cả `Email` và `PhoneNumber` đều tích hợp bước thử giải mã trước khi thực thi mã hóa mới. Nếu giải mã thành công, trả về nguyên bản để tránh lỗi dữ liệu rác.
 
 ### 1.2. Tìm kiếm Mã Hóa An Toàn (Searchable Encryption) & Chỉ mục Duy nhất (e_hash)
