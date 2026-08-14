@@ -109,7 +109,7 @@ func (r *AbstractOpenSearchRepository[T]) GetEntityRouting(entity *T) string
 
 | Domain / Alias | Phân vùng (`Partition`) | Tên Index Mẫu | Time Field | Routing Key | Chu kỳ Lưu giữ (`Retention`) |
 |---|---|---|---|---|---|
-| `general_logs` | `PartitionDay` | `general_logs-YYYY.MM.DD` | `timestamp` | Không (Cluster-wide) | **30 ngày** (Xoá sau 30 ngày) |
+| `general_logs` | `PartitionDay` | `general_logs-YYYY.MM.DD` | `timestamp` | Không (Cluster-wide) | **7 ngày** (Xoá sau 7 ngày) |
 | `danger_logs` | `PartitionMonth` | `danger_logs-YYYY.MM` | `c_at` | `TenantID` (`tid`) | **6 tháng** (Xoá sau 180 ngày) |
 | *Entity tĩnh* | `PartitionNone` | `entity_name` | `""` | `TenantID` (`tid`) | Không áp dụng (Lưu vĩnh viễn) |
 
