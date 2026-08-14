@@ -51,266 +51,108 @@ Một trang danh sách dữ liệu (List page) hoàn chỉnh bao gồm 4 cấu p
    * Dropdown chọn kích thước trang (`Select` size: 10, 30, 50).
    * Ô nhảy trang nhanh (Page Jump Input) kiểm tra biên chặn cứng `page * size <= 10000`.
 
-### 2.2 Dữ Liệu Mẫu Props Cho Các Thành Phần Frontend (TypeScript Props & Mock Data)
+### 2.2 Đặc Tả TypeScript Props Chuẩn Của Các Thành Phần Frontend
 
 ```typescript
 // 1. SearchBar Component Props
-interface SearchBarProps {
+export interface SearchBarProps {
   placeholder?: string;
   onChange: (value: string) => void;
+  debounceMs?: number; // Mặc định: 300ms
 }
-
-const sampleSearchBarProps: SearchBarProps = {
-  placeholder: "Tìm kiếm nhân viên",
-  onChange: (val) => console.log("Tìm kiếm từ khóa: ", val)
-};
 
 // 2. MultiSelect (Filter Pill) Component Props
-interface MultiSelectOption {
-  value: string;
-  label: string;
+export interface MultiSelectOption {
+  value: string; // Raw ID hoặc Enum (VD: "ACTIVE", "usr-admin-01")
+  label: string; // Tên hiển thị (VD: "Hoạt động", "Quản trị viên")
 }
 
-interface MultiSelectProps {
-  label: string; // Tên thuộc tính hiển thị ở Pill (Ví dụ: "Vai trò")
+export interface MultiSelectProps {
+  label: string;                  // Tên thuộc tính hiển thị ở Pill (VD: "Trạng thái")
   options: MultiSelectOption[];
-  value: string[]; // Danh sách ID đang được chọn
+  value: string[];                // Danh sách ID/Enum đang chọn
   onChange: (newValue: string[]) => void;
+  containerClassName?: string;
+  allowSelectAll?: boolean;       // Tự động có tùy chọn "Tất cả" - Mặc định: true
 }
-
-const sampleMultiSelectProps: MultiSelectProps = {
-  label: "Vai trò",
-  options: [
-    { value: "OWNER", label: "Owner" },
-    { value: "ADMIN", label: "Admin" },
-    { value: "MEMBER", label: "Member" }
-  ],
-  value: ["OWNER", "ADMIN"],
-  onChange: (selected) => console.log("Các vai trò đã chọn: ", selected)
-};
 
 // 3. DateRangePicker (Filter Pill) Component Props
-interface DateRangeValue {
-  from: number; // Unix timestamp bằng mili-giây chuẩn UTC (Ví dụ: 1785542400000)
-  to: number;   // Unix timestamp bằng mili-giây
+export interface DateRangeValue {
+  from: number; // Unix timestamp bằng mili-giây chuẩn UTC (VD: 1785542400000)
+  to: number;   // Unix timestamp bằng mili-giây chuẩn UTC
 }
 
-interface DateRangePickerProps {
+export interface DateRangePickerProps {
   label: string;
   value: DateRangeValue;
   onChange: (val: DateRangeValue) => void;
 }
 
-const sampleDateRangePickerProps: DateRangePickerProps = {
-  label: "Ngày tham gia",
-  value: {
-    from: 1785542400000, // 01/08/2026 UTC
-    to: 1786752000000    // 15/08/2026 UTC
-  },
-  onChange: (range) => console.log("Khoảng ngày lọc: ", range)
-};
+// 4. Cấu hình Filter Item trong DataTable
+export interface AvailableFilterItem {
+  id: string;        // Khớp với Column.key (VD: 'c_at', 'status', 'owner_id')
+  label?: string;    // Tùy chọn: Tự động kế thừa column.header nếu để trống
+  visible?: boolean; // Trạng thái hiển thị mặc định
+  component: React.ReactNode;
+}
 
-// 4. DataTable Component Props (Bao gồm Table Grid và Pagination Footer)
-interface Column<T> {
+// 5. Cấu hình Column Schema trong DataTable
+export interface Column<T> {
   key: string;
   header: string;
   initialWidth?: number;
   type?: 'text' | 'title-subtitle' | 'double-text' | 'badge';
-  getSubtitle?: (item: T) => string;
-  getIndex?: (item: T) => string | number;
-  getLine2?: (item: T) => string;
+  visible?: boolean;
+  isPrimary?: boolean;
+  getSubtitle?: (item: T) => string | undefined;
+  getIndex?: (item: T) => string | number | undefined;
+  getLine2?: (item: T) => string | undefined;
   getBadgeVariant?: (val: any) => BadgeVariant;
   render?: (item: T) => React.ReactNode;
 }
 
-interface DataTableProps<T> {
+// 6. DataTable Component Props (Tích hợp trọn bộ Toolbar, Settings, Grid & Pagination)
+export interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   total: number;
   page: number;
   size: number;
-  hasMore: boolean;
-  onPageChange: (newPage: number) => void;
-  onSizeChange: (newSize: number) => void;
-  onSearchChange?: (value: string) => void;
+  hasMore?: boolean;
+  onPageChange?: (newPage: number) => void;
+  onSizeChange?: (newSize: number) => void;
+  onSearchChange?: (val: string) => void;
   searchPlaceholder?: string;
-  filterComponent?: React.ReactNode; // Nơi truyền FilterRow chứa các Pill lọc
-  actionComponent?: React.ReactNode; // Nút tạo mới hoặc export
+  
+  // Bộ lọc tương tác (Capsule Filter Pills)
+  availableFilters?: AvailableFilterItem[];
+  filterComponent?: React.ReactNode;
+  
+  // Nút hành động chính (Dùng <AddButton />)
+  actionComponent?: React.ReactNode;
+  
+  // Tùy chọn ẩn/hiện thành phần
+  hideSearch?: boolean;          // Ẩn thanh tìm kiếm (SearchBar)
+  hidePagination?: boolean;      // Ẩn thanh phân trang (Pagination Footer)
+  hideColumnSettings?: boolean;  // Ẩn nút cài đặt hiển thị (⚙️ Settings)
+  hideFilterRow?: boolean;       // Ẩn hàng bộ lọc (FilterRow)
+  hideAction?: boolean;          // Ẩn nút hành động (actionComponent)
 
-  // Cấu hình ẩn hiện các thành phần (Visibility Config)
-  hideSearch?: boolean;          // Ẩn thanh tìm kiếm (SearchBar) - Mặc định: false
-  hidePagination?: boolean;      // Ẩn thanh phân trang (Pagination Footer) - Mặc định: false
-  hideColumnSettings?: boolean;  // Ẩn nút quản lý ẩn hiện cột (⚙️ Settings) - Mặc định: false
-  hideFilterRow?: boolean;       // Ẩn hàng chứa các Pill lọc (FilterRow) - Mặc định: false
-  hideAction?: boolean;          // Ẩn nút hành động (actionComponent) - Mặc định: false
+  // Callback nhận kết quả cấu hình từ TableSettingsModal
+  onSettingsChange?: (settings: TableSettingsResult) => void;
 }
-
-// Ví dụ mock data truyền vào DataTable trong trang Employees
-const sampleDataTableProps: DataTableProps<any> = {
-  columns: [
-    {
-      key: "name",
-      header: "Nhân viên",
-      type: "title-subtitle",
-      getSubtitle: (emp) => `ID: ${emp.id}`,
-      getIndex: (emp) => emp.name.replace('Nhân viên số ', ''),
-      initialWidth: 240
-    },
-    {
-      key: "email",
-      header: "Liên hệ",
-      type: "double-text",
-      getLine2: (emp) => emp.phone,
-      initialWidth: 260
-    },
-    {
-      key: "role",
-      header: "Vai trò",
-      type: "badge",
-      getBadgeVariant: (role) => role === "OWNER" ? "warning" : role === "ADMIN" ? "info" : "neutral",
-      initialWidth: 120
-    }
-  ],
-  data: [
-    { id: "emp-1", name: "Nhân viên số 1", email: "employee.1@verse.com", role: "OWNER" },
-    { id: "emp-2", name: "Nhân viên số 2", email: "employee.2@verse.com", role: "ADMIN" }
-  ],
-  total: 2,
-  page: 1,
-  size: 10,
-  hasMore: false,
-  onPageChange: (newPage) => console.log("Chuyển sang trang: ", newPage),
-  onSizeChange: (newSize) => console.log("Đổi size trang: ", newSize),
-  onSearchChange: (searchVal) => console.log("Gõ tìm kiếm table: ", searchVal),
-  searchPlaceholder: "Tìm kiếm",
-  filterComponent: (
-    <div className="flex items-center gap-2 flex-wrap">
-      <MultiSelect {...sampleMultiSelectProps} />
-      <DateRangePicker {...sampleDateRangePickerProps} />
-    </div>
-  ),
-  actionComponent: (
-    <button className="px-4 h-10 bg-indigo-600 text-white rounded font-semibold text-xs">
-      + Thêm nhân viên
-    </button>
-  ),
-  // Cấu hình ẩn/hiện mặc định để test hoặc sử dụng thực tế
-  hideSearch: false,
-  hidePagination: false,
-  hideColumnSettings: false,
-  hideFilterRow: false,
-  hideAction: false
-};
 ```
 
 ### 2.3 Cấu Hình Ẩn Hiện Các Thành Phần (Component Visibility Options)
 
 Để tối ưu không gian hiển thị và đáp ứng linh hoạt các nghiệp vụ khác nhau (ví dụ: màn hình mini-list, xem nhanh không phân trang, hoặc danh sách tĩnh không tìm kiếm), `DataTable` hỗ trợ các props tuỳ chọn ẩn hiện sau:
 
-*   **`hideSearch` (boolean):** Khi nhận giá trị `true`, thanh tìm kiếm (`SearchBar`) sẽ bị ẩn khỏi giao diện.
-*   **`hidePagination` (boolean):** Khi nhận giá trị `true`, phần phân trang cuối bảng (`Pagination Footer`) bao gồm cả dropdown size và ô page jump sẽ bị ẩn hoàn toàn.
-*   **`hideColumnSettings` (boolean):** Khi nhận giá trị `true`, biểu tượng bánh răng cài đặt ẩn hiện cột (⚙️) sẽ không được hiển thị.
-*   **`hideFilterRow` (boolean):** Khi nhận giá trị `true`, hàng chứa `filterComponent` (hoặc các capsule lọc) sẽ bị ẩn khỏi giao diện.
-*   **`hideAction` (boolean):** Khi nhận giá trị `true`, nút hành động (`actionComponent`) sẽ bị ẩn khỏi giao diện.
+* **`hideSearch` (boolean):** Khi nhận giá trị `true`, thanh tìm kiếm (`SearchBar`) sẽ bị ẩn khỏi giao diện.
+* **`hidePagination` (boolean):** Khi nhận giá trị `true`, phần phân trang cuối bảng (`Pagination Footer`) bao gồm cả dropdown size và ô page jump sẽ bị ẩn hoàn toàn.
+* **`hideColumnSettings` (boolean):** Khi nhận giá trị `true`, biểu tượng cài đặt hiển thị bảng (Sliders Icon) sẽ không hiển thị.
+* **`hideFilterRow` (boolean):** Khi nhận giá trị `true`, hàng chứa `availableFilters` (hoặc `filterComponent`) sẽ bị ẩn.
+* **`hideAction` (boolean):** Khi nhận giá trị `true`, nút hành động (`actionComponent`) sẽ bị ẩn khỏi giao diện.
 
-### 2.4 Ví Dụ Tích Hợp Nút Bật/Tắt Để Kiểm Thử Tại Page Component (Page Component Toggles Example)
-
-Trong quá trình phát triển và kiểm thử, Page Component (component cha quản lý trang danh sách) có thể định nghĩa các state điều khiển (toggles) hiển thị trực tiếp để tester hoặc developer dễ dàng kiểm thử hành vi giao diện của DataTable:
-
-```typescript
-import React, { useState } from 'react';
-
-const EmployeePage: React.FC = () => {
-  // 1. State quản lý ẩn hiện để kiểm thử
-  const [hideSearch, setHideSearch] = useState(false);
-  const [hidePagination, setHidePagination] = useState(false);
-  const [hideColumnSettings, setHideColumnSettings] = useState(false);
-  const [hideFilterRow, setHideFilterRow] = useState(false);
-  const [hideAction, setHideAction] = useState(false);
-
-  // 2. Mock các props dữ liệu khác
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(10);
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* KHU VỰC ĐIỀU KHIỂN ĐỂ TEST (Developer & Tester Console) */}
-      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg dark:bg-zinc-900 dark:border-zinc-800">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-          Bảng Điều Khiển Kiểm Thử Ẩn/Hiện (DataTable Visibility Toggles)
-        </h4>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input 
-              type="checkbox" 
-              checked={hideSearch} 
-              onChange={(e) => setHideSearch(e.target.checked)} 
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Ẩn Tìm kiếm (hideSearch)</span>
-          </label>
-          
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input 
-              type="checkbox" 
-              checked={hidePagination} 
-              onChange={(e) => setHidePagination(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Ẩn Phân trang (hidePagination)</span>
-          </label>
-          
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input 
-              type="checkbox" 
-              checked={hideColumnSettings} 
-              onChange={(e) => setHideColumnSettings(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Ẩn Cài đặt cột (hideColumnSettings)</span>
-          </label>
-          
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input 
-              type="checkbox" 
-              checked={hideFilterRow} 
-              onChange={(e) => setHideFilterRow(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Ẩn Bộ lọc (hideFilterRow)</span>
-          </label>
-
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input 
-              type="checkbox" 
-              checked={hideAction} 
-              onChange={(e) => setHideAction(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Ẩn Nút (hideAction)</span>
-          </label>
-        </div>
-      </div>
-
-      {/* DANH SÁCH CHÍNH */}
-      <DataTable
-        {...sampleDataTableProps}
-        page={page}
-        size={size}
-        onPageChange={setPage}
-        onSizeChange={setSize}
-        
-        // Truyền các state kiểm thử vào DataTable
-        hideSearch={hideSearch}
-        hidePagination={hidePagination}
-        hideColumnSettings={hideColumnSettings}
-        hideFilterRow={hideFilterRow}
-        hideAction={hideAction}
-      />
-    </div>
-  );
-};
-```
 
 ---
 
@@ -384,8 +226,8 @@ Khi tích hợp đầy đủ các thành phần, lập trình viên cả hai đ�
 
 1. **Tự động reset trang về 1 khi lọc (Reset Page on Filter Change - FE):** 
    Khi người dùng đổi tiêu chí lọc (search key, multi-select roles, date range), Frontend bắt buộc reset `page = 1` trước khi gửi request API mới.
-2. **Trì hoãn gọi API Tìm kiếm (Debounced Search - FE):** 
-   Spam request trên từng phím gõ bị cấm. Áp dụng debounce trì hoãn gọi API `300ms` trên SearchBar.
+2. **Tìm kiếm Tối thiểu 3 Ký tự & Nhấn Enter (Min 3 Chars & Enter-to-Search - FE):** 
+   Spam request trên từng phím gõ bị cấm. Tìm kiếm chỉ được kích hoạt khi người dùng nhập từ 3 ký tự trở lên (`trimmed.length >= 3`) và nhấn phím **ENTER**. Khi xóa rỗng ô tìm kiếm (`""`), tự động reset tìm kiếm để tải lại danh sách đầy đủ.
 3. **Đồng bộ hóa State lên URL Query Parameters (FE):** 
    Tất cả state lọc (`page`, `size`, `search`, `filters`) cần được map vào URL query params để khi người dùng tải lại trang (`F5`) hoặc chia sẻ URL, giao diện sẽ tự khôi phục chính xác trạng thái cũ.
 4. **Lọc ẩn hệ thống phía Backend (Invisible System Filters - BE):** 
@@ -399,3 +241,171 @@ Khi tích hợp đầy đủ các thành phần, lập trình viên cả hai đ�
 | :--- | :--- | :--- |
 | `400` | `ERR_INVALID_CURSOR` | Giá trị `next_cursor` gửi lên không đúng định dạng Hex ObjectID hoặc bị chỉnh sửa. |
 | `400` | `ERR_PAGING_LIMIT_EXCEEDED` | Client cố tình offset sâu (`page * size > 10000`) mà không dùng `next_cursor`. |
+
+---
+
+## 6. Quy Trình Tích Hợp Chuẩn 1 Module Danh Sách (Step-by-Step List Integration Standard)
+
+Để xây dựng một màn hình danh sách mới (VD: Khách hàng, Đơn hàng, Phiếu hỗ trợ, Nhân viên,...) tuân thủ 100% Golden Standard và tái sử dụng toàn bộ hệ sinh thái List, lập trình viên thực hiện theo **quy trình 5 bước chuẩn hóa** dưới đây:
+
+### Bước 1: Khai báo Entity Model kế thừa `BaseAuditEntity`
+Mọi interface entity ở Frontend bắt buộc phải kế thừa `BaseAuditEntity` (phản chiếu trực tiếp từ `BaseEntity` của Backend Go):
+```typescript
+import { BaseAuditEntity } from '@/types/baseEntity';
+
+export interface Customer extends BaseAuditEntity {
+  id: string;          // _id hoặc UID
+  name: string;        // Tên khách hàng (Primary)
+  email: string;       // Email
+  phone: string;       // Số điện thoại
+  status: 'ACTIVE' | 'INACTIVE'; // Trạng thái
+  owner_id?: string;   // Người phụ trách
+  // ...các trường đặc thù khác của module
+}
+```
+
+---
+
+### Bước 2: Khai báo Schema Cột với `commonColumns`
+Sử dụng các hàm builder có sẵn từ `@/components` để khởi tạo cột chỉ trong 1 dòng code, tự động liên kết đa ngôn ngữ và tối ưu hiệu năng:
+```typescript
+import {
+  Column,
+  getNameColumn,
+  getEmailColumn,
+  getPhoneColumn,
+  getStatusColumn,
+  getOwnerColumn,
+  getBaseAuditColumns,
+} from '@/components';
+
+const allColumns: Column<Customer>[] = useMemo(() => [
+  // 1. Cột định danh chính (Tên + ID Subtitle) - Cố định vị trí đầu
+  getNameColumn<Customer>(t, { header: t('col_customer_name') }),
+
+  // 2. Các cột thông dụng (Tự động Alias Resolution & Zero-Allocation)
+  getEmailColumn<Customer>(t),
+  getPhoneColumn<Customer>(t),
+  getStatusColumn<Customer>(t),
+  getOwnerColumn<Customer>(t),
+
+  // 3. Cột đặc thù riêng của module (nếu có)
+  {
+    key: 'loyalty_points',
+    header: 'Điểm tích lũy',
+    initialWidth: 140,
+    render: (item) => <Typo variant="body" className="font-mono">{item.loyalty_points || 0}</Typo>,
+  },
+
+  // 4. Trọn bộ 4 cột Audit hệ thống (c_at, u_at, c_by, u_by)
+  ...getBaseAuditColumns<Customer>(t),
+], [t, language]);
+```
+
+---
+
+### Bước 3: Khai báo Bộ Lọc `availableFilters` (Tuân thủ Filter Priority Order)
+* **Quy tắc thứ tự**: Bộ lọc khoảng thời gian (`c_at` / `DateRangePicker`) **BẮT BUỘC LUÔN NẰM Ở VỊ TRÍ ĐẦU TIÊN (INDEX 0)**.
+* **Tự động đồng bộ**: Bỏ trống `label` để `<DataTable />` tự động kế thừa `column.header` từ mảng cột.
+```typescript
+import { AvailableFilterItem, MultiSelect, DateRangePicker } from '@/components';
+
+const availableFilters: AvailableFilterItem[] = useMemo(() => [
+  // Vị trí 1 (BẮT BUỘC): Bộ lọc thời gian tạo
+  {
+    id: 'c_at',
+    visible: true,
+    component: (
+      <DateRangePicker
+        label={t('col_created_at')}
+        value={dateRange}
+        onChange={(val) => { setDateRange(val); setPage(1); }}
+      />
+    ),
+  },
+  // Vị trí 2: Bộ lọc Trạng thái (Tự động có nút "Tất cả")
+  {
+    id: 'status',
+    visible: true,
+    component: (
+      <MultiSelect
+        label={t('col_status')}
+        options={statusOptions}
+        value={selectedStatuses}
+        onChange={(val) => { setSelectedStatuses(val); setPage(1); }}
+      />
+    ),
+  },
+  // Vị trí 3: Bộ lọc Người phụ trách
+  {
+    id: 'owner_id',
+    visible: true,
+    component: (
+      <MultiSelect
+        label={t('col_owner')}
+        options={ownerOptions}
+        value={selectedOwners}
+        onChange={(val) => { setSelectedOwners(val); setPage(1); }}
+      />
+    ),
+  },
+], [t, dateRange, selectedStatuses, selectedOwners, statusOptions, ownerOptions]);
+```
+
+---
+
+### Bước 4: Xây dựng Payload Gọi API (Zero-Waste Payload Rule)
+Tuân thủ nguyên tắc bỏ qua (omit) các trường không lọc hoặc chọn tất cả:
+```typescript
+// Chỉ gửi các trường thực sự có lọc tập con lên API
+const queryParams: Record<string, any> = {
+  page,
+  size,
+};
+
+if (searchQuery.trim()) {
+  queryParams.search = searchQuery.trim();
+}
+
+// Bỏ qua nếu là 0 hoặc chọn tất cả options
+if (selectedStatuses.length > 0 && selectedStatuses.length < statusOptions.length) {
+  queryParams.status = selectedStatuses;
+}
+
+if (selectedOwners.length > 0 && selectedOwners.length < ownerOptions.length) {
+  queryParams.owner_id = selectedOwners;
+}
+
+if (dateRange.from > 0 && dateRange.to > 0) {
+  queryParams.from_date = dateRange.from;
+  queryParams.to_date = dateRange.to;
+}
+```
+
+---
+
+### Bước 5: Render Component `<DataTable />`
+Lắp ráp các thành phần lại với Action Button chuẩn thuần chữ (`<AddButton />`):
+```tsx
+import { DataTable, AddButton } from '@/components';
+
+<DataTable
+  columns={allColumns}
+  data={customers}
+  total={totalCount}
+  page={page}
+  size={size}
+  hasMore={hasMore}
+  onPageChange={setPage}
+  onSizeChange={(newSize) => { setSize(newSize); setPage(1); }}
+  onSearchChange={(val) => { setSearchQuery(val); setPage(1); }}
+  searchPlaceholder={t('header_search_placeholder')}
+  availableFilters={availableFilters}
+  actionComponent={<AddButton onClick={handleOpenCreateModal} />}
+  onSettingsChange={(settings) => {
+    // Lưu projection fields hoặc tùy biến hiển thị
+    setProjectionFields(settings.visibleColumnKeys);
+  }}
+/>
+```
+
