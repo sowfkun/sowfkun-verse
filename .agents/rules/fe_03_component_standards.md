@@ -10,7 +10,7 @@
 - **Sử dụng Core Components:** Nếu có một thành phần cơ bản đã được chuẩn hóa, **BẮT BUỘC** phải gọi component đó, không tự vẽ lại bằng HTML thô.
     - Chữ viết: Gọi `<Typo>`
     - Đường phân cách: Gọi `<Divider>`
-    - Nút bấm: Gọi `<Button>`
+    - Nút bấm chuẩn hóa: Gọi `<Button>`, hoặc các Action Buttons chuyên dụng `<AddButton>`, `<SaveButton>`, `<CancelButton>`, `<EditButton>`, `<DeleteButton>` (thuần chữ, không icon mặc định).
     - Khối layout / Card: Gọi `<Zone>`
     - Ô nhập liệu: Gọi `<TextInput>`
     - Điều hướng tab: Gọi `<Tabs>`
