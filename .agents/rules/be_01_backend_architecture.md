@@ -73,4 +73,8 @@ trigger: always_on
 
 ## 5. Dependency Injection & Infrastructure (Root Level)
 - **Rule 5.1 - Shared Infra Khởi tạo 1 lần**: Tại `cmd/api/setup_xxx.go`. Hỗ trợ kết nối Multi-server (nhiều DB, Redis cluster), cấm hardcode 1 connection Singleton.
-- **Rule 5.2 - Module Encapsulation**: Hạ tầng được truyền từ `main.go` vào qua hàm `RegisterXRoutes(mux, db)` của từng module. Khởi tạo Repo, UseCase ở trong đó thông qua Specific Injection (truyền interface qua Constructor).
+- **Rule 5.2 - Module Encapsulation**: Hạ tầng được truyền từ `main.go` vào qua hàm `RegisterXRoutes(...)` của từng module. Khởi tạo Repo, UseCase ở trong đó thông qua Specific Injection (truyền interface qua Constructor).
+- **Rule 5.3 - Multi-Cluster Connection Explicit Naming (Định danh kết nối đa cụm tường minh)**:
+  - Khi làm việc với các thành phần hạ tầng (Infrastructure) hỗ trợ đa cụm (Multi-server / Multi-cluster) như MongoDB (`dbTenant1`, `dbSystem1`, `dbConfig1`), Redis (`generalRedisClient`, `agentBusinessRedisClient`, `gatewayRedisClient`), Kafka Producers (`general1Producer`, `general2Producer`, `entitySyncProducer`), OpenSearch (`loggingClient`):
+  - Tên biến, trường struct, tham số hàm (ở `main.go`, `setup_*.go`, `RegisterXRoutes`, `RegisterMQHandlers`, Repositories, UseCases, Services, Handlers, Jobs) **BẮT BUỘC** phải đặt tên rõ ràng, phản ánh chính xác cụm kết nối đang sử dụng (VD: `dbTenant1`, `generalRedisClient`, `agentBusinessRedisClient`, `general1Producer`, `general2Producer`, `loggingClient`).
+  - **TUYỆT ĐỐI NGHIÊM CẤM** đặt tên mơ hồ, chung chung (như `db`, `redisClient`, `producer`, `client`, `opensearchClient`) gây nhầm lẫn luồng kết nối giữa các cụm độc lập.
