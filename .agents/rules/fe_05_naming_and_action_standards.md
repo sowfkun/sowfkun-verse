@@ -44,6 +44,40 @@ Tuyệt đối **NGHIÊM CẤM** việc dùng từ ngữ tùy tiện, không nh�
   btn_close: 'Đóng',    // EN: 'Close'
   btn_saved_success: 'Cập nhật thành công!',
   ```
+- **Phân Zone Cột Bảng & Thuộc Tính Dữ Liệu (Table Attribute Zones)**:
+  Mọi key đa ngôn ngữ cho bảng biểu **BẮT BUỘC** phân chia vào 4 zone riêng biệt:
+  ```ts
+  // ==========================================
+  // UI - BASE ENTITY AUDIT ATTRIBUTES (c_at, u_at, c_by, u_by)
+  // ==========================================
+  col_created_at: 'Ngày tạo',
+  col_updated_at: 'Lần update cuối',
+  col_created_by: 'Người tạo',
+  col_updated_by: 'Người update cuối',
+
+  // ==========================================
+  // UI - COMMON RECURRING ATTRIBUTES
+  // ==========================================
+  col_name: 'Tên',
+  col_email: 'Email',
+  col_phone: 'Số điện thoại',
+  col_status: 'Trạng thái',
+  col_owner: 'Người phụ trách',
+  col_roles: 'Bộ quyền',
+
+  // ==========================================
+  // UI - DOMAIN-SPECIFIC ENTITY NAMES
+  // ==========================================
+  col_emp_name: 'Tên nhân viên',
+  col_customer_name: 'Tên khách hàng',
+
+  // ==========================================
+  // UI - TABLE CONTROLS & SETTINGS MODAL
+  // ==========================================
+  filter_status: 'Trạng thái',
+  table_settings: 'Cấu hình hiển thị',
+  ...
+  ```
 - **Cấm Trùng Lặp Khóa (Zero Redundant Keys)**: Tuyệt đối không tạo thêm các key thừa như `btn_save_changes`, `save_settings`, `btn_create` khi đã có `btn_save`, `btn_add`.
 
 ---
