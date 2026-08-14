@@ -15,18 +15,21 @@ sequenceDiagram
     participant BE as Backend Server
     participant DB as MongoDB
 
-    alt Trang dữ liệu nhỏ (Page * Size <= 10000)
-        Client->>BE: GET /api/v1/resource?page=5&size=10&roles=ADMIN,MEMBER
-        BE->>DB: Query với Skip(40) & Limit(10) + Count()
+    alt Trang dữ liệu nhỏ / Shallow Paging (Page * Size <= 10000)
+        Client->>BE: GET /api/v1/resource?page=5&size=10&status=ACTIVE
+        BE->>DB: Query với Skip(40) & Limit(10) + CountDocuments()
         DB-->>BE: Trả về 10 Items & Total = 100
-        BE-->>Client: Response: BaseResponse { Data: PagedResponse { Total: 100, Items: [...], HasMore: true } }
-        Note over Client: Hiển thị bộ phân trang số và ô nhảy trang nhanh
-    else Trang dữ liệu lớn / Deep Paging (Page * Size > 10000)
-        Client->>BE: GET /api/v1/resource?next_cursor=66b45a7b1c43&size=10
-        BE->>DB: Query filter {_id: {$gt: ObjectID("66b45a7b1c43")}} & Limit(10) (Không Count)
-        DB-->>BE: Trả về 10 Items
-        BE-->>Client: Response: BaseResponse { Data: PagedResponse { Total: -1, Items: [...], NextCursor: "66b45d9eef21", HasMore: true } }
-        Note over Client: Ẩn thanh số trang. Chỉ hiển thị nút [<- Trước] và [Sau ->]
+        BE-->>Client: Response: BaseResponse { Data: PagedResponse { Total: 100, Items: [...], NextCursor: "eyJmaWVsZCI...", PrevCursor: "...", HasMore: true, HasPrev: true } }
+        Note over Client: Hiển thị bộ phân trang số (1, 2, 3... 10) và ô nhảy trang nhanh
+    else Deep Paging hoặc Duyệt Cursor (search_after / search_before)
+        Client->>BE: GET /api/v1/resource?search_after=eyJmaWVsZCI6ImNfYXQiLCJ2YWwiOjE3ODU1NDI0MDAwMDAsImlkIjoiNjZiNDVhN2IxYzQzIn0&size=10
+        Note over BE: Decode token Base64 -> CursorData {Field: "c_at", Val: 1785542400000, ID: "66b45a7b1c43"}
+        Note over BE: Kiểm tra Whitelist Sort & Range Conflict Check
+        BE->>DB: Query compound cursor: $or: [{c_at: {$lt: 1785542400000}}, {c_at: 1785542400000, _id: {$lt: ID}}] & Limit(11) (Không Count)
+        DB-->>BE: Trả về 11 Items
+        Note over BE: Trim items về 10, gán Total = -1, HasMore = true, HasPrev = true, sinh NextCursor & PrevCursor mới
+        BE-->>Client: Response: BaseResponse { Data: PagedResponse { Total: -1, Items: [10 items], NextCursor: "eyJmaWVsZCI...", HasMore: true, HasPrev: true } }
+        Note over Client: Total = -1 -> Chuyển sang thanh điều hướng [⬅ Trước] và [Tiếp ➡]
     end
 ```
 
@@ -181,16 +184,18 @@ Mọi API danh sách phía Backend bắt buộc phải trả về dữ liệu th
     "page": 1,         // Trang hiện tại
     "size": 10,        // Số lượng item trên một trang
     "has_more": true,  // Cờ báo hiệu còn dữ liệu trang sau không
-    "next_cursor": "", // ID cursor tiếp theo (omitempty)
-    "prev_cursor": ""  // ID cursor trước đó (omitempty)
+    "has_prev": false, // Cờ báo hiệu còn dữ liệu trang trước không
+    "next_cursor": "eyJmaWVsZCI6ImNfYXQiLCJ2YWwiOjE3ODU1NDI0MDAwMDAsImlkIjoiNjZiNDVhN2IxYzQzIn0", // Base64 URL-safe token
+    "prev_cursor": ""  // Base64 URL-safe token
   },
   "error_code": "SUCCESS",
   "error_detail": ""
 }
 ```
 
-### 3.2 Đặc Tả Tầng Go DTOs (Model Go Structs)
+### 3.2 Đặc Tả Tầng Go DTOs & Cursor Engine (Backend Core DTOs)
 
+#### 1. Model PagedResponse
 ```go
 package dto
 
@@ -200,37 +205,81 @@ type PagedResponse[T any] struct {
 	Page       int    `json:"page" example:"1"`          // Trang hiện tại
 	Size       int    `json:"size" example:"10"`         // Số lượng bản ghi trên một trang
 	Items      []T    `json:"items"`                     // Danh sách dữ liệu trang
-	NextCursor string `json:"next_cursor,omitempty"`     // Con trỏ lấy trang tiếp theo (Deep Paging)
-	PrevCursor string `json:"prev_cursor,omitempty"`     // Con trỏ lấy trang trước đó
+	NextCursor string `json:"next_cursor,omitempty"`     // Con trỏ Base64 lấy trang tiếp theo
+	PrevCursor string `json:"prev_cursor,omitempty"`     // Con trỏ Base64 lấy trang trước đó
 	HasMore    bool   `json:"has_more"`                  // Cờ báo hiệu còn trang kế tiếp không
+	HasPrev    bool   `json:"has_prev"`                  // Cờ báo hiệu còn trang trước đó không
 }
 ```
 
+#### 2. Cấu Trúc Con Trỏ Cursor (CursorData Token)
+Con trỏ phân trang được mã hóa Base64 URL-safe từ struct `CursorData`:
 ```go
-package dto
-
-// CommonQuery định nghĩa các tham số lọc và phân trang cơ bản Backend nhận từ HTTP Query String
-type CommonQuery struct {
-	Page       int    `form:"page" default:"1"`
-	Size       int    `form:"size" default:"10"`
-	NextCursor string `form:"next_cursor"`
-	PrevCursor string `form:"prev_cursor"`
+type CursorData struct {
+	Field string `json:"field"` // Trường sort (VD: "c_at", "u_at")
+	Value any    `json:"val"`   // Giá trị phân trang (timestamp mili-giây int64 hoặc chuỗi)
+	ID    string `json:"id"`    // Hex ObjectID của bản ghi tie-breaker (_id)
 }
 ```
+
+#### 3. Cấu Trúc CommonQuery DTO
+```go
+type CommonQuery struct {
+	TenantID     string               `json:"-"`
+	SkipIsDel    bool                 `json:"skip_is_del,omitempty"`
+	IncludeIDs   []string             `json:"include_ids,omitempty"`
+	ExcludeIDs   []string             `json:"exclude_ids,omitempty"`
+	Ranges       map[string]TimeRange `json:"ranges,omitempty"`
+	Keyword      string               `json:"keyword,omitempty" validate:"omitempty,min=3,max=100"`
+	Page         int                  `json:"page"`
+	Size         int                  `json:"size"`
+	SearchAfter  string               `json:"search_after,omitempty"`  // Token con trỏ duyệt tới
+	SearchBefore string               `json:"search_before,omitempty"` // Token con trỏ duyệt lùi
+	Projection   map[string]any       `json:"projection,omitempty"`
+	Sort         map[string]any       `json:"sort,omitempty"`          // Map từ client VD: {"c_at": -1}
+	Role         QueryRole            `json:"role,omitempty"`
+
+	ParsedCursor *CursorData          `json:"-"` // Con trỏ đã giải mã và kiểm tra hợp lệ
+}
+```
+
+#### 4. Phân Quyền Sắp Xếp Whitelist Sort (`ISortableQuery`)
+Mọi Request DTO của từng module có thể giới hạn danh sách trường được phép Sort bằng cách implement interface:
+```go
+type ISortableQuery interface {
+	GetAllowedSortFields() []string
+}
+
+// Ví dụ User Request:
+func (r ListUsersRequest) GetAllowedSortFields() []string {
+	return []string{"c_at"} // Chỉ cho phép sort theo ngày tạo
+}
+```
+
+#### 5. Công Thức Truy Vấn Keyset Compound Cursor (MongoDB)
+Khi Client truyền `search_after` hoặc `search_before`, Backend tự động tạo điều kiện BSON `$or` kết hợp tie-breaker `_id`:
+- **Sort DESC (`sortDir = -1`):**
+  - **`SearchAfter`:** `$or: [{ Field: { $lt: Value } }, { Field: Value, _id: { $lt: ID } }]`
+  - **`SearchBefore`:** `$or: [{ Field: { $gt: Value } }, { Field: Value, _id: { $gt: ID } }]`, DB sort đảo ngược thành `{ Field: 1, _id: 1 }` và Backend đảo ngược mảng kết quả sau khi fetch.
+- **Sort ASC (`sortDir = 1`):**
+  - **`SearchAfter`:** `$or: [{ Field: { $gt: Value } }, { Field: Value, _id: { $gt: ID } }]`
+  - **`SearchBefore`:** `$or: [{ Field: { $lt: Value } }, { Field: Value, _id: { $lt: ID } }]`, DB sort đảo ngược thành `{ Field: -1, _id: -1 }` và Backend đảo ngược mảng kết quả sau khi fetch.
 
 ---
 
 ## 4. Quy Tắc & Logic Đặc Biệt Khi Phối Hợp Trọn Bộ List (Global List Integration Logic)
 
-Khi tích hợp đầy đủ các thành phần, lập trình viên cả hai đội FE và BE bắt buộc tuân thủ 4 logic đặc biệt:
+Khi tích hợp đầy đủ các thành phần, lập trình viên cả hai đội FE và BE bắt buộc tuân thủ các logic đặc biệt:
 
 1. **Tự động reset trang về 1 khi lọc (Reset Page on Filter Change - FE):** 
-   Khi người dùng đổi tiêu chí lọc (search key, multi-select roles, date range), Frontend bắt buộc reset `page = 1` trước khi gửi request API mới.
+   Khi người dùng đổi tiêu chí lọc (search key, multi-select roles, date range), Frontend bắt buộc reset `page = 1`, xóa `search_after`/`search_before` trước khi gửi request API mới.
 2. **Tìm kiếm Tối thiểu 3 Ký tự & Nhấn Enter (Min 3 Chars & Enter-to-Search - FE):** 
    Spam request trên từng phím gõ bị cấm. Tìm kiếm chỉ được kích hoạt khi người dùng nhập từ 3 ký tự trở lên (`trimmed.length >= 3`) và nhấn phím **ENTER**. Khi xóa rỗng ô tìm kiếm (`""`), tự động reset tìm kiếm để tải lại danh sách đầy đủ.
-3. **Đồng bộ hóa State lên URL Query Parameters (FE):** 
-   Tất cả state lọc (`page`, `size`, `search`, `filters`) cần được map vào URL query params để khi người dùng tải lại trang (`F5`) hoặc chia sẻ URL, giao diện sẽ tự khôi phục chính xác trạng thái cũ.
-4. **Lọc ẩn hệ thống phía Backend (Invisible System Filters - BE):** 
+3. **Range Conflict Check (BE):**
+   Nếu Client truyền Cursor (`search_after` / `search_before`) nhưng giá trị mốc thời gian của cursor nằm ngoài khoảng `ranges[field]` đã chọn (ví dụ: filter từ ngày 1 đến ngày 10 nhưng cursor gửi mốc ngày 15), Backend lập tức trả về lỗi `ERR_CURSOR_OUT_OF_RANGE`.
+4. **Safe `$or` Merger (BE):**
+   Khi Repository kết hợp thêm các điều kiện `$or` riêng (như phân cấp quyền Owner), bắt buộc dùng `mongodb.AppendOrClause(baseQuery, clauses)` để tự động gom vào `$and` mà không ghi đè điều kiện Cursor của hệ thống.
+5. **Lọc ẩn hệ thống phía Backend (Invisible System Filters - BE):** 
    Frontend không tự gửi các điều kiện bảo mật/hệ thống. Backend tự động tiêm filter cô lập Multi-tenant (`tid`) và loại bỏ xóa mềm (`is_del: false`) trực tiếp ở tầng Repository của Go.
 
 ---
@@ -239,8 +288,9 @@ Khi tích hợp đầy đủ các thành phần, lập trình viên cả hai đ�
 
 | HTTP Status | error_code | Ý nghĩa & Hướng xử lý |
 | :--- | :--- | :--- |
-| `400` | `ERR_INVALID_CURSOR` | Giá trị `next_cursor` gửi lên không đúng định dạng Hex ObjectID hoặc bị chỉnh sửa. |
-| `400` | `ERR_PAGING_LIMIT_EXCEEDED` | Client cố tình offset sâu (`page * size > 10000`) mà không dùng `next_cursor`. |
+| `400` | `ERR_INVALID_CURSOR` | Token cursor Base64 không hợp lệ, sai cấu trúc JSON, sai ObjectID hex, hoặc field sort không khớp với cursor. |
+| `400` | `ERR_CURSOR_OUT_OF_RANGE` | Giá trị con trỏ cursor vượt ra ngoài biên của bộ lọc khoảng thời gian `ranges[field]`. |
+| `400` | `ERR_PAGING_LIMIT_EXCEEDED` | Client cố tình offset sâu (`page * size > 10000`) mà không dùng con trỏ cursor. |
 
 ---
 
