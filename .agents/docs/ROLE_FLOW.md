@@ -12,10 +12,17 @@ Phân hệ Role đóng vai trò trung tâm trong việc quản lý hệ thống 
 - **Quyền Quản lý Cấu hình (`CONFIG_MANAGE`)**: Toàn bộ các API của phân hệ Role (bao gồm Create, Read, Update, Delete, List, Options) **bắt buộc** phải đi qua middleware kiểm tra quyền `CONFIG_MANAGE`.
 - **Đặc quyền Chủ sở hữu (Owner Privilege)**: Tài khoản Owner (`is_owner = true`) luôn mặc định sở hữu toàn quyền cao nhất trên toàn bộ tính năng và phạm vi `ALL`.
 
-### 1.2 Cấu trúc Phân quyền (Permission Matrix & Scopes)
+### 1.2 Cấu trúc Phân quyền & Ràng buộc Tính nhất quán (Permission Matrix & Consistency Rules)
 - Mỗi Role đại diện cho một vai trò trong Tenant và chứa một ma trận quyền: `map[PermissionKey][]PermissionScope`.
   - **PermissionKey**: Mã định danh tính năng (VD: `USER_VIEW`, `USER_MANAGE`, `CONFIG_MANAGE`).
-  - **PermissionScope**: Phạm vi truy cập của quyền đó (`ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWN_ONLY`, `NONE`).
+  - **PermissionScope**: Phạm vi truy cập của quyền Xem (`ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWN_ONLY`, `NONE`).
+  - **Quy ước Scope**:
+    - **Quyền Xem (`*_VIEW`)**: Bắt buộc phải có Scope hợp lệ để hệ thống phân giải phạm vi hiển thị dữ liệu theo cấp bậc.
+    - **Quyền Quản lý/Chỉnh sửa (`*_MANAGE`, `CONFIG_MANAGE`)**: Là cờ hành động (Action/Toggle), **không cần scope** (mảng scope có thể để rỗng `[]` hoặc `nil`).
+- **Luật Nhất quán Phân quyền (Consistency Rules)**:
+  - **Có quyền xem chưa chắc có quyền chỉnh sửa**: Role có thể chỉ sở hữu `USER_VIEW` mà không có `USER_MANAGE` (hoàn toàn hợp lệ).
+  - **Có quyền chỉnh sửa bắt buộc phải có quyền xem**: Nếu Role được gán quyền chỉnh sửa (`USER_MANAGE`) thì **bắt buộc** phải được gán kèm quyền xem tương ứng (`USER_VIEW` có scope hợp lệ).
+  - **Xung đột quyền (`ERR_PERMISSION_CONFLICT`)**: Nếu ma trận quyền chứa quyền quản lý/chỉnh sửa nhưng thiếu hoặc rỗng quyền xem tương ứng, hệ thống sẽ từ chối và trả về lỗi `ERR_PERMISSION_CONFLICT` ngay tại tầng UseCase.
 
 ### 1.3 Cơ chế Caching & Real-time Synchronization (Redis & MQ)
 - **Redis Cache (Gateway Pattern)**: Dữ liệu Role được cache trên Redis (`role:id:{roleID}`) với TTL 24 giờ để tăng tốc độ kiểm tra quyền (Permission Checking) và đọc dữ liệu.
@@ -260,6 +267,7 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | `400 Bad Request` | `ERR_BAD_REQUEST` | Payload không hợp lệ hoặc dữ liệu phân quyền sai cấu trúc. |
 | `400 Bad Request` | `ERR_VALIDATION_FAILED` | Không thỏa mãn điều kiện `validate` (tên trống, vượt quá độ dài quy định). |
+| `400 Bad Request` | `ERR_PERMISSION_CONFLICT` | Xung đột ma trận phân quyền (Quyền quản lý/chỉnh sửa bắt buộc phải đi kèm quyền xem). |
 | `401 Unauthorized`| `ERR_UNAUTHORIZED` | Token JWT thiếu, hết hạn hoặc không hợp lệ. |
 | `403 Forbidden`   | `ERR_FORBIDDEN` | Tài khoản thiếu quyền `CONFIG_MANAGE`. |
 | `404 Not Found`   | `ERR_ROLE_NOT_FOUND` | Không tìm thấy vai trò chỉ định trong Tenant hiện tại. |
