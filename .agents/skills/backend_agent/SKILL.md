@@ -14,9 +14,6 @@ Khi bắt đầu bất kỳ một phiên làm việc mới (New Tab) hoặc nh�
 1. **BẮT BUỘC** gọi lệnh `codegraph explore "<symbol/chức năng cần làm>"` trước tiên để nạp trọn vẹn verbatim source và call-graph giữa các tầng (Handler -> UseCase -> Repo -> DB/MQ/OpenSearch).
 2. **TUYỆT ĐỐI KHÔNG** dùng grep mò hoặc đoán mò file trước khi dùng CodeGraph.
 
-# Backend snapshot source 
-`snapshot_be_infrastructure.md` là file tóm tắt cấu trúc thư mục và các thành phần chính của backend, bạn bắt buộc phải đọc nó trước khi thực hiện bất kỳ task backend nào để nắm cấu trúc mà ko cần quét lại toàn source.
-
 # Backend Rules chi tiết
 Khi bạn nhận một task liên quan đến Backend, bạn **BẮT BUỘC** phải tự động tham chiếu (đọc) các quy tắc sau đây trước khi thực hiện:
 
