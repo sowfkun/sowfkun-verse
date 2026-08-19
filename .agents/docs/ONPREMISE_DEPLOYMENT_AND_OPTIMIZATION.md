@@ -19,7 +19,7 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 | **OpenSearch Time-Series** | `PartitionMonth` / `PartitionDay`, Retention: 6 - 12 tháng | `PartitionQuarter` / `PartitionYear`, Retention: 3 - 5 năm | Giảm 70-90% số lượng Shard, tránh tràn RAM JVM Heap, lưu trữ lịch sử dài hạn. |
 | **OpenSearch Replication** | `replicas: 0`, `shards: 1` | `replicas: 1`, `shards: 2 - 4` | Tăng tính sẵn sàng (High Availability), tìm kiếm song song đa luồng. |
 | **Kafka / Redpanda** | Batch: 50 msgs / 2s, Concurrency: 2 | Batch: 200 - 500 msgs / 500ms, Concurrency: 8 - 16 | Tăng Throughput xử lý lên 10,000+ msg/s, độ trễ ingestion thời gian thực (<0.5s). |
-| **Redis In-Memory** | Cache DTO tối giản, TTL ngắn (1 - 24h), LRU eviction gắt gao | Cache Entity đầy đủ, TTL dài (7 - 30 ngày), Tăng Rate Limit (500-1000 req/s) | Tăng Cache Hit Ratio > 95%, giảm tải 80% truy vấn xuống MongoDB chính. |
+| **Redis In-Memory** | Cache DTO tối giản, TTL ngắn (1 - 24h), LRU eviction gắt gao | Cache DTO chuẩn hóa, TTL dài (7 - 30 ngày), Tăng Rate Limit (500-1000 req/s) | Tăng Cache Hit Ratio > 95%, giảm tải 80% truy vấn xuống MongoDB chính. |
 | **MongoDB Database** | Shared ReplicaSet, Connection Pool: 20 - 50 | Dedicated ReplicaSet, Connection Pool: 100 - 300, WiredTiger 50% RAM | Giảm độ trễ I/O xuống <1ms (Local LAN), tối ưu hóa ghi đồng thời. |
 | **Security & E2EE** | `ENABLE_PAYLOAD_ENCRYPTION=true` (bắt buộc qua Public Internet) | `ENABLE_PAYLOAD_ENCRYPTION=false` (nếu đã có mTLS/VPN nội bộ cô lập) | Giảm tải 10-15% CPU xử lý mã hóa/giải mã AES-GCM cho cả Server và Client. |
 | **Background Jobs** | Chạy chung Worker trong API server | Tách riêng Worker Node độc lập (`API_SERVER=false`, Concurrency: 30-50) | Tách biệt hoàn toàn tải CPU xử lý tác vụ nặng (Báo cáo, Import/Export, Sync). |
@@ -105,16 +105,19 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 * `RATE_LIMIT_MAX_REQUESTS=100`.
 
 #### Cấu hình On-Premise tối ưu:
-1. **Mở rộng Dung lượng RAM & Nâng Rate Limit (`.env`):**
+1. **Luôn Tuân Thủ Golden Standard Cache DTO:**
+   * Dù triển khai trên On-Premise có RAM dồi dào, hệ thống **bắt buộc vẫn sử dụng Cache DTO** (như `TenantCacheModel`, `RoleCacheModel`, `UserCacheModel`) thay vì lưu thẳng raw Entity xuống Redis.
+   * *Mục đích:* Chỉ cache các trường thực sự cần thiết cho nghiệp vụ đọc nhanh, loại bỏ các trường nặng (desc, raw metadata, hash không dùng) để giữ Redis luôn gọn nhẹ, serialization nhanh và tránh rò rỉ dữ liệu.
+2. **Mở rộng Dung lượng RAM & Nâng Rate Limit (`.env`):**
    ```env
    # Nâng ngưỡng giới hạn request cho mạng nội bộ/doanh nghiệp
    RATE_LIMIT_MAX_REQUESTS=1000
    RATE_LIMIT_WINDOW_SECONDS=60
    ```
-2. **Mở rộng TTL Cache Domain (`pkg/cache/redis/`):**
+3. **Mở rộng TTL Cache Domain (`pkg/cache/redis/`):**
    * Session Token TTL: Tăng từ 1 ngày lên 7 - 30 ngày.
    * Metadata/Role/Permission Cache TTL: Tăng lên 7 ngày.
-3. **Lợi ích:**
+4. **Lợi ích:**
    * Giảm thiểu 90% truy vấn xác thực quyền và thông tin người dùng xuống MongoDB.
    * Trải nghiệm ứng dụng mượt mà, phản hồi API trung bình dưới 5ms.
 
