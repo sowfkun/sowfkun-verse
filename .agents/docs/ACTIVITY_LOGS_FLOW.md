@@ -14,7 +14,7 @@ Tài liệu đặc tả toàn diện kiến trúc phân hệ **Activity Logs** (
    - Cụm kết nối OpenSearch: `customer_activities` (cấu hình qua biến môi trường `OPENSEARCH_CUSTOMER_ACTIVITIES_URL`).
 3. **Phân vùng Thời gian & Retention Tự động (Time-Series Partitioning):**
    - **Customer Activities Index:** `customer_activities-YYYY.MM` (Phân vùng theo **Tháng**, UTC), gắn vào Alias `customer_activities`.
-   - **Retention Policy:** Tự động lưu giữ 365 ngày (1 năm), được đăng ký tập trung tại `cmd/indexer/opensearch.go` và dọn dẹp hàng ngày lúc `02:00 AM UTC` bởi Asynq Cron Job.
+   - **Retention Policy:** Tự động lưu giữ 180 ngày (6 tháng), được đăng ký tập trung tại `cmd/indexer/opensearch.go` và dọn dẹp hàng ngày lúc `02:00 AM UTC` bởi Asynq Cron Job.
 4. **Ghi Bất đồng bộ qua Kafka Batch Consumer (High Throughput):**
    - Các UseCase nghiệp vụ sau khi update DB xong chỉ việc bắn event lên Kafka topic `entity-activities-progress` trên cụm `general2`.
    - Batch Consumer gom 50 messages hoặc 2 giây window $\rightarrow$ gọi `ActivityMQHandler` để phân nhóm theo `TargetType` và thực thi ghi hàng loạt qua OpenSearch `_bulk` API.
@@ -166,4 +166,4 @@ sequenceDiagram
 - **Alias:** `customer_activities`
 - **Cluster:** `customer_activities` (URL kết nối cấu hình qua `OPENSEARCH_CUSTOMER_ACTIVITIES_URL`)
 - **Settings:** Shards: 1, Replicas: 0, Refresh Interval: 5s.
-- **Retention:** 365 ngày (12 tháng).
+- **Retention:** 180 ngày (6 tháng).
