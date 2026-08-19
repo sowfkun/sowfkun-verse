@@ -21,8 +21,6 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 | **Kafka / Redpanda** | Batch: 50 msgs / 2s, Concurrency: 2 | Batch: 200 - 500 msgs / 500ms, Concurrency: 8 - 16 | Tăng Throughput xử lý lên 10,000+ msg/s, độ trễ ingestion thời gian thực (<0.5s). |
 | **Redis In-Memory** | Cache DTO tối giản, TTL ngắn (1 - 24h), LRU eviction gắt gao | Cache DTO chuẩn hóa, TTL dài (7 - 30 ngày), Tăng Rate Limit (500-1000 req/s) | Tăng Cache Hit Ratio > 95%, giảm tải 80% truy vấn xuống MongoDB chính. |
 | **MongoDB Database** | Shared ReplicaSet, Connection Pool: 20 - 50 | Dedicated ReplicaSet, Connection Pool: 100 - 300, WiredTiger 50% RAM | Giảm độ trễ I/O xuống <1ms (Local LAN), tối ưu hóa ghi đồng thời. |
-| **Security & E2EE** | `ENABLE_PAYLOAD_ENCRYPTION=true` (bắt buộc qua Public Internet) | `ENABLE_PAYLOAD_ENCRYPTION=false` (nếu đã có mTLS/VPN nội bộ cô lập) | Giảm tải 10-15% CPU xử lý mã hóa/giải mã AES-GCM cho cả Server và Client. |
-| **Background Jobs** | Chạy chung Worker trong API server | Tách riêng Worker Node độc lập (`API_SERVER=false`, Concurrency: 30-50) | Tách biệt hoàn toàn tải CPU xử lý tác vụ nặng (Báo cáo, Import/Export, Sync). |
 
 ---
 
@@ -148,37 +146,6 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 
 ---
 
-### 3.5. Bảo mật & Mã hóa Payload (E2EE / Hybrid Encryption)
-
-#### Hiện trạng Cloud / SaaS:
-* `ENABLE_PAYLOAD_ENCRYPTION=true` (Mã hóa toàn bộ request body qua RSA + AES-256-GCM để phòng chống nghe lén trên Internet).
-
-#### Cấu hình On-Premise tối ưu:
-1. **Môi trường Mạng Nội bộ Cô lập (Private Intranet / Dedicated VPN / mTLS):**
-   ```env
-   # Có thể tắt mã hóa payload tầng ứng dụng nếu hạ tầng mạng đã được cô lập vật lý
-   ENABLE_PAYLOAD_ENCRYPTION=false
-   ```
-2. **Lợi ích:**
-   * Giảm 10-15% mức tiêu thụ CPU trên Server API.
-   * Giảm độ trễ xử lý JSON và pin/CPU trên các thiết bị Mobile On-Premise của nhân viên.
-
----
-
-### 3.6. Background Workers & Task Processing (Asynq)
-
-#### Hiện trạng Cloud / SaaS:
-* API và Background Worker chạy chung trong 1 tiến trình Go duy nhất (`API_SERVER=false`) để tiết kiệm RAM.
-
-#### Cấu hình On-Premise tối ưu:
-1. **Tách cụm API Server và cụm Worker Server độc lập:**
-   * **Node API (Phục vụ Client):** Cấu hình `API_SERVER=true` (tắt toàn bộ consumer và asynq workers, chỉ tập trung trả HTTP requests siêu nhanh).
-   * **Node Background Worker (Xử lý nặng):** Cấu hình `API_SERVER=false`, tăng Concurrency lên 30-50 workers để chuyên xử lý gửi mail hàng loạt, import dữ liệu excel lớn, đồng bộ OpenSearch và dọn dẹp retention.
-2. **Lợi ích:**
-   * Dù hệ thống có đang xuất báo cáo 500,000 khách hàng thì API giao diện người dùng vẫn mượt 100%, không bao giờ bị lag/treo.
-
----
-
 ## 4. Hướng dẫn Chuyển Đổi Nhanh Sang On-Premise (Checklist)
 
 Khi bàn giao và triển khai cho khách hàng On-Premise:
@@ -186,7 +153,6 @@ Khi bàn giao và triển khai cho khách hàng On-Premise:
 1. [ ] **Thiết lập File `.env` On-Premise:**
    * Cập nhật các URL nội bộ: `MONGO_*_URI`, `REDIS_*_URL`, `KAFKA_*_BROKERS`, `OPENSEARCH_*_URL`.
    * Tăng `RATE_LIMIT_MAX_REQUESTS=1000`.
-   * Thiết lập `API_SERVER=true` cho node API và `API_SERVER=false` cho node Worker.
 2. [ ] **Cập nhật Phân vùng OpenSearch:**
    * Đổi Partition sang `osPkg.PartitionQuarter` hoặc `osPkg.PartitionYear` tại `cmd/api/main.go`.
    * Cập nhật `RetentionAmount` tương ứng (VD: 12 quý = 3 năm) tại `cmd/indexer/opensearch.go`.
