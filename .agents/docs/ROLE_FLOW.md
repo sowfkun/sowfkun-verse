@@ -225,37 +225,26 @@ sequenceDiagram
 ---
 
 ### 3.6 Danh sách vai trò rút gọn cho Dropdown/Options (List Roles For Options)
-* **Endpoint:** `POST /api/v1/role/list-for-options`
+* **Endpoint:** `GET /api/v1/role/list-for-options`
 * **Xác thực:** JWT Bearer Token (`Authorization: Bearer <token>`)
-* **Quyền hạn:** `CONFIG_MANAGE`
-* **Request Body:**
-
-| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
-| :--- | :--- | :--- | :--- |
-| `page` | `int` | `omitempty,min=1` | Số trang. |
-| `size` | `int` | `omitempty,min=1,max=1000` | Số bản ghi (nhận từ client). |
-| `search` | `string` | `omitempty` | Từ khóa tìm kiếm nhanh. |
+* **Quyền hạn:** `RequireAuth`
+* **Query Parameters:** `page` (int, default 1), `size` (int, default 100)
 
 * **Response (200 OK):**
 ```json
 {
   "code": 200,
   "message": "MSG_SUCCESS",
-  "data": {
-    "items": [
-      {
-        "id": "65f123456789abcdef012345",
-        "name": "Trưởng phòng Kinh doanh",
-        "perms": {
-          "USER_VIEW": ["ALL"],
-          "USER_MANAGE": ["SUBORDINATES"]
-        }
+  "data": [
+    {
+      "id": "65f123456789abcdef012345",
+      "name": "Trưởng phòng Kinh doanh",
+      "perms": {
+        "USER_VIEW": ["ALL"],
+        "USER_MANAGE": ["SUBORDINATES"]
       }
-    ],
-    "total": 1,
-    "page": 1,
-    "size": 20
-  }
+    }
+  ]
 }
 ```
 

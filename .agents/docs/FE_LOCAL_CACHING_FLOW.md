@@ -176,5 +176,16 @@ Khi xây dựng một module mới cần áp dụng Local Caching (ví dụ: `TA
 4. **Sử dụng ở UI Components**:
    - Lấy Map để tra cứu $O(1)$: `const tagsMap = await TagCache.getMap(tenant);`
    - Lấy List để render Dropdown/Select: `const tagsList = await TagCache.getList(tenant);`
-5. **Backend MQ Trigger**: Backend đảm bảo kích hoạt `EventTenantSyncMetaUpdate` (cập nhật `meta.[ENTITY]`) và `EventEntityChanged` khi có thay đổi dữ liệu.
+5. **Backend MQ Trigger**: Backend đảm bảo kích hoạt `EventTenantSyncMetaUpdate` (cập nhật `meta.[ENTITY]`) và `EventEntityChanged` khi có thay đổi dữ liệu (chỉ bắn socket khi `UPDATE`/`DELETE`, bỏ qua `INSERT`).
+
+---
+
+## 6. Danh Mục Các Phân Hệ Đã Tích Hợp Local Cache (Active Services Registry)
+
+| EntityType | Endpoint API | Projection Ép Cứng ở Backend | Mô hình DTO Frontend | Service Cache Khởi Tạo |
+| :--- | :--- | :--- | :--- | :--- |
+| `ROLE` | `GET /api/v1/role/list-for-options` | `name`, `perms` | `RoleBriefItem` (`id`, `name`, `perms`) | `RoleCache` (`getRolesMap`, `getRolesForOptions`) |
+| `TAG` | `GET /api/v1/tag/list-for-options` | `name`, `color`, `entity_types` | `TagBriefItem` (`id`, `name`, `color`, `entity_types`) | `TagCache` (`getTagsMap`, `getTagsForOptions`) |
+| `ATTRIBUTE` | `GET /api/v1/attribute/list-for-options` | `entity_type`, `zones`, `attributes` | `ModuleAttributeSet` (`id`, `entity_type`, `zones`, `attributes`) | `AttributeCache` (`getAttributesMap`, `getAttributesForOptions`) |
+
 
