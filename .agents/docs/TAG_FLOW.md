@@ -77,8 +77,6 @@ sequenceDiagram
 - **Response `200 OK`**:
   ```json
   {
-    "code": 200,
-    "message": "success",
     "data": [
       {
         "id": "65c1234567890abcdef12345",
@@ -92,7 +90,9 @@ sequenceDiagram
         "color": "#E74C3C",
         "entity_types": ["TICKET"]
       }
-    ]
+    ],
+    "error_code": "",
+    "error_detail": ""
   }
   ```
 
