@@ -11,7 +11,7 @@ Tài liệu đặc tả toàn diện kiến trúc phân hệ **Activity Logs** (
    - Bất kỳ phân hệ nào (Customer, Ticket, Order, Deal...) đều sử dụng chung module này mà không cần nhân bản mã nguồn (Zero Code Duplication).
 2. **Cô lập Lưu trữ & Đa Cụm (Multi-Cluster Storage Isolation):**
    - Các module có khối lượng log lớn (như Ticket) và log ít (như Customer) được lưu vào các Index/Cụm OpenSearch hoàn toàn độc lập (`customer_activities-*`, `ticket_activities-*`) để tránh tình trạng nuốt tài nguyên/shard của nhau.
-   - Cụm Customer Activities: `https://avnadmin:***@sowfkun-verse-customer-activites-sowfkun-verse-general-2.a.aivencloud.com:22178`.
+   - Cụm kết nối OpenSearch: `customer_activities` (cấu hình qua biến môi trường `OPENSEARCH_CUSTOMER_ACTIVITIES_URL`).
 3. **Phân vùng Thời gian & Retention Tự động (Time-Series Partitioning):**
    - **Customer Activities Index:** `customer_activities-YYYY.MM` (Phân vùng theo **Tháng**, UTC), gắn vào Alias `customer_activities`.
    - **Retention Policy:** Tự động lưu giữ 365 ngày (1 năm), được đăng ký tập trung tại `cmd/indexer/opensearch.go` và dọn dẹp hàng ngày lúc `02:00 AM UTC` bởi Asynq Cron Job.
