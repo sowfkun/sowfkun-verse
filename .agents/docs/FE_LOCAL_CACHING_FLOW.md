@@ -22,7 +22,14 @@ Hệ thống Local Caching phía Frontend được thiết kế xoay quanh 5 ngu
    - Cơ chế này bảo vệ trình duyệt khỏi nguy cơ tràn bộ nhớ RAM (Browser Heap Overflow) khi số lượng bản ghi của Tenant quá lớn.
 5. **Đồng Bộ Lười Khi Nhận Socket (Lazy Realtime Invalidation)**:
    - Khi có sự kiện `ENTITY_CHANGED` từ WebSocket, Client **không gọi API tải lại ngay lập tức**.
-   - Client chỉ xóa cache cũ (`invalidateEntityCache`) và cập nhật lại mốc `tenant.meta[EntityType]` trên RAM. Việc nạp dữ liệu mới sẽ được nhường lại cho cơ chế On-Demand ở lần truy cập tiếp theo.
+   - Client cập nhật lại mốc `tenant.meta[EntityType]` trên RAM khi Tenant sync. Việc nạp toàn bộ danh sách mới sẽ được nhường lại cho cơ chế On-Demand ở lần truy cập tiếp theo.
+6. **Vá Dữ Liệu Thời Gian Thực An Toàn (Safe Granular Realtime Patching - UPDATE & DELETE)**:
+   - Khi nhận event `ENTITY_CHANGED` của một danh mục (`ROLE`, `TAG`, `EMPLOYEE`, v.v.):
+   - **Quy tắc Thép về Tính Toàn Vẹn Dữ Liệu (Data Integrity)**:
+     - **CHỈ** thực hiện ghi đè (`UPDATE`) hoặc xoá (`DELETE`) nếu cache của entity đó **ĐÃ TỒN TẠI** trong `localStorage` và **CHỨA CHÍNH XÁC ID ĐÓ** (`cached.data[entityId] !== undefined`).
+     - Nếu cache chưa từng được nạp (người dùng chưa từng mở màn hình dùng danh mục đó), hoặc `entityId` chưa có trong cache: **TUYỆT ĐỐI KHÔNG ghi vào cache**.
+     - *Lý do*: Tránh trường hợp cache rỗng bị nhét 1 item đơn lẻ, khiến các lần đọc sau hiểu lầm là "Cache Hit" nhưng thực tế bị mất sạch toàn bộ các bản ghi khác.
+     - Event `CREATE` được bỏ qua có chủ đích để cơ chế Lazy Versioning tự động tải trọn bộ danh sách khi cần.
 
 ---
 
@@ -65,7 +72,7 @@ sequenceDiagram
 
 ---
 
-### 2.2 Luồng Đồng Bộ Khi Có Thay Đổi Thời Gian Thực (Realtime Invalidation Flow)
+### 2.2 Luồng Đồng Bộ Khi Có Thay Đổi Thời Gian Thực (Realtime Invalidation & Granular Patching Flow)
 
 ```mermaid
 sequenceDiagram
@@ -75,17 +82,24 @@ sequenceDiagram
     participant WS as WebSocket Hub
     participant ClientSocket as useGlobalSocketHandlers.ts
     participant AuthContext as AuthContext (Tenant State)
+    participant LocalCache as LocalStorage (entityCache.ts)
 
     Admin->>BE: POST /api/v1/{entity}/add | update | delete
-    Note over BE: MQ Handler tự động cập nhật tenant.meta.{ENTITY} = timestamp
-    BE->>WS: Broadcast event ENTITY_CHANGED { entity_type: "TENANT", entity_id: tenant.id, data: updatedTenant }
+    Note over BE: MQ Handler cập nhật tenant.meta.{ENTITY} = timestamp
+    BE->>WS: Broadcast ENTITY_CHANGED (TENANT hoặc ROLE, TAG, v.v.)
     WS->>ClientSocket: Nhận gói tin SOCKET_EVENTS.ENTITY_CHANGED
     
-    Note over ClientSocket: 1. Tự động đồng bộ Tenant State trên RAM
-    ClientSocket->>AuthContext: updateTenant(payload.data) (đã chứa meta.{ENTITY} mới)
-    
-    Note over ClientSocket: KHÔNG cần xóa cache trước và KHÔNG gọi API fetch lại ngay (Lazy)
-    Note over ClientSocket: Lần mở Component tiếp theo, cơ chế kiểm tra (cached.version !== tenant.meta.{ENTITY}) sẽ tự động kích hoạt fetch mới
+    alt Trường hợp 1: entity_type === "TENANT"
+        Note over ClientSocket: Tự động đồng bộ Tenant State trên RAM
+        ClientSocket->>AuthContext: updateTenant(payload.data) (đã chứa meta.{ENTITY} mới)
+    else Trường hợp 2: entity_type là Danh mục (ROLE, TAG, EMPLOYEE, v.v.)
+        ClientSocket->>LocalCache: patchEntityCacheItem(entity_type, entity_id, op_type, data)
+        alt Cache đã tồn tại & chứa ID đó
+            Note over LocalCache: UPDATE: Ghi đè item trong Map<br/>DELETE: Xóa item khỏi Map
+        else Cache chưa từng nạp hoặc không chứa ID
+            Note over LocalCache: BỎ QUA HOÀN TOÀN (Bảo vệ Data Integrity)
+        end
+    end
 ```
 
 ---
@@ -150,7 +164,7 @@ export interface CachedEntityData<T> {
 
 Khi xây dựng một module mới cần áp dụng Local Caching (ví dụ: `TAG`, `ATTRIBUTE`, `CUSTOMER_TIER`):
 
-1. **Khai báo EntityType**: Bổ sung mã định danh vào `ENTITY_TYPES` tại `src/lib/socket/events.ts` (ví dụ: `TAG: 'TAG'`).
+1. **Khai báo EntityType & Whitelist**: Bổ sung mã định danh vào `ENTITY_TYPES` tại `src/lib/socket/events.ts` (ví dụ: `TAG: 'TAG'`) và thêm vào mảng `CACHED_ENTITY_TYPES` tại `src/lib/cache/entityCache.ts`.
 2. **Khai báo API Client**: Viết hàm API trong `src/lib/api/tag.ts`: `listTagsForOptions({ page, size })`.
 3. **Đăng ký Service trong `src/lib/cache/entityCache.ts`**: Chỉ cần đúng 1 dòng sử dụng Factory `createEntityCacheService`:
    ```typescript
