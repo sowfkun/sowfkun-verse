@@ -23,6 +23,7 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 1.5 | **Bọc Interface Dư Thừa** | Không bọc lại standard library/third-party interface (ví dụ: bọc `kafkaPkg.Producer`). |
 | 1.6 | **Response Không Chuẩn** | Presentation Handler phải dùng `response.Success(w, dto)` hoặc bọc qua `response.BaseResponse[T]`. |
 | 1.7 | **Mơ hồ tên cụm kết nối Infra** | Khi tiêm/truyền kết nối hạ tầng đa cụm (MongoDB, Redis, Kafka Producers, OpenSearch), BẮT BUỘC đặt tên tường minh theo từng cụm cụ thể (VD: `dbTenant1`, `generalRedisClient`, `agentBusinessRedisClient`, `general1Producer`, `general2Producer`, `loggingClient`). CẤM đặt tên chung chung như `db`, `redisClient`, `producer`, `client`. |
+| 1.8 | **Delete Thiếu Rào An Toàn (IsSelAll / IncludeIDs)** | UseCase Delete bắt buộc kiểm tra `if !cmd.IsSelAll && len(cmd.IncludeIDs) == 0 { return errors.New(coreDomain.ErrBadRequest) }`. Tầng Presentation `PopulateCommonQuery` bắt buộc kiểm tra xung đột `if query.IsSelAll && len(query.IncludeIDs) > 0 { return errors.New(coreDomain.ErrBadRequest) }`. |
 ### 📂 Zone 2: BE_02 Caching & Redis
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |
 |---|---|---|

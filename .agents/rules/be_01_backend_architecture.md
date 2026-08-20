@@ -32,7 +32,10 @@ trigger: always_on
   - TUYỆT ĐỐI KHÔNG trả về thẳng Entity ra Controller, phải dùng Response DTO.
 - **Rule 2.4 - Audit Fields**: Dùng `utils.SetCommonEntityData(entity, command)` để set tự động thông tin Audit khi Create/Update.
 - **Rule 2.5 - Xử lí keyword nếu cần (text.BuildKeywords(cmd.Name)
-- **Rule 2.6 - Delete sẽ xử lí để hỗ trợ cả xoá 1 và xoá nhiều. bằng cách dùng CommonQuery giống list để hỗ trợ xoá theo filter (xem tag)
+- **Rule 2.6 - Delete Hỗ trợ Xóa 1 / Xóa Nhiều & Rào An Toàn (IsSelAll / IncludeIDs)**:
+  - UseCase Delete nhúng `CommonQuery` để hỗ trợ xóa theo filter/danh sách ID.
+  - **Rào an toàn bắt buộc tại Delete UseCase**: Bắt buộc kiểm tra `if !cmd.IsSelAll && len(cmd.IncludeIDs) == 0 { return errors.New(coreDomain.ErrBadRequest) }` để ngăn ngừa việc vô tình xóa toàn bộ danh sách khi Client truyền payload rỗng hoặc thiếu sót.
+  - **Kiểm tra xung đột tại Presentation (`PopulateCommonQuery`)**: Nếu `query.IsSelAll == true` VÀ `len(query.IncludeIDs) > 0` thì lập tức trả về `errors.New(coreDomain.ErrBadRequest)` (không được vừa chọn tất cả vừa chỉ định danh sách ID cụ thể).
 - **Rule 2.7 - Cấm lạm quyền**: TUYỆT ĐỐI KHÔNG gọi thẳng DB, Cache, ES ở layer này. Phải đi qua Interface của Repo. 
 - **Rule 2.8 - Soft Delete Data Tracking**: Khi thực hiện xóa (Delete UseCase), bắt buộc chuẩn bị `updateData` chứa thông tin actor (`u_by`) và `tracking_id` (nếu có từ `cmd.TrackingID`) truyền vào `SoftDeleteManyIDs` của Repository để lưu vết dữ liệu thao tác.
 
