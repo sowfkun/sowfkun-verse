@@ -1,0 +1,52 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: sowfkun_redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=${REDPANDA_SMP:-1}
+      - --memory=${REDPANDA_MEMORY:-512M}
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      - --advertise-kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://${REDPANDA_ADVERTISED_HOST:-127.0.0.1}:9094
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --schema-registry-addr=0.0.0.0:8081
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+      - "${KAFKA_OUTSIDE_PORT:-9094}:9094"
+      - "${SCHEMA_REGISTRY_PORT:-8081}:8081"
+      - "${PANDAPROXY_PORT:-8082}:8082"
+    volumes:
+      - ./data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: ${REDPANDA_CONTAINER_MEMORY_LIMIT:-600M}
+
+  console:
+    image: redpandadata/console:latest
+    container_name: sowfkun_redpanda_console
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: "redpanda:9092"
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: "http://redpanda:8081"
+    ports:
+      - "${CONSOLE_PORT:-8080}:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 150M

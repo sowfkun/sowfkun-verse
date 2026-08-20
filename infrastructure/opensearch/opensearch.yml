@@ -1,0 +1,8 @@
+cluster.name: sowfkun-opensearch-cluster
+node.name: opensearch-node-1
+discovery.type: single-node
+network.host: 0.0.0.0
+http.port: 9200
+
+# Security (Tắt TLS nội bộ để tiết kiệm RAM & CPU trên máy 1GB, chỉ bind mạng VPC nội bộ)
+plugins.security.disabled: true

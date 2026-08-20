@@ -1,0 +1,16 @@
+services:
+  api:
+    build:
+      context: ../../sowfkun-verse-api
+      dockerfile: Dockerfile
+    image: sowfkun-verse-api:latest
+    container_name: sowfkun_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT:-8080}:8080"
+    deploy:
+      resources:
+        limits:
+          memory: ${API_CONTAINER_MEMORY_LIMIT:-400M}

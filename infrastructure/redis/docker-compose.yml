@@ -1,0 +1,21 @@
+services:
+  redis:
+    image: ${REDIS_IMAGE:-redis:alpine}
+    container_name: sowfkun_redis
+    restart: unless-stopped
+    command: >
+      sh -c "redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-sowfkun_redis_secure_pass_2026} --maxmemory ${REDIS_MAX_MEMORY:-512mb}"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-sowfkun_redis_secure_pass_2026}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_CONTAINER_MEMORY_LIMIT:-600M}
