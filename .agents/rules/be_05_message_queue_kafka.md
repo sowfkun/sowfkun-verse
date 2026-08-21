@@ -61,3 +61,7 @@ type Event struct {
 
 ## 7. Socket & Realtime Message Queue Rules
 - **Model dùng chung**: Mọi tin nhắn truyền qua Socket cho Client bắt buộc phải được đóng gói qua struct `socket.SocketMessagePayload` và được publish qua hàm `socket.PublishSocketMessage` (với tham số `isSend bool`). Nghiêm cấm việc gửi trực tiếp JSON thủ công không qua schema định sẵn.
+
+## 8. Đồng bộ Tag Entity với Change Stream & MQ Handler Filter
+- Khi xử lý sự kiện Entity Change từ Change Stream (`Handle[Domain]Changed`), Handler sử dụng `reflection.GetStructTags` trên Cache Model và Response DTO để trích xuất danh sách key cần theo dõi (`cacheFields`, `socketFields`).
+- **Yêu cầu bắt buộc**: Tên tag BSON trong Entity và JSON tag trong Response DTO / Cache Model phải đồng nhất 100% (ví dụ: cùng là `tz`, `phone`, `status`, `tier`, `meta`). Nếu đặt lệch tên, hàm `HasFieldIntersection` sẽ không phát hiện được sự thay đổi dẫn tới việc bỏ sót xoá cache hoặc không bắn WebSocket cập nhật realtime.

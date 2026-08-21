@@ -63,6 +63,7 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 6.4 | **Enum Không Viết Hoa** | Các giá trị string đại diện cho Enum/Type phải viết hoa hoàn toàn (UPPERCASE). |
 | 6.5 | **Thiếu Validate đầu vào** | DTO request từ Client bắt buộc khai báo tag `validate:"..."`. Khi kiểm tra thất bại phải trả về `coreDomain.ErrValidationFailed` cùng chi tiết lỗi. |
 | 6.6 | **Utils chứa nghiệp vụ** | Cấm đặt logic nghiệp vụ trong `pkg/utils/`. Các helper nghiệp vụ phải chuyển thành Domain Service hoặc hàm trong Entity. |
+| 6.7 | **Lệch tag Entity với DTO Event Change** | Tên tag BSON/JSON của Entity phải đồng bộ chính xác với tag JSON trong Response DTO và Cache Model (ví dụ: `tz`, `phone`, `meta`) để đảm bảo hàm `HasFieldIntersection` trong MQ Handler bắt đúng event thay đổi từ Change Stream. |
 
 
 ### 📂 Zone 7: BE_07 OpenSearch

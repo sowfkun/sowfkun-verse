@@ -98,6 +98,23 @@ type User struct {
 
 ---
 
+### 3.1. Đồng bộ Tag BSON/JSON giữa Entity, DTO và Event Change (Change Stream Synchronization)
+
+> **LUẬT THÉP**: Khi thêm mới hoặc sửa đổi tên field/tag trong Entity (`bson:"..." json:"..."`), **BẮT BUỘC** phải đối chiếu và đồng bộ tag đó xuyên suốt toàn bộ hệ thống:
+> 1. **Entity**: `bson:"<tag>" json:"<tag>"` (ví dụ: `bson:"tz" json:"tz"`).
+> 2. **Cache DTO / Cache Model**: `json:"<tag>"` (ví dụ: `TenantCacheModel` trường `Timezone` có tag `json:"tz"`).
+> 3. **Response DTO**: `json:"<tag>"` (ví dụ: `TenantResponse`, `UserBriefResponse` có tag `json:"tz"`).
+> 4. **Request DTO / Command**: `json:"<tag>,omitempty"`.
+
+**Lý do sống còn:**
+- MongoDB Change Stream khi phát hiện update sẽ gửi payload chứa danh sách các BSON key bị thay đổi (ví dụ: `tz`, `phone`, `status`, `meta`).
+- Các MQ Handler (`TenantMQHandler`, `UserMQHandler`, `RoleMQHandler`, v.v.) sử dụng `reflection.GetStructTags` trên DTO/CacheModel để trích xuất danh sách key cần theo dõi.
+- Nếu tên tag trong Response DTO/Cache Model bị lệch so với Entity BSON key (ví dụ: Entity là `tz` nhưng DTO lại đặt là `timezone`), hàm `reflection.HasFieldIntersection` sẽ **bị miss và không khớp key**, dẫn tới:
+  - ❌ **Không xóa cache Redis** (dữ liệu cache bị stale/lỗi thời).
+  - ❌ **Không bắn WebSocket `ENTITY_CHANGED`** xuống Frontend (Client không nhận được cập nhật realtime).
+
+---
+
 ## 4. Chuẩn hóa Enum & Const Values (UPPERCASE)
 - **BẮT BUỘC viết hoa toàn bộ (UPPERCASE)** đối với tất cả các giá trị string đại diện cho các trường kiểu Enum/Type (ví dụ: `Status`, `Type`, `Role`, `Module`, v.v.) trong cả mã nguồn Go và khi lưu trữ xuống Database MongoDB.
 - **Quy ước**: `ACTIVE`, `INACTIVE`, `CUSTOMER`, `TICKET`, `USER`, `ADMIN`.

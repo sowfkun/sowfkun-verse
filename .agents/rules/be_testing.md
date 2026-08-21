@@ -1,6 +1,8 @@
 # Testing (Quy trình Test của Agent)
 
-Để đảm bảo các tính năng và API do Agent phát triển hoạt động chính xác và an toàn, Agent BẮT BUỘC tuân thủ quy trình kiểm thử (Testing Workflow) theo hai trường hợp sau:
+> **LUẬT THÉP:** Tuyệt đối **KHÔNG chạy `go test` hoặc `go test ./...`** trong toàn bộ dự án. Khi cần kiểm tra tính đúng đắn và cú pháp sau khi code, Agent CHỈ được dùng lệnh `go build ./...`.
+
+Để đảm bảo các tính năng và API do Agent phát triển hoạt động chính xác và an toàn, Agent tuân thủ quy trình kiểm thử (Testing Workflow) theo hai trường hợp sau:
 
 ---
 
