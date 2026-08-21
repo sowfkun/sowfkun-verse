@@ -3,8 +3,8 @@ services:
     build:
       context: ../../sowfkun-verse-api
       dockerfile: Dockerfile
-    image: sowfkun-verse-api:latest
-    container_name: sowfkun_api
+    image: ${API_IMAGE:-app-api:latest}
+    container_name: ${API_CONTAINER_NAME:-app_api}
     restart: unless-stopped
     env_file:
       - .env

@@ -1,7 +1,7 @@
 services:
   mongo:
     image: mongodb/mongodb-atlas-local:latest
-    container_name: sowfkun_mongo
+    container_name: ${MONGO_CONTAINER_NAME:-app_mongo}
     restart: unless-stopped
     ports:
       - "${MONGO_PORT:-27017}:27017"

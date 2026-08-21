@@ -146,17 +146,55 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 
 ---
 
-## 4. Hướng dẫn Chuyển Đổi Nhanh Sang On-Premise (Checklist)
+## 4. Hướng dẫn Chuyển Đổi & Checklist Khi Triển Khai On-Premise
 
-Khi bàn giao và triển khai cho khách hàng On-Premise:
+Khi chuẩn bị đóng gói và triển khai sản phẩm lên hạ tầng On-Premise của khách hàng (Private DataCenter, Bare-Metal Server, hoặc Private Cloud VM), cần tuân thủ bảng checklist toàn diện sau:
 
-1. [ ] **Thiết lập File `.env` On-Premise:**
-   * Cập nhật các URL nội bộ: `MONGO_*_URI`, `REDIS_*_URL`, `KAFKA_*_BROKERS`, `OPENSEARCH_*_URL`.
-   * Tăng `RATE_LIMIT_MAX_REQUESTS=1000`.
-2. [ ] **Cập nhật Phân vùng OpenSearch:**
-   * Đổi Partition sang `osPkg.PartitionQuarter` hoặc `osPkg.PartitionYear` tại `cmd/api/main.go`.
-   * Cập nhật `RetentionAmount` tương ứng (VD: 12 quý = 3 năm) tại `cmd/indexer/opensearch.go`.
-3. [ ] **Chạy Indexer khởi tạo:**
-   * Khởi động server để tự động nạp Template và Retention Registry: `go run cmd/api/*.go`.
-4. [ ] **Kiểm tra Logs Khởi động:**
-   * Xác nhận toàn bộ kết nối các cụm DB, Redis, Kafka, OpenSearch đều hiển thị `[OK]`.
+### 4.1. Checklist Cấu hình Môi trường & Kết nối (`.env`)
+- [ ] **Khử Naming Đặc trưng (Generic Naming):** Đảm bảo không hardcode tên sản phẩm/thương hiệu trong container name, cluster name và image name. Cấu hình qua các biến:
+  - `API_CONTAINER_NAME`, `API_IMAGE`
+  - `MONGO_CONTAINER_NAME`, `REDIS_CONTAINER_NAME`, `REDPANDA_CONTAINER_NAME`
+  - `OPENSEARCH_CONTAINER_NAME`, `OPENSEARCH_CLUSTER_NAME`
+- [ ] **IP & Domain nội bộ doanh nghiệp:**
+  - `API_PORT`, `API_HOST`, `CORS_ALLOWED_ORIGINS` (cập nhật dải domain/IP nội bộ khách hàng).
+  - `REDPANDA_ADVERTISED_HOST`: Điền IP mạng LAN / Private VPC của node Kafka.
+- [ ] **Connection Strings:** Cập nhật trỏ tới các node/cluster nội bộ:
+  - `MONGO_*_URI`: Cập nhật user/pass, IP/Host và `authSource=admin`.
+  - `REDIS_*_URL`: Cập nhật mật khẩu và IP node Redis.
+  - `KAFKA_*_BROKERS`: Cập nhật dải IP:Port broker.
+  - `OPENSEARCH_*_URL`: Cập nhật URL node OpenSearch.
+
+### 4.2. Checklist Bảo mật & Bí mật hệ thống (Secrets Rotation)
+- [ ] **Thay đổi Default Credentials:**
+  - Đổi mật khẩu Redis (`REDIS_PASSWORD`), MongoDB root password, OpenSearch auth.
+- [ ] **Sinh mới Khóa JWT & Khóa E2EE Riêng Biệt:**
+  - `JWT_SECRET`: Sinh chuỗi secret ngẫu nhiên bảo mật (ít nhất 32 ký tự).
+  - `BLIND_INDEX_PEPPER`: Sinh chuỗi pepper ngẫu nhiên bảo mật cho tìm kiếm mã hóa.
+  - `DATABASE_ENCRYPTION_KEY_v1`: Sinh 32-byte hex key độc lập cho mã hóa dữ liệu nhạy cảm (SĐT/Email).
+  - `RSA_PRIVATE_KEY_BASE64` / `RSA_PUBLIC_KEY_BASE64`: Gen cặp khóa RSA 2048-bit mới cho từng khách hàng để phục vụ mã hóa payload E2EE giữa Client & Backend.
+
+### 4.3. Checklist Tài nguyên Phần cứng & Hiệu năng (Resource Tuning)
+- [ ] **Điều chỉnh RAM Limits theo cấu hình Server:**
+  - `API_CONTAINER_MEMORY_LIMIT`: Nâng lên 1G - 2G tùy tải.
+  - `MONGO_CONTAINER_MEMORY_LIMIT` & `MONGO_MAX_POOL_SIZE`: Tăng pool kết nối lên 100-300.
+  - `REDIS_MAX_MEMORY` & `REDIS_CONTAINER_MEMORY_LIMIT`: Tăng theo dung lượng RAM vật lý.
+  - `OPENSEARCH_JVM_HEAP`: Cấu hình 50% RAM máy chủ (ví dụ: `-Xms4g -Xmx4g` cho máy 8GB RAM).
+  - `RATE_LIMIT_MAX_REQUESTS`: Nâng từ 100 lên 500 - 1000 requests/phút trong mạng nội bộ.
+- [ ] **OpenSearch Time-Series Partitioning:**
+  - Đổi Partition sang `osPkg.PartitionQuarter` hoặc `osPkg.PartitionYear` tại `cmd/api/main.go`.
+  - Cập nhật `RetentionAmount` tương ứng (VD: 12 quý = 3 năm) tại `cmd/indexer/opensearch.go`.
+
+### 4.4. Checklist Lưu trữ Dữ liệu & Backup (Volumes & Mount Points)
+- [ ] **Mount Phân vùng Ổ cứng Chuyên dụng:**
+  - Trỏ các volume `./data` (Mongo, Redis, Kafka, OpenSearch) ra các mount point SSD/NVMe chuyên dụng (VD: `/data/db`, `/data/redis`, `/data/opensearch`).
+- [ ] **Thiết lập Backup Định kỳ:**
+  - Thiết lập crontab tự động `mongodump` và snapshot OpenSearch/Redis hàng ngày đẩy về SAN/NAS nội bộ.
+
+### 4.5. Checklist Hệ thống Mạng, Reverse Proxy & Thời gian
+- [ ] **Đồng bộ Thời gian UTC & NTP:**
+  - Bắt buộc kiểm tra server OS đã chạy chuẩn UTC: `timedatectl set-timezone UTC && timedatectl set-ntp true`.
+- [ ] **Reverse Proxy & SSL/TLS:**
+  - Cấu hình Nginx / HAProxy / Traefik làm cổng Gateway tiếp nhận HTTPS với chứng chỉ SSL/TLS nội bộ của doanh nghiệp.
+- [ ] **Tường lửa & Phân vùng Mạng (Firewall / UFW):**
+  - Đóng toàn bộ các port DB/Queue (`27017`, `6379`, `9092`, `9200`) ra ngoài Internet, chỉ cho phép kết nối trong dải IP mạng LAN / Docker Network nội bộ.
+

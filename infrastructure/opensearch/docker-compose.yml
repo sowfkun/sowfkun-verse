@@ -1,11 +1,11 @@
 services:
   opensearch:
     image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:latest}
-    container_name: sowfkun_opensearch
+    container_name: ${OPENSEARCH_CONTAINER_NAME:-app_opensearch}
     restart: unless-stopped
     environment:
-      - cluster.name=sowfkun-opensearch-cluster
-      - node.name=opensearch-node-1
+      - cluster.name=${OPENSEARCH_CLUSTER_NAME:-app-opensearch-cluster}
+      - node.name=${OPENSEARCH_NODE_NAME:-opensearch-node-1}
       - discovery.type=single-node
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JVM_HEAP:--Xms384m -Xmx384m}"

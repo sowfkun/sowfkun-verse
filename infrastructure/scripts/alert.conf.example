@@ -1,9 +1,9 @@
 # ==============================================================================
-# SOWFKUN VERSE ALERT CONFIGURATION (/etc/sowfkun/alert.conf)
+# ON-PREMISE ALERT CONFIGURATION (/etc/app/alert.conf)
 # ==============================================================================
 
 # Định danh tên Server hiển thị trên thông báo (VD: Redis-Server-01, API-Server-01)
-SERVER_NAME="Sowfkun-Server-01"
+SERVER_NAME="Server-01"
 
 # --- 1. Cấu hình Telegram Alert (Khuyên dùng) ---
 # Lấy token từ @BotFather và Chat ID từ @userinfobot

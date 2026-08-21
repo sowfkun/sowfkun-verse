@@ -1,7 +1,7 @@
 services:
   redpanda:
     image: redpandadata/redpanda:latest
-    container_name: sowfkun_redpanda
+    container_name: ${REDPANDA_CONTAINER_NAME:-app_kafka}
     restart: unless-stopped
     command:
       - redpanda
@@ -35,7 +35,7 @@ services:
 
   console:
     image: redpandadata/console:latest
-    container_name: sowfkun_redpanda_console
+    container_name: ${CONSOLE_CONTAINER_NAME:-app_kafka_console}
     restart: unless-stopped
     depends_on:
       redpanda:
