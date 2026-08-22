@@ -79,3 +79,16 @@ Khi một MQ Handler, Consumer hoặc Job thực hiện tác động lên DB (In
   - Khi cần đọc lại entity ngay sau khi vừa tác động DB (Read-after-write): **BẮT BUỘC** dùng `GetByID` hoặc `Find()` trực tiếp từ DB chính để đảm bảo Realtime, **TUYỆT ĐỐI KHÔNG** dùng các hàm List/Query đi qua Atlas Search / OpenSearch vì dữ liệu sẽ bị "bóng ma" (stale data hoặc miss).
   - Nếu nghiệp vụ bắt buộc phải dùng Search Engine (ví dụ: cần aggregate, search phân cấp, re-ranking toàn cục sau khi entity thay đổi): **BẮT BUỘC** phải có cơ chế **Delay / Retry** (ví dụ: dispatch qua Asynq Delayed Task sau 2-3 giây, hoặc retry exponential backoff) để đảm bảo engine tìm kiếm đã hoàn tất re-indexing trước khi đọc.
 
+## 10. Kiến Trúc Change Stream Zero-Waste (Không Dùng UpdateLookup) & Consumer-side Projection
+- **Cấm dùng UpdateLookup tại Watcher**: `ChangeStreamWatcher` TUYỆT ĐỐI KHÔNG cấu hình `SetFullDocument(options.UpdateLookup)` khi khởi tạo Change Stream cursor. Điều này loại bỏ hoàn toàn việc MongoDB Server phải chạy truy vấn lookup ngầm cho mỗi sự kiện update, giảm tải tối đa CPU/Disk I/O và tối ưu tốc độ Change Stream lên mức tối đa.
+- **Payload Tối Giản (Zero-Waste)**: Payload của sự kiện phát sinh từ Change Stream chỉ chứa các trường metadata gọn nhẹ: `id`, `op`, `collection`, và `updateDescription` (chứa `updatedFields`, `removedFields`).
+- **Chủ Động Projection Tại Consumer**: Khi MQ Consumer (`RoleMQHandler`, `UserMQHandler`, `TenantMQHandler`, `TagMQHandler`, `AttributeMQHandler`, v.v.) nhận event thay đổi và cần dữ liệu để đóng gói payload Socket hoặc xóa Cache theo trường phụ thuộc:
+  - BẮT BUỘC phải gọi `repo.GetByID(ctx, id, projection)` với `projection` chỉ định đích danh các trường cần thiết.
+  - TUYỆT ĐỐI KHÔNG dựa dẫm vào `fullDocument` trong event payload và KHÔNG truyền projection `nil` (SELECT *) khi không thực sự cần thiết.
+
+## 11. Cấu Hình Kafka Producer (Non-blocking Asynchronous & Fast Batch Timeout)
+- **Cơ chế**: Kafka Producer (`NewProducer`) phải được cấu hình `Async: true` và `BatchTimeout: 10 * time.Millisecond`.
+- **Mục đích**: 
+  - `Async: true` đảm bảo hàm `Publish()` ghi message vào memory buffer và trả về ngay tức thì (< 0.1ms), không bị block chờ round-trip mạng tới Kafka Cluster.
+  - `BatchTimeout: 10ms` khắc phục triệt để hành vi mặc định của thư viện `segmentio/kafka-go` (vốn bị treo 1.0 giây để gom batch nếu không có thêm message mới).
+

@@ -53,6 +53,8 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 5.2 | **Sai cách khai báo Event Type** | Event type constant bắt buộc đặt tại `pkg/core/domain/event.go`. Tên biến bắt đầu bằng `Event[Domain]`, giá trị string dạng `UPPER_SNAKE_CASE`. |
 | 5.3 | **Sai tên MQ Handler / Constructor** | MQ Handler struct bắt buộc là `[DomainName]MQHandler` và constructor là `New[DomainName]MQHandler()`. |
 | 5.4 | **Hardcode Event khi đăng ký** | Cấm hardcode chuỗi string trực tiếp khi đăng ký dispatcher (phải dùng hằng số đã khai báo ở `pkg/core/domain/event.go`). |
+| 5.5 | **Dùng fullDocument trong MQ Handler** | MQ Handler cấm kỳ vọng trường `fullDocument` từ Change Stream payload; bắt buộc gọi `repo.GetByID(ctx, id, projection)` với projection các trường đích danh cần thiết. |
+| 5.6 | **Kafka Producer Sync Blocking** | Kafka Producer (`NewProducer`) bắt buộc cấu hình `Async: true` và `BatchTimeout: 10 * time.Millisecond` để tránh treo 1 giây gom batch khi publish. |
 
 ### 📂 Zone 6: BE_06 Coding Standards & Utils
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |

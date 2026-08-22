@@ -4,3 +4,5 @@ main.exe
 .codegraph/
 tmp/
 .idea
+*.pem
+sowfkun-verse.pem

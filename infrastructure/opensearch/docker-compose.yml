@@ -32,3 +32,9 @@ services:
       resources:
         limits:
           memory: ${OPENSEARCH_CONTAINER_MEMORY_LIMIT:-650M}
+
+networks:
+  default:
+    name: ${APP_NETWORK:-app_net}
+    external: true
+

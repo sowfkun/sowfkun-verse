@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# SOWFKUN VERSE SERVER HEALTH & ALERT MONITOR (Ultra-Lightweight & Zero-Waste)
+# ENTERPRISE SERVER HEALTH & ALERT MONITOR (Ultra-Lightweight & Zero-Waste)
 # Supports: Telegram Bot & Discord Webhook Alerts
 # Checks: RAM (Threshold 85%), SWAP (Threshold 70%), Disk (Threshold 85%), 
 #         Docker Container Health / Crashes.
 # ==============================================================================
 
-# Load Alert Configurations from /etc/sowfkun/alert.conf if exists
-ALERT_CONF="/etc/sowfkun/alert.conf"
+# Load Alert Configurations from /etc/infra/alert.conf if exists
+ALERT_CONF="/etc/infra/alert.conf"
+if [ ! -f "$ALERT_CONF" ] && [ -f "/etc/app/alert.conf" ]; then
+    ALERT_CONF="/etc/app/alert.conf"
+fi
 if [ -f "$ALERT_CONF" ]; then
     # shellcheck source=/dev/null
     source "$ALERT_CONF"
 fi
 
-# Config Defaults (Override via /etc/sowfkun/alert.conf)
+# Config Defaults (Override via /etc/infra/alert.conf)
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
 DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
@@ -22,7 +25,7 @@ RAM_THRESHOLD="${RAM_THRESHOLD:-85}"
 SWAP_THRESHOLD="${SWAP_THRESHOLD:-70}"
 DISK_THRESHOLD="${DISK_THRESHOLD:-85}"
 
-STATE_DIR="/var/run/sowfkun-monitor"
+STATE_DIR="/var/run/app-monitor"
 mkdir -p "$STATE_DIR"
 ALERT_FLAG="$STATE_DIR/last_alert_time"
 COOLDOWN_SECONDS=1800 # 30 mins cooldown between repeated warnings
@@ -40,7 +43,7 @@ send_alert() {
         if [ "$level" == "RECOVERED" ]; then tg_icon="✅"; fi
         if [ "$level" == "WARNING" ]; then tg_icon="⚠️"; fi
 
-        local tg_text="${tg_icon} <b>[Sowfkun Alert - ${level}]</b>%0A"
+        local tg_text="${tg_icon} <b>[System Alert - ${level}]</b>%0A"
         tg_text+="<b>Server:</b> <code>${SERVER_NAME}</code>%0A"
         tg_text+="<b>Time:</b> <code>${timestamp}</code>%0A%0A"
         tg_text+="<b>${title}</b>%0A"

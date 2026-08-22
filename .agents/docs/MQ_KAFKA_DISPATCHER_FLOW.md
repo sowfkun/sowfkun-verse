@@ -114,6 +114,11 @@ func RegisterMQHandlers(dispatcher *kafkaPkg.EventDispatcher, userRepo domain.IU
 }
 ```
 
+### 3.4 Change Stream Zero-Waste & Consumer-Side Projection
+- **MongoDB ChangeStreamWatcher**: Không sử dụng `SetFullDocument(options.UpdateLookup)` để tránh overhead lookup ngầm trên MongoDB Oplog. Payload phát ra Kafka chỉ chứa metadata tối giản: `id`, `op`, `collection`, `updateDescription`.
+- **Consumer Projection**: Các MQ Consumer khi cần dữ liệu để xử lý socket notification hoặc xóa cache bắt buộc gọi `repo.GetByID(ctx, id, projection)` với `projection` chỉ định đích danh các trường cần thiết (cấm `SELECT *`).
+- **Kafka Producer Configuration**: `NewProducer` được cấu hình `Async: true` và `BatchTimeout: 10 * time.Millisecond` để đảm bảo lệnh `Publish` trả về ngay tức thì (< 0.1ms) mà không bị block.
+
 ---
 
 ## 4. Các lỗi thường gặp & Giải pháp (Common Pitfalls)
@@ -124,3 +129,5 @@ func RegisterMQHandlers(dispatcher *kafkaPkg.EventDispatcher, userRepo domain.IU
 | 2 | **Xử lý sai thứ tự sự kiện (FIFO)** | Không truyền trường `Key` khi push vào topic tuần tự `low-traffics-order-progress`. | Bắt buộc gán `Key` là ID của đối tượng (TenantID, UserID) để Kafka định tuyến vào chung một partition. |
 | 3 | **Lỗi Compile khi import chéo** | Khai báo hằng số Event ở các file nghiệp vụ cụ thể nằm trong `internal/`. | Bắt buộc khai báo Event Type tại file dùng chung [event.go](file:///f:/Coding/Project/sowfkun.verse.v2/sowfkun-verse-api/pkg/core/domain/event.go). |
 | 4 | **Sập Consumer (Crash) do Panic** | Handler nghiệp vụ phát sinh panic (ví dụ: pointer nil) nhưng không có `recover` bảo vệ. | Hệ thống `Dispatcher` đã bọc hàm `recover` tại vòng lặp xử lý chính, nhưng trong handler song song nên có cơ chế tự quản lý an toàn. |
+| 5 | **Tắc nghẽn Change Stream (1s/event)** | `BatchTimeout` của `kafka.Writer` mặc định là 1s ở chế độ Synchronous. | Cấu hình `Async: true` và `BatchTimeout: 10 * time.Millisecond` trong `NewProducer()`. |
+| 6 | **Stale hoặc chậm do `fullDocument`** | Watcher bật `UpdateLookup` ép MongoDB lookup ngầm cho mỗi update event. | Bỏ `UpdateLookup` tại Watcher, chuyển sang gọi `GetByID` kèm `projection` tại từng Consumer. |

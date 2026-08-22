@@ -1,5 +1,5 @@
 # ==============================================================================
-# ON-PREMISE ALERT CONFIGURATION (/etc/app/alert.conf)
+# ON-PREMISE ALERT CONFIGURATION (/etc/infra/alert.conf)
 # ==============================================================================
 
 # Định danh tên Server hiển thị trên thông báo (VD: Redis-Server-01, API-Server-01)

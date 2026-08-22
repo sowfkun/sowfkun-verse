@@ -1,19 +1,62 @@
-# Sowfkun Verse Infrastructure (Ultra-Lean & Dedicated 1GB RAM)
+# Enterprise Infrastructure (Ultra-Lean & Flexible Multi-Service Deployment)
 
-Bộ kịch bản và cấu hình khởi tạo hạ tầng tự động **"1 Lệnh Duy Nhất"** cho các dịch vụ độc lập trên **Ubuntu 24.04 LTS (2 Core / 1GB RAM)**:
-- **Redpanda (Kafka API)**: Port `9092` (Internal) / `9094` (External), Web Console `8080`.
+Bộ kịch bản và cấu hình khởi tạo hạ tầng tự động **"1 Lệnh Duy Nhất"** cho các dịch vụ trên **Ubuntu 24.04 LTS**:
+- **Redpanda (Kafka API)**: Port `9092` (Internal) / `9094` (External), Web Console `8085`.
 - **Redis 7 / 8**: Port `6379`.
 - **MongoDB 8 / Atlas Local**: Port `27017` (hỗ trợ full `$search` Lucene Engine).
 - **OpenSearch 2 / 3**: Port `9200`.
 - **Go Backend (API)**: Port `8080`.
+- **Docker Network**: `app_net` (tất cả containers cùng VPS tự động kết nối nội bộ).
 
 ---
 
-## 🚀 Hướng Dẫn Khởi Tạo Nhanh (1 Lệnh)
+## 🚀 Hướng Dẫn Khởi Tạo
 
-### 1. Trên Server Trống (Fresh Server - Cài từ đầu)
+### Cách 1: Menu Tương Tác Trực Quan (Interactive Multi-Select)
 
-Chạy lệnh tương ứng với loại dịch vụ của con server đó:
+Chỉ cần chạy lệnh mà không cần truyền tham số:
+```bash
+sudo bash bootstrap.sh
+```
+Hệ thống sẽ hiển thị menu chọn các dịch vụ cần chạy:
+```text
+=================================================================
+📋 CHỌN CÁC DỊCH VỤ CẦN CHẠY TRÊN VPS NÀY
+=================================================================
+  1) Redis Cache (Port 6379)
+  2) MongoDB Atlas Local (Port 27017)
+  3) Redpanda / Kafka (Port 9092 / Console 8085)
+  4) OpenSearch (Port 9200)
+  5) Go API Backend (Port 8080)
+  6) Tất cả (All-in-One: Cài & chạy toàn bộ 5 dịch vụ)
+=================================================================
+👉 Nhập lựa chọn của bạn [1-6]: 1,2,5
+```
+
+---
+
+### Cách 2: Chọn Tổ Hợp Nhiều Dịch Vụ Chạy Chung 1 VPS (CLI)
+
+Chạy danh sách service phân tách bằng dấu phẩy:
+
+#### Chạy Redis + Go API trên cùng 1 VPS:
+```bash
+sudo bash bootstrap.sh --service=redis,api --mode=fresh
+```
+
+#### Chạy MongoDB + Redis + Kafka trên cùng 1 VPS:
+```bash
+sudo bash bootstrap.sh --services=mongo,redis,kafka --mode=fresh
+```
+
+#### Chạy All-in-One (Tất cả 5 dịch vụ trên 1 VPS):
+```bash
+sudo bash bootstrap.sh --service=all --mode=fresh
+```
+
+---
+
+### Cách 3: Chạy Từng Service Độc Lập (Dedicated 1 VPS per Service)
 
 #### Server Redpanda (Kafka):
 ```bash
@@ -40,15 +83,13 @@ sudo bash bootstrap.sh --service=opensearch --mode=fresh
 sudo bash bootstrap.sh --service=api --mode=fresh
 ```
 
-*(Hoặc nếu chạy thử nghiệm tất cả trên 1 server: `sudo bash bootstrap.sh --service=all --mode=fresh`)*
-
 ---
 
-### 2. Trên Server Khôi Phục từ Snapshot Alibaba Cloud (Rollback)
+### 4. Trên Server Khôi Phục từ Snapshot Cloud (Rollback)
 
 Sau khi revert Snapshot đĩa, chỉ cần vào thư mục và chạy:
 ```bash
-sudo bash bootstrap.sh --service=<tên_service> --mode=rollback
+sudo bash bootstrap.sh --service=redis,api --mode=rollback
 ```
 
 ---
@@ -63,11 +104,11 @@ Mỗi server sau khi chạy `bootstrap.sh` sẽ tự động kích hoạt **Moni
 ### Cấu hình nhận thông báo:
 Mở file cấu hình trên server:
 ```bash
-sudo nano /etc/sowfkun/alert.conf
+sudo nano /etc/infra/alert.conf
 ```
 Điền Token Telegram / Discord:
 ```ini
-SERVER_NAME="Redis-Server-01"
+SERVER_NAME="App-Server-01"
 TELEGRAM_BOT_TOKEN="123456789:AAXXXXXXXXXXXXXX"
 TELEGRAM_CHAT_ID="123456789"
 ```
@@ -76,17 +117,18 @@ TELEGRAM_CHAT_ID="123456789"
 
 ## 🛡️ Kiến Trúc Bảo Mật Đa Tầng (Multi-Layer Security)
 
-### Lớp 1: Alibaba Cloud Security Group (Tường lửa Phần cứng Cloud)
-- **SSH (Port 22):** Đóng hoàn toàn với `0.0.0.0/0`. Quản trị 100% qua **Alibaba Cloud Workbench / VNC Web Console**.
-- **Database & Queue Ports (`27017`, `6379`, `9092`, `9200`):** CHỈ mở cho dải IP Private VPC của cụm Web/API Server.
+### Lớp 1: Cloud Security Group (Tường lửa Phần cứng Cloud)
+- **SSH (Port 22):** Đóng hoàn toàn với `0.0.0.0/0`. Quản trị qua Cloud Workbench / Web Console / SSH Key nội bộ.
+- **Database & Queue Ports (`27017`, `6379`, `9092`, `9200`):** CHỈ mở cho dải IP Private VPC của cụm API Server.
 
 ### Lớp 2: OS Hardening & Network Kernel (`bootstrap.sh`)
-- **Đồng bộ thời gian UTC:** Chuẩn hóa NTP với `ntp.aliyun.com` và `time.google.com` (chống lỗi JWT / E2EE Clock Drift).
-- **Vô hiệu hóa Password SSH:** Tắt xác thực mật khẩu, chống Brute-force 100%.
+- **Đồng bộ thời gian UTC:** Chuẩn hóa NTP (chống lệch giờ JWT / E2EE / Kafka Clock Drift).
+- **Vô hiệu hóa Password SSH:** Tắt xác thực mật khẩu, chống Brute-force.
 - **Fail2ban & UFW:** Tự động phát hiện và ban IP quét cổng.
 - **Kernel Spoofing Guard & Outbound TCP Tuning:** Bật `tcp_tw_reuse`, mở rộng 64k ephemeral ports, chống nghẽn HTTP request ra ngoài.
 
 ### Lớp 3: Docker & Application Security
+- **Shared Network `app_net`:** Kết nối nội bộ container-to-container an toàn qua DNS Docker.
 - **Log Rotation Protection:** Giới hạn log tối đa 50MB x 3 file trong `daemon.json`, chống tràn ổ đĩa.
 - **Tự động dọn rác Docker (Cron):** Dọn images và cache thừa lúc 3h sáng Chủ Nhật hàng tuần.
-- **Resource Guard (Swap 2GB):** Ngăn ngừa Linux OOM Killer bắn chết tiến trình DB.
+- **Resource Guard (Swap 2GB - 4GB):** Tự động scale swap, ngăn ngừa Linux OOM Killer bắn chết tiến trình DB/API.

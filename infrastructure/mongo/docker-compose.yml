@@ -6,7 +6,8 @@ services:
     ports:
       - "${MONGO_PORT:-27017}:27017"
     volumes:
-      - ./data:/data/db
+      - ./data/db:/data/db
+      - ./data/configdb:/data/configdb
     healthcheck:
       test: ["CMD-SHELL", "mongosh --eval 'db.runCommand({ ping: 1 })' || exit 1"]
       interval: 15s
@@ -16,3 +17,9 @@ services:
       resources:
         limits:
           memory: ${MONGO_CONTAINER_MEMORY_LIMIT:-750M}
+
+networks:
+  default:
+    name: ${APP_NETWORK:-app_net}
+    external: true
+

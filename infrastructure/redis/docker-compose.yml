@@ -19,3 +19,9 @@ services:
       resources:
         limits:
           memory: ${REDIS_CONTAINER_MEMORY_LIMIT:-600M}
+
+networks:
+  default:
+    name: ${APP_NETWORK:-app_net}
+    external: true
+

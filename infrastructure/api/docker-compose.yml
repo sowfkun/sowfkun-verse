@@ -14,3 +14,9 @@ services:
       resources:
         limits:
           memory: ${API_CONTAINER_MEMORY_LIMIT:-400M}
+
+networks:
+  default:
+    name: ${APP_NETWORK:-app_net}
+    external: true
+
