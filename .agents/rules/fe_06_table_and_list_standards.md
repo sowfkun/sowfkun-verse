@@ -55,3 +55,16 @@ Tài liệu này quy định toàn bộ tiêu chuẩn về việc xây dựng, c
   * Tab 1: Ẩn/Hiện bộ lọc (`availableFilters`).
   * Tab 2: Sắp xếp thứ tự cột (Drag & Drop) và ẩn/hiện cột thuộc tính (`columns`).
 - **Nút Hành Động Chuẩn**: Nút thêm mới đi kèm danh sách bắt buộc sử dụng component `<AddButton />` (thuần chữ, có cơ chế chống double-click 400ms và async promise lock).
+
+---
+
+## 7. Tối Ưu State Sau Khi Xóa / Cập Nhật (Local State vs Refetch)
+- **Khi Xóa Thành Công (Delete Success)**:
+  - Nếu danh sách hiện tại **chưa đầy trang** (`items.length < size` hoặc `total <= size`):
+    - **TUYỆT ĐỐI KHÔNG gọi lại API danh sách (`fetchList()`)** nhằm tiết kiệm tài nguyên mạng và triệt tiêu ảnh hưởng của độ trễ Index Lag từ Search Engine phía Backend.
+    - **Chỉ cập nhật Local State**: Lọc bỏ item trực tiếp qua `setItems(prev => prev.filter(item => item.id !== deletedId))` và giảm tổng số bản ghi `setTotal(prev => Math.max(0, prev - 1))`.
+  - Chỉ gọi lại API khi danh sách đang ở trang đầy đủ (`items.length === size`) để kéo bản ghi ở trang tiếp theo lên lấp chỗ trống, hoặc khi trang cuối cùng bị xóa hết bản ghi để lùi về trang trước đó.
+- **Khi Cập Nhật Thành Công (Update Success)**:
+  - Cập nhật trực tiếp bản ghi trong Local State `setItems(prev => prev.map(item => item.id === updated.id ? updated : item))` thay vì reload toàn bộ bảng.
+  - Kích hoạt `invalidateEntityCache(ENTITY_TYPE)` để xóa cache các dropdown/options phụ thuộc ở client.
+
