@@ -461,37 +461,95 @@ import { DataTable, AddButton } from '@/components';
 
 ---
 
-## 7. Các Tips & Tối Ưu Xương Máu Khi Triển Khai List & API Integration (Best Practices & Gotchas)
+## 7. Quy Trình Vòng Đời Từ Danh Sách Đến Modal Chi Tiết (List-to-Modal Lifecycle & Interaction Flow)
 
-Dưới đây là các đúc kết thực chiến bắt buộc phải áp dụng khi triển khai bất kỳ phân hệ List / Bảng dữ liệu nào trên hệ thống:
+Mọi phân hệ hiển thị bảng dữ liệu (Bảng Roles, Users, Customers, Tags...) trên hệ thống đều phải tuân thủ chuẩn tương tác 2 chiều giữa **Danh sách (`DataTable`)** và **Hộp thoại Chi tiết (`ItemModal`)** theo đặc tả dưới đây:
 
-### 7.1 Tip 1: Chống Duplicate API Fetch Khi Mount Component
-- **Nguyên nhân**: Khai báo object `projection`, `sort`, `defaultFilters` inline bên trong thân Function Component khiến mỗi lần React render sinh ra một object reference mới $\rightarrow$ Dependency array của `useEffect` phát hiện thay đổi liên tục $\rightarrow$ Gây gọi API lặp nhiều lần.
-- **Giải pháp**:
-  1. Khai báo các đối tượng mặc định (`DEFAULT_PROJECTION`, `DEFAULT_SORT`) thành **hằng số tĩnh (static constant)** ở cấp Module bên ngoài Component.
-  2. Bắt buộc dùng `useMemo` cho các query parameters động được truyền vào `useEffect`.
-  3. Chỉ kích hoạt Debounce Search khi `searchQuery.trim() !== debouncedSearch` và có độ dài `>= 3` ký tự hoặc rỗng (reset filter).
-  4. Tránh gọi lại API lấy quyền/options ở layout cha nếu component con đã tự quản lý dữ liệu.
+```mermaid
+flowchart TD
+    A[Bảng Danh Sách - DataTable] -->|1. Bấm nút Thêm mới| B[Mở Modal: Chế độ 'create']
+    A -->|2. Click vào Row / Chỉnh sửa| C{Kiểm tra Quyền?}
+    C -->|Có quyền MANAGE| D[Mở Modal: Chế độ 'edit']
+    C -->|Chỉ có quyền VIEW| E[Mở Modal: Chế độ 'view' - ReadOnly]
+    
+    B -->|Tạo thành công| F[Callback: onSuccess(item, 'create')]
+    D -->|Lưu thành công| G[Callback: onSuccess(item, 'update')]
+    D -->|Xóa thành công| H[Callback: onSuccess(item, 'delete')]
+    
+    F -->|Cập nhật List| I[Thêm vào đầu danh sách & Total + 1]
+    G -->|Cập nhật List| J[Cập nhật trực tiếp bản ghi trong Local State]
+    H -->|Cập nhật List| K[Lọc bỏ bản ghi trong Local State & Total - 1]
+```
 
-### 7.2 Tip 2: Tối Ưu State Khi Xóa (Zero Index Lag & Local State Optimization)
-- **Vấn đề**: Các cơ chế Search Engine bên Backend (như MongoDB Atlas Search `$search`, OpenSearch) có độ trễ re-indexing từ **500ms đến 2 giây** (Eventual Consistency). Nếu vừa xóa thành công mà gọi lại API `fetchList()` ngay thì Backend có thể vẫn trả về bản ghi cũ vừa xóa do index chưa kịp cập nhật.
-- **Giải pháp**:
-  - Khi xóa thành công: Nếu danh sách hiện tại **chưa đầy trang** (`items.length < size` hoặc `total <= size`):
-    * **TUYỆT ĐỐI KHÔNG gọi lại API `fetchList()`**.
-    * **Chỉ cập nhật Local State**: Lọc bỏ item trực tiếp qua `setItems(prev => prev.filter(x => x.id !== deletedId))` và giảm `setTotal(prev => Math.max(0, prev - 1))`.
-    * **Hiệu quả**: UI phản hồi tức thì 0ms, không tốn tài nguyên mạng và hoàn toàn miễn nhiễm với Index Lag.
-  - Chỉ gọi lại API khi danh sách đang ở trang đầy đủ (`items.length === size`) để kéo bản ghi ở trang tiếp theo lên lấp chỗ trống.
+---
 
-### 7.3 Tip 3: Xử Lý Filter `_id` với MongoDB Atlas Search (`$search`)
-- **Vấn đề**: Atlas Search stage `$search` không hỗ trợ filter `_id: { $in: [ObjectID(...)] }` bên trong `$search.compound.filter`. Nếu truyền `_id` vào `$search` sẽ dẫn đến query trả về 0 bản ghi (gây lỗi `404 ERR_NOT_FOUND` khi xóa/cập nhật bulk).
-- **Giải pháp**: Trong `ConvertQueryToAtlasSearch` và `AbstractMongoRepository`, các điều kiện lọc theo `_id` (từ `IncludeIDs`) bắt buộc phải được tách ra khỏi `$search` stage và đưa vào **`$match` stage riêng biệt** ngay sau `$search` trong Aggregate Pipeline.
+### 7.1 Quy Trình Call API List & Parse Model Phía Frontend
+1. **Khởi tạo Request**:
+   * Gọi `listX(payload)` kèm `projection: DEFAULT_[ENTITY]_PROJECTION`, `page`, `size`, `sort: { c_at: -1 }`.
+   * Đối tượng `projection` và `sort` **bắt buộc phải là hằng số tĩnh** hoặc bọc `useMemo` ngoài component để tránh duplicate fetch.
+2. **Nhận & Parse Response Model**:
+   * Backend trả về `BaseResponse<PagedResponse<T>>`.
+   * Frontend bóc tách:
+     * `items: res.data.items` $\rightarrow$ gán vào state danh sách (`setItems`).
+     * `total: res.data.total` $\rightarrow$ gán vào state tổng số bản ghi (`setTotal`).
+     * `has_more: res.data.has_more` $\rightarrow$ phục vụ chuyển trang cursor nếu có.
+3. **Mapping vào DataTable Schema**:
+   * Sử dụng các Column Builder chuẩn (`getNameColumn`, `getStatusColumn`, `...getBaseAuditColumns(t)`).
+   * Cấu hình sự kiện click dòng: `onRowClick={(row) => handleOpenModal(hasManagePerm ? 'edit' : 'view', row)}`.
 
-### 7.4 Tip 4: Cơ Chế Chặn Spam Refresh Token Vô Hạn (401 Infinite Loop Protection)
-- **Vấn đề**: Khi API trả về `401 Unauthorized`, nếu hàm refresh token hoặc request retry tiếp tục gặp 401 thì client dễ rơi vào vòng lặp vô hạn gọi API liên tục làm đơ trình duyệt.
-- **Giải pháp**: Trong `client.ts` (`apiFetch`), triển khai cờ `_retryCount` với giới hạn cứng `MAX_RETRIES = 1` và gán cờ `skipSilentRefresh: true` cho lần retry duy nhất. Nếu vẫn thất bại, dừng ngay lập tức và redirect người dùng về trang đăng nhập.
+---
 
-### 7.5 Tip 5: Dirty Check & Cập Nhật Cục Bộ Khi Sửa (Update Local State)
-- **Dirty Check (Rule 9)**: Modal chỉnh sửa (Update Modal) luôn so sánh dữ liệu form hiện tại với dữ liệu ban đầu. Chỉ gửi lên API các field có sự thay đổi thực sự và vô hiệu hóa (disable) nút "Lưu thay đổi" nếu `!isDirty`.
-- **Cập nhật Cục bộ**: Khi API Update trả về thành công, cập nhật trực tiếp bản ghi trong Local State `setItems(prev => prev.map(item => item.id === updated.id ? updated : item))` thay vì reload toàn bộ bảng, giúp giao diện người dùng mượt mà và không bị chớp màn hình.
+### 7.2 Đặc Tả 3 Chế Độ Xem Của Modal (Modal Modes Specification)
+
+Mỗi form chi tiết (`ItemModal`) hỗ trợ đúng **3 chế độ xem (Mode)**:
+
+| Chế độ (`mode`) | Điều kiện kích hoạt | Trạng thái Form & Inputs | Nút Hành Động (Action Buttons) |
+|---|---|---|---|
+| **`create`** *(Thêm mới)* | Người dùng bấm nút `<AddButton />` ở góc trên bảng | Form rỗng, các trường editable | • **Nút Tạo mới (Primary CTA)**: Gọi API `addX`<br>• **Nút Hủy (Secondary)**: Đóng modal<br>❌ *Không có nút Xóa* |
+| **`edit`** *(Chỉnh sửa)* | Người dùng click vào dòng trên bảng và **có quyền `*_MANAGE`** | Form nạp dữ liệu từ row được chọn, các trường editable | • **Nút Lưu thay đổi (Primary CTA)**: Áp dụng **Dirty Check (Rule 9)**, bị `disabled` nếu chưa có thay đổi nào hiệu dụng<br>• **Nút Xóa (Danger)**: Nằm góc trái modal, click mở Mini Confirm Dialog xác nhận trước khi xóa<br>• **Nút Hủy**: Đóng modal |
+| **`view`** *(Chỉ xem / Read-only)* | Người dùng click vào dòng trên bảng nhưng **chỉ có quyền `*_VIEW`** (hoặc item hệ thống bị khóa) | Toàn bộ inputs/checkboxes bị `disabled` hoặc `readOnly` | • **Nút Đóng (Secondary CTA)**: Đóng modal<br>❌ *Ẩn toàn bộ nút Lưu và nút Xóa* |
+
+---
+
+### 7.3 Quy Trình Đồng Bộ State Ngược Lại List Sau Thao Tác (`onSuccess Callback`)
+
+Khi Modal thực hiện thành công một thao tác CUD, Modal sẽ gọi callback `onSuccess(item, actionType)` truyền ngược về List View để cập nhật giao diện mà **không cần reload toàn bộ trang**:
+
+```typescript
+const handleModalSuccess = (item: RoleResponse, action: 'create' | 'update' | 'delete') => {
+  if (action === 'create') {
+    // 1. Thêm mới: Đưa lên đầu danh sách và tăng total
+    setRoles((prev) => [item, ...prev]);
+    setTotal((prev) => prev + 1);
+  } else if (action === 'update') {
+    // 2. Cập nhật: Map trực tiếp vào bản ghi tương ứng (Zero Network Re-fetch)
+    setRoles((prev) => prev.map((r) => (r.id === item.id ? { ...r, ...item } : r)));
+  } else if (action === 'delete') {
+    // 3. Xóa: Nếu danh sách chưa đầy trang -> xóa trực tiếp trong state
+    if (roles.length < size || total <= size) {
+      setRoles((prev) => prev.filter((r) => r.id !== item.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+    } else {
+      // Đang ở trang đầy đủ -> gọi lại API fetch để kéo bản ghi trang kế tiếp lên
+      fetchRoles();
+    }
+  }
+};
+```
+
+---
+
+### 7.4 Các Tips Kỹ Thuật Tối Ưu Bảng & API Dữ Liệu
+1. **Chống Duplicate Fetch khi Mount**:
+   * Khai báo `DEFAULT_PROJECTION` hằng số ngoài Module.
+   * Debounce search chỉ trigger khi `searchQuery.trim() !== debouncedSearch` và độ dài `>= 3` ký tự hoặc rỗng.
+   * Chặn không gọi các API lấy quyền trùng lặp ở Layout cha nếu component con đã tự quản lý.
+2. **Khắc Phục Độ Trễ Index Lag Của Search Engine Khi Xóa**:
+   * Atlas Search (`$search`) và OpenSearch có độ trễ đồng bộ từ 500ms - 2s.
+   * Khi xóa item trên UI: Bắt buộc dùng cơ chế **Local State Filter** ở Mục 7.3 thay vì gọi lại `fetchList()` ngay để tránh hiện tượng bản ghi vừa xóa vẫn xuất hiện lại trên bảng.
+3. **Xử Lý Lọc `_id` với MongoDB Atlas Search**:
+   * Atlas Search `$search` không hỗ trợ filter `_id: { $in: [...] }`.
+   * Phía Backend bắt buộc tách `_id` filter ra `$match` stage riêng biệt đặt ngay sau `$search` stage trong Aggregate Pipeline.
+
 
 
