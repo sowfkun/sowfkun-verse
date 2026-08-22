@@ -3,7 +3,7 @@ name: E2E Tester Agent
 description: Skill chuyên dụng phối hợp kiểm thử tự động toàn diện Frontend (UI Browser Subagent) và Backend (Audit Logs, MongoDB Query, Projection, Cache, WebSocket).
 ---
 
-# Kỹ Năng E2E Automated Tester (Frontend UI & Backend Audit)
+# Kỹ Năng E2E Automated Tester (Frontend UI & Backend Verification)
 
 Bạn là chuyên gia QA / E2E Automation Lead điều phối kịch bản kiểm thử tự động hai chiều giữa **Frontend** (thao tác trực quan trên trình duyệt qua `browser_subagent`) và **Backend** (thẩm định toàn bộ API requests, validation, MongoDB queries, projection, Redis cache, và WebSocket realtime thông qua cờ môi trường `ENABLE_DEBUG_QUERY_LOG=true`).
 
@@ -11,7 +11,25 @@ Bạn là chuyên gia QA / E2E Automation Lead điều phối kịch bản kiể
 
 ---
 
-## 1. Nguyên Tắc Phối Hợp Kiểm Thử Hai Chiều (FE-BE Dual Verification)
+## 1. Phân Định 2 Tầng Log Hệ Thống (Two-Tier Logging Separation)
+
+> **Luật Thép**: Tuyệt đối không được lẫn lộn giữa Log hạ tầng hệ thống và Log thăm dò kiểm thử tạm thời.
+
+### 1.1 Tầng 1: Log Hạ Tầng Hệ Thống (System Infrastructure Logging)
+- **Cơ chế**: Được kiểm soát hoàn toàn bằng biến môi trường `ENABLE_DEBUG_QUERY_LOG=true` trong `.env`.
+- **Phạm vi áp dụng**:
+  - **Tầng Middleware**: Tự động log HTTP Method, URL Path, Decrypted DTO Payload tại `pkg/middleware/payload_crypto.go`.
+  - **Tầng Database Hạ Tầng**: Tự động log Collection Name, Filter BSON, Projection Map, Sort Order, Page/Size tại `pkg/database/mongodb/abstract_repository.go`.
+- **Mục đích**: Phục vụ việc soi toàn diện mọi request/query khi debug và test mà không cần thêm code riêng lẻ ở từng Domain.
+
+### 1.2 Tầng 2: Log Thăm Dò Kiểm Thử Tạm Thời (Temporary Test Probe Logs)
+- **Quy tắc**: Trong quá trình phát triển tính năng hoặc kiểm thử một kịch bản phức tạp, nếu Agent/Lập trình viên đặt các lệnh log thăm dò trong các UseCase, Handler, Repository, MQ, hoặc Frontend:
+  - **BẮT BUỘC PHẢI DỌN DẸP XÓA SẠCH 100%** sau khi hoàn thành phiên kiểm thử.
+  - Tuyệt đối **NGHIÊM CẤM** để lại các dòng log rác, cờ debug tạm thời trong mã nguồn Production.
+
+---
+
+## 2. Tiêu Chuẩn Thẩm Định 6 Phân Hệ Khi Kiểm Thử (The 6 Verification Pillars)
 
 ```mermaid
 flowchart LR
@@ -20,29 +38,44 @@ flowchart LR
     C -->|3. Ghi vết tự động nếu ENABLE_DEBUG_QUERY_LOG=true| D[Terminal Logs]
     C -->|4. Query WiredTiger / Atlas Search| E[MongoDB]
     C -->|5. Evict Cache & Bắn Event| F[Redis & WebSocket Hub]
-    D -->|6. QA Tester đọc Terminal & so khớp| G[Báo cáo Kết quả Walkthrough]
+    D -->|6. QA Tester đối soát 6 phân hệ| G[Báo cáo Kết quả & Dọn Dẹp Sạch 100%]
 ```
 
-### Phía Frontend (Thao tác Web Thực Tế):
-1. **Dùng `browser_subagent`**: Mở trực tiếp trình duyệt, đi tới các màn hình cần test (`/settings`, `/customers`, `/employees`,...).
-2. **Kích hoạt các kịch bản thực**:
-   - Thử nhập dữ liệu sai/rỗng để kiểm tra Validation Error trên UI.
-   - Thêm mới bản ghi $\rightarrow$ Kiểm tra modal đóng, Toast xuất hiện, dòng mới hiển thị ở đầu bảng (Zero-Lag).
-   - Click vào dòng để mở Modal Edit $\rightarrow$ Sửa một vài trường (Dirty Check) $\rightarrow$ Lưu thay đổi $\rightarrow$ Kiểm tra state cập nhật tại chỗ.
-   - Bấm nút Xóa $\rightarrow$ Xác nhận trên Mini Dialog $\rightarrow$ Kiểm tra dòng biến mất ngay khỏi state.
-   - Kiểm tra ngưỡng giới hạn Quota khi thêm tới số lượng tối đa.
+Mọi kịch bản kiểm thử tính năng (CRUD, Danh mục, Cấu hình) bắt buộc phải đối soát qua **6 phân hệ cốt lõi**:
 
-### Phía Backend (Ghi Vết & Thẩm Định Log):
-Khi cấu hình `ENABLE_DEBUG_QUERY_LOG=true` trong `.env`:
-1. **Kiểm tra Payload & DTO**: Bắt toàn bộ DTO giải mã nhận từ Client. Xác nhận Dirty Check (chỉ nhận các trường có thay đổi thực sự).
-2. **Kiểm tra DB Projection**: Bắt chính xác map `Projection` gửi xuống MongoDB. Cấm `SELECT *` / lấy Full Document không lý do.
-3. **Kiểm tra MongoDB Query**: Xác nhận query BSON lọc đúng `tid`, `is_del: false`, `kws`, thời gian `ranges`.
-4. **Kiểm tra Invalidation Cache**: Xác nhận Redis xóa sạch các key entity `[domain]:{id}` và cache phân cấp liên quan.
-5. **Kiểm tra WebSocket Broadcast**: Xác nhận WebSocket Hub gửi event `ENTITY_CHANGED` (`entity_type`, `op_type`) xuống client.
+### 2.1 Thẩm Định Request & Input Validation (Input Verification)
+- Kiểm tra tính đúng đắn của DTO giải mã nhận từ Client.
+- Thẩm định bắt lỗi chuẩn xác các trường hợp: Rỗng, vượt ký tự tối đa (vd: >50 ký tự), sai kiểu Enum/Scope, xung đột cờ xóa (`is_sel_all` + `include_ids`).
+- Thẩm định cơ chế **Dirty Check (Rule 9)**: Chỉ gửi và nhận các trường có thay đổi thực sự. Nút Lưu/Submit bắt buộc phải bị disabled nếu form không có thay đổi.
+
+### 2.2 Thẩm Định Truy Vấn MongoDB, Index & Projection (DB & Index Verification)
+- **Projection Strictness**: Xác nhận câu query MongoDB chỉ project đúng các trường cần hiển thị trên UI. Cấm `SELECT *` / Full Document không lý do.
+- **Index Optimization**: Xác nhận query lọc đúng các trường đã đánh chỉ mục (`tid`, `is_del`, `kws`, ranges).
+- **Audit Logging**: Xác nhận `c_at`, `c_by`, `u_at`, `u_by` được cập nhật chính xác.
+
+### 2.3 Thẩm Định Luồng Cache Invalidation & Freshness (Cache Verification Probe)
+- Khi Update / Delete $\rightarrow$ MongoDB Change Stream kích hoạt $\rightarrow$ Kafka Handler xóa cache cũ trên Redis (`[domain]Cache.BuildKey`).
+- **Thăm dò kiểm chứng (Probe Verification)**:
+  - Gọi lại hàm Get Cached ngay sau khi xóa cache: Lần 1 phải **Cache Miss** $\rightarrow$ Tự động fallback xuống MongoDB đọc bản ghi mới nhất $\rightarrow$ Nạp lại vào Redis (Cache Set). Lần 2 phải **Cache Hit** với dữ liệu mới 100%.
+
+### 2.4 Thẩm Định Giới Hạn Quota (Quota & Max Limit Verification)
+- Thao tác thêm bản ghi liên tục tới khi chạm ngưỡng giới hạn của Tenant Tier.
+- Xác nhận Backend chặn đứng và trả về đúng mã lỗi `ERR_QUOTA_EXCEEDED` (hoặc `ERR_ROLE_QUOTA_EXCEEDED`).
+- Xác nhận Frontend bắt lỗi hiển thị Dialog/Toast cảnh báo rõ ràng.
+
+### 2.5 Thẩm Định Realtime WebSocket Dispatch (WebSocket Verification)
+- Xác nhận sau khi ghi DB thành công: Kafka Producer bắn sự kiện $\rightarrow$ WebSocket Hub gửi payload `ENTITY_CHANGED` (`entity_type`, `op_type`, `data`) xuống Client.
+
+### 2.6 Thẩm Định Giao Diện & Local State (Frontend Zero-Lag Verification)
+- **Zero-Lag State Handling**:
+  - Thêm mới $\rightarrow$ Chèn ngay lên đầu danh sách (`items = [newItem, ...items]`, `total + 1`).
+  - Chỉnh sửa $\rightarrow$ Cập nhật tại chỗ trong state (Zero network re-fetch).
+  - Xóa $\rightarrow$ Lọc bỏ trực tiếp khỏi state (`items = items.filter(...)`, `total - 1`) mà không gọi lại `fetchList()` khi danh sách chưa đầy trang.
+- **Render Đúng**: Render chuẩn UI, đúng Design System Tokens, đúng Responsive.
 
 ---
 
-## 2. Quy Trình 4 Bước Triển Khai Kiểm Thử
+## 3. Quy Trình 4 Bước Triển Khai Kiểm Thử
 
 ### Bước 1: Chuẩn Bị & Bật Cờ Môi Trường
 * Đảm bảo `ENABLE_DEBUG_QUERY_LOG=true` trong `sowfkun-verse-api/.env`.
@@ -53,11 +86,9 @@ Khi cấu hình `ENABLE_DEBUG_QUERY_LOG=true` trong `.env`:
   - Mở URL $\rightarrow$ Thao tác form $\rightarrow$ Chụp screenshot / ghi nhận phản hồi UI.
 
 ### Bước 3: Thu Thập & Đối Soát Log Terminal
-* Đọc các dòng log `[BE AUDIT]`, `[BE DB]` và `[BE MQ]` trên terminal của `air`.
-* Đối chiếu với hành vi của FE trên Browser:
-  - FE gửi gì $\rightarrow$ BE nhận đúng không?
-  - BE query DB có projection đúng không?
-  - Sau khi CUD thì Redis key đã bị xóa và WebSocket đã phát tin chưa?
+* Đọc các dòng log `[HTTP_IN]`, `[MONGO_QUERY]`, `[KAFKA_MQ]`, `[REDIS_CACHE]` và `[WEBSOCKET]` trên terminal.
+* Đối chiếu với hành vi của FE trên Browser theo đúng 6 phân hệ ở Mục 2.
 
-### Bước 4: Tổng Hợp & Xuất Báo Cáo Walkthrough
+### Bước 4: Dọn Dẹp Mã Nguồn & Xuất Báo Cáo Walkthrough
+* **Dọn dẹp sạch sẽ 100%** mọi dòng probe log hoặc code thăm dò tạm thời.
 * Trình bày bảng kết quả chi tiết từng kịch bản (Pass / Fail / Latency / Observation).
