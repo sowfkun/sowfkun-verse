@@ -1,6 +1,6 @@
-# 09. Testing, Verification & Logging Standards (Quy Chuẩn Kiểm Thử & Ghi Vết)
+# 09. Testing, Verification & Logging Standards (Quy Chuẩn Kiểm Thử & Ghi Vết Toàn Diện)
 
-Tài liệu này định nghĩa toàn bộ "Luật Thép" về quy trình kiểm thử tự động, thẩm định luồng Cache, và tiêu chuẩn quản lý Log trong hệ thống Backend Sowfkun-Verse.
+Tài liệu này định nghĩa "Luật Thép" về quy trình kiểm thử tự động, thẩm định toàn diện các phân hệ (Request, Validation, DB, Projection, Index, Cache, Quota, WebSocket, UI State), và tiêu chuẩn quản lý Log trong hệ thống Sowfkun-Verse.
 
 ---
 
@@ -16,30 +16,43 @@ Tài liệu này định nghĩa toàn bộ "Luật Thép" về quy trình kiểm
 - **Mục đích**: Phục vụ việc soi toàn diện mọi request/query khi debug và test mà không cần thêm code riêng lẻ ở từng Domain.
 
 ### 1.2 Tầng 2: Log Thăm Dò Kiểm Thử Tạm Thời (Temporary Test Probe Logs)
-- **Quy tắc**: Trong quá trình phát triển tính năng hoặc kiểm thử một kịch bản phức tạp, nếu Agent/Lập trình viên đặt các lệnh `log.Printf` thăm dò trong các UseCase, Handler, hay Repository:
-  - **BẮT BUỘC PHẢI DỌN DẸP XÓA SẠCH** sau khi hoàn thành phiên kiểm thử.
-  - Tuyệt đối **NGHIÊM CẤM** để lại các dòng log rác trong mã nguồn Production.
+- **Quy tắc**: Trong quá trình phát triển tính năng hoặc kiểm thử một kịch bản phức tạp, nếu Agent/Lập trình viên đặt các lệnh log thăm dò trong các UseCase, Handler, Repository, MQ, hoặc Frontend:
+  - **BẮT BUỘC PHẢI DỌN DẸP XÓA SẠCH 100%** sau khi hoàn thành phiên kiểm thử.
+  - Tuyệt đối **NGHIÊM CẤM** để lại các dòng log rác, cờ debug tạm thời trong mã nguồn Production.
 
 ---
 
-## 2. Quy Chuẩn Kiểm Thử Luồng Cache & Invalidation (Cache Verification Probe)
+## 2. Tiêu Chuẩn Thẩm Định 6 Phân Hệ Khi Kiểm Thử (The 6 Verification Pillars)
 
-Khi thực hiện kiểm thử tự động một luồng Cập nhật / Xóa dữ liệu (Update / Delete):
-1. **Ghi DB**: Thực hiện request cập nhật dữ liệu xuống MongoDB WiredTiger.
-2. **Kích hoạt Change Stream**: MongoDB Change Stream phát hiện thay đổi $\rightarrow$ Kafka dispatch sự kiện sang MQ Handler $\rightarrow$ Xóa key Cache trên Redis (`[domain]Cache.BuildKey`).
-3. **Thăm dò kiểm chứng (Freshness Verification Probe)**:
-   - Ngay sau khi xóa cache, thực hiện gọi lại hàm `GetCachedByID(id)`.
-   - **Xác nhận tính toàn vẹn**:
-     - Lần đọc đầu tiên: Bắt buộc rơi vào **Cache Miss** $\rightarrow$ Hệ thống tự động fallback xuống MongoDB đọc bản ghi mới nhất $\rightarrow$ Nạp lại vào Redis (Cache Set).
-     - Lần đọc thứ hai: Bắt buộc rơi vào **Cache Hit** với dữ liệu mới cập nhật 100%.
+Mọi kịch bản kiểm thử tính năng (CRUD, Danh mục, Cấu hình) bắt buộc phải đối soát qua **6 phân hệ cốt lõi**:
 
----
+### 2.1 Thẩm Định Request & Input Validation (Input Verification)
+- Kiểm tra tính đúng đắn của DTO giải mã.
+- Thẩm định bắt lỗi chuẩn xác các trường hợp: Rỗng, vượt ký tự tối đa, sai kiểu Enum/Scope, xung đột cờ xóa (`is_sel_all` + `include_ids`).
+- Thẩm định cơ chế **Dirty Check (Rule 9)**: Chỉ gửi và nhận các trường có thay đổi thực sự.
 
-## 3. Quy Chuẩn Bắt Lỗi & Validate Đầu Vào (Input Validation Verification)
+### 2.2 Thẩm Định Truy Vấn MongoDB, Index & Projection (DB & Index Verification)
+- **Projection Strictness**: Xác nhận câu query MongoDB chỉ project đúng các trường cần hiển thị trên UI. Cấm `SELECT *` / Full Document không lý do.
+- **Index Optimization**: Xác nhận query lọc đúng các trường đã đánh chỉ mục (`tid`, `is_del`, `kws`, ranges).
+- **Audit Logging**: Xác nhận `c_at`, `c_by`, `u_at`, `u_by` được cập nhật chính xác.
 
-- Khi kiểm thử một API Endpoint mới:
-  - Phải kiểm tra ít nhất 4 trường hợp dữ liệu sai:
-    1. **Payload rỗng / thiếu trường bắt buộc**: Trả về `400 ERR_VALIDATION_FAILED` kèm struct chi tiết lỗi.
-    2. **Độ dài vượt quá giới hạn** (vd: Tên > 50 ký tự): Trả về `400 ERR_VALIDATION_FAILED`.
-    3. **Enum / Scope không hợp lệ**: Trả về `400 ERR_VALIDATION_FAILED`.
-    4. **Xung đột tham số xóa** (`is_sel_all = true` kèm `include_ids`): Trả về `400 ERR_BAD_REQUEST`.
+### 2.3 Thẩm Định Luồng Cache Invalidation & Freshness (Cache Verification Probe)
+- Khi Update / Delete $\rightarrow$ MongoDB Change Stream kích hoạt $\rightarrow$ Kafka Handler xóa cache cũ trên Redis.
+- **Thăm dò kiểm chứng (Probe Verification)**:
+  - Gọi lại hàm Get Cached ngay sau khi xóa cache: Lần 1 phải **Cache Miss** $\rightarrow$ Tự động fallback xuống MongoDB đọc bản ghi mới $\rightarrow$ Nạp lại Redis. Lần 2 phải **Cache Hit** với dữ liệu mới 100%.
+
+### 2.4 Thẩm Định Giới Hạn Quota (Quota & Max Limit Verification)
+- Thao tác thêm bản ghi liên tục tới khi chạm ngưỡng giới hạn của Tenant Tier.
+- Xác nhận Backend chặn đứng và trả về đúng mã lỗi `ERR_QUOTA_EXCEEDED` (hoặc `ERR_ROLE_QUOTA_EXCEEDED`).
+- Xác nhận Frontend bắt lỗi hiển thị Dialog/Toast cảnh báo rõ ràng.
+
+### 2.5 Thẩm Định Realtime WebSocket Dispatch (WebSocket Verification)
+- Xác nhận sau khi ghi DB thành công: Kafka Producer bắn sự kiện $\rightarrow$ WebSocket Hub gửi payload `ENTITY_CHANGED` (`entity_type`, `op_type`, `data`) xuống Client.
+
+### 2.6 Thẩm Định Giao Diện & Local State (Frontend Zero-Lag Verification)
+- **Zero-Lag State Handling**:
+  - Thêm mới $\rightarrow$ Chèn ngay lên đầu danh sách (`items = [newItem, ...items]`, `total + 1`).
+  - Chỉnh sửa $\rightarrow$ Cập nhật tại chỗ trong state (Zero network re-fetch).
+  - Xóa $\rightarrow$ Lọc bỏ trực tiếp khỏi state (`items = items.filter(...)`, `total - 1`) mà không gọi lại `fetchList()` khi danh sách chưa đầy trang.
+- **Form & UX**: Nút Lưu/Submit bị disabled nếu không có thay đổi hiệu dụng (Dirty Check).
+
