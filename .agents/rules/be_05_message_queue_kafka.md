@@ -65,3 +65,17 @@ type Event struct {
 ## 8. Đồng bộ Tag Entity với Change Stream & MQ Handler Filter
 - Khi xử lý sự kiện Entity Change từ Change Stream (`Handle[Domain]Changed`), Handler sử dụng `reflection.GetStructTags` trên Cache Model và Response DTO để trích xuất danh sách key cần theo dõi (`cacheFields`, `socketFields`).
 - **Yêu cầu bắt buộc**: Tên tag BSON trong Entity và JSON tag trong Response DTO / Cache Model phải đồng nhất 100% (ví dụ: cùng là `tz`, `phone`, `status`, `tier`, `meta`). Nếu đặt lệch tên, hàm `HasFieldIntersection` sẽ không phát hiện được sự thay đổi dẫn tới việc bỏ sót xoá cache hoặc không bắn WebSocket cập nhật realtime.
+
+## 9. Đọc Lại Dữ Liệu Sau Tác Động DB Trong MQ / Async Handlers (Read-After-Write Consistency & Delay Awareness)
+Khi một MQ Handler, Consumer hoặc Job thực hiện tác động lên DB (Insert/Update/Soft-Delete) hoặc nhận event DB vừa thay đổi và cần query/get lại dữ liệu để xử lý tiếp:
+- **Phân biệt rạch ròi 2 cơ chế Đọc (Read Consistency)**:
+  1. **Strong Consistency (Realtime 100% / Zero-Lag)**:
+     - Các hàm `GetByID`, `GetOne` truy vấn trực tiếp vào MongoDB Primary (WiredTiger Storage Engine qua B-Tree Index).
+     - **Tính chất**: Dữ liệu vừa ghi/xóa xong 1ms sau đọc lại là có kết quả chuẩn xác tuyệt đối tức thì.
+  2. **Eventual Consistency (Độ trễ Re-indexing / Index Lag)**:
+     - Các truy vấn tìm kiếm/danh sách đi qua **Atlas Search (`$search`)**, **OpenSearch**, **Elasticsearch**, hoặc **Read Replicas**.
+     - **Tính chất**: Engine tìm kiếm bất đồng bộ cần thời gian (thường từ 500ms đến 2-3 giây) để ingest Change Stream và re-index tài liệu.
+- **Luật Thép Khi Viết MQ Handler / Async Service**:
+  - Khi cần đọc lại entity ngay sau khi vừa tác động DB (Read-after-write): **BẮT BUỘC** dùng `GetByID` hoặc `Find()` trực tiếp từ DB chính để đảm bảo Realtime, **TUYỆT ĐỐI KHÔNG** dùng các hàm List/Query đi qua Atlas Search / OpenSearch vì dữ liệu sẽ bị "bóng ma" (stale data hoặc miss).
+  - Nếu nghiệp vụ bắt buộc phải dùng Search Engine (ví dụ: cần aggregate, search phân cấp, re-ranking toàn cục sau khi entity thay đổi): **BẮT BUỘC** phải có cơ chế **Delay / Retry** (ví dụ: dispatch qua Asynq Delayed Task sau 2-3 giây, hoặc retry exponential backoff) để đảm bảo engine tìm kiếm đã hoàn tất re-indexing trước khi đọc.
+

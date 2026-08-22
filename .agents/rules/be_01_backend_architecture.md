@@ -65,6 +65,10 @@ trigger: always_on
   - Atlas Search (stage `$search`) CHỈ hoạt động với Aggregate Pipeline (được dùng trong hàm `List/Count`) và KHÔNG thể dùng trực tiếp làm filter cho các hàm UpdateMany / DeleteMany của MongoDB.
   - Mọi thao tác Bulk Update / Bulk Delete có điều kiện search phức tạp BẮT BUỘC thực hiện qua 2 bước: Bước 1 gọi `List()` (với projection chỉ lấy `_id`), Bước 2 truyền mảng `_id` đó vào hàm `UpdateManyIDs()` hoặc `DeleteManyIDs()`.
 - **Rule 3.7 - insert thì đặt tên là Add. danh sách thì là List.., lấy 1 thì là Get... KHÔNG đặt tên Create..., Find...
+- **Rule 3.8 - Phân biệt Realtime Read (Strong) vs Search Engine (Eventual Consistency)**:
+  - Các hàm `GetByID`, `GetOne` truy vấn trực tiếp vào Primary Database (WiredTiger Storage Engine) đảm bảo tính nhất quán tức thì (Strong Consistency - Realtime 100%).
+  - Các hàm `List`, `Count` khi đi qua Search Engine (Atlas Search `$search`, OpenSearch) có độ trễ đồng bộ (Index Ingestion Lag từ 500ms - 2s).
+  - Khi thực hiện các luồng nghiệp vụ ghi DB (Add/Update/Delete) mà cần query/get lại entity ngay sau đó: **BẮT BUỘC** dùng `GetByID` hoặc `Find()` trực tiếp từ DB chính để có dữ liệu Realtime, **TUYỆT ĐỐI KHÔNG** dùng search engine để tránh dữ liệu bị stale/bóng ma. Nếu bắt buộc dùng search engine thì phải có cơ chế Delay / Retry.
 
 ## 4. Presentation Layer (`presentation/`)
 - **Rule 4.1 - Controller "Ngu ngốc"**: Tầng này CHỈ được làm: Nhận HTTP Request -> Parse JWT gán vào DTO -> Gọi Application Layer -> Trả về HTTP Response. KHÔNG chứa business logic.
