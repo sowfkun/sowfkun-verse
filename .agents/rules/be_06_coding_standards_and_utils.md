@@ -127,3 +127,4 @@ type User struct {
 - Sử dụng thư viện `github.com/go-playground/validator/v10` thông qua wrapper `pkg/utils/validator`.
 - Khai báo các rule validate trực tiếp bằng struct tag `validate:"..."` trong các DTO / Request model (ví dụ: `validate:"required,max=100,email"`).
 - Khi gọi `validator.Validate(req)` trong Handler, nếu có lỗi phải trả về mã lỗi chung `coreDomain.ErrValidationFailed` cùng chi tiết lỗi `err.(validator.ValidationErrors)` thông qua hàm `response.AppErrorWithData` để Client có thể hiển thị thông báo lỗi tương ứng cho từng field.
+

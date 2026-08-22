@@ -1,7 +1,8 @@
-# Project Context — sowfkun.verse.v2
+---
+trigger: always_on
+---
 
-## Overview
-Full-stack SaaS platform. Backend đã có infra base, chưa có nghiệp vụ cụ thể.
+# Project Context — sowfkun.verse.v2
 
 ## Tech Stack
 
@@ -18,4 +19,3 @@ Full-stack SaaS platform. Backend đã có infra base, chưa có nghiệp vụ c
 | **E2EE** | Hybrid RSA-2048 + AES-256-GCM |
 | **Frontend** | Next.js App Router, Tailwind CSS v4, CSS Modules (thư mục: `sowfkun-verse-web/`) |
 | **Mobile** | Flutter (thư mục: `sowfkun-verse-mobile/`) |
-
