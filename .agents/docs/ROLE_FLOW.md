@@ -15,14 +15,16 @@ Phân hệ Role đóng vai trò trung tâm trong việc quản lý hệ thống 
 ### 1.2 Cấu trúc Phân quyền & Ràng buộc Tính nhất quán (Permission Matrix & Consistency Rules)
 - Mỗi Role đại diện cho một vai trò trong Tenant và chứa một ma trận quyền: `map[PermissionKey][]PermissionScope`.
   - **PermissionKey**: Mã định danh tính năng (VD: `USER_VIEW`, `USER_MANAGE`, `CONFIG_MANAGE`).
-  - **PermissionScope**: Phạm vi truy cập của quyền Xem (`ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWN_ONLY`, `NONE`).
+  - **PermissionScope**: Phạm vi truy cập của quyền Xem (`ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWNER`, `NONE`).
   - **Quy ước Scope**:
     - **Quyền Xem (`*_VIEW`)**: Bắt buộc phải có Scope hợp lệ để hệ thống phân giải phạm vi hiển thị dữ liệu theo cấp bậc.
     - **Quyền Quản lý/Chỉnh sửa (`*_MANAGE`, `CONFIG_MANAGE`)**: Là cờ hành động (Action/Toggle), **không cần scope** (mảng scope có thể để rỗng `[]` hoặc `nil`).
-- **Luật Nhất quán Phân quyền (Consistency Rules)**:
+- **Luật Nhất quán Phân quyền & Chuẩn hóa (Consistency & Normalization Rules)**:
   - **Có quyền xem chưa chắc có quyền chỉnh sửa**: Role có thể chỉ sở hữu `USER_VIEW` mà không có `USER_MANAGE` (hoàn toàn hợp lệ).
   - **Có quyền chỉnh sửa bắt buộc phải có quyền xem**: Nếu Role được gán quyền chỉnh sửa (`USER_MANAGE`) thì **bắt buộc** phải được gán kèm quyền xem tương ứng (`USER_VIEW` có scope hợp lệ).
   - **Xung đột quyền (`ERR_PERMISSION_CONFLICT`)**: Nếu ma trận quyền chứa quyền quản lý/chỉnh sửa nhưng thiếu hoặc rỗng quyền xem tương ứng, hệ thống sẽ từ chối và trả về lỗi `ERR_PERMISSION_CONFLICT` ngay tại tầng UseCase.
+  - **Luật `ALL` loại trừ tương hỗ**: Nếu mảng scope chứa `ALL` thì hệ thống tự động tối giản thành duy nhất `["ALL"]` (loại bỏ các scope con dư thừa).
+  - **Fallback Mặc định**: Nếu bật quyền xem nhưng mảng scope rỗng, hệ thống tự động gán mặc định phạm vi `["OWNER"]`.
 
 ### 1.3 Cơ chế Caching & Real-time Synchronization (Redis & MQ)
 - **Redis Cache (Gateway Pattern)**: Dữ liệu Role được cache trên Redis (`role:id:{roleID}`) với TTL 24 giờ để tăng tốc độ kiểm tra quyền (Permission Checking) và đọc dữ liệu.
@@ -30,6 +32,9 @@ Phân hệ Role đóng vai trò trung tâm trong việc quản lý hệ thống 
   - Khi có thao tác Create/Update/Delete Role, `onChange()` của Repository sẽ tự động gửi sự kiện đồng bộ qua Kafka.
   - **Kafka `entity_sync`**: Gửi sự kiện `EventTenantSyncMetaUpdate` để cập nhật `meta.ROLE = timestamp` vào document Tenant.
   - **Kafka `general2` (Target Tenant)**: Gửi sự kiện `EventEntityChanged` (`entity_type = "ROLE"`, `op_type = CREATE/UPDATE/DELETE`) để WebSocket Dispatcher phát sóng sự kiện `ENTITY_CHANGED` về client đang kết nối.
+  - **Xóa Hierarchy Cache có chọn lọc (Conditional Hierarchy Cache Invalidation)**:
+    - Khi **ma trận phân quyền (`perms`)** hoặc Role bị **xóa (`is_del: true` / delete)**: `RoleMQHandler` tự động quét danh sách người dùng của Tenant và xóa sạch các key `user:accessible_users:{uid}:{perm}` trên Redis để nạp lại phân cấp quyền mới ngay lập tức.
+    - Khi chỉ thay đổi thông tin cơ bản (**`name`** hoặc **`desc`**): Hệ thống **bỏ qua không xóa Hierarchy Cache** nhằm tối ưu hóa hiệu năng CPU và I/O Redis.
 
 ### 1.4 Cơ chế Cập nhật & Xóa Tối ưu (Dirty Check & Soft Delete Tracking)
 - **Dirty Check (Rule 9)**: API Update so sánh dữ liệu mới với DB, nếu không có thay đổi nào thực sự khác biệt thì bỏ qua việc ghi MongoDB (Skip DB Write).

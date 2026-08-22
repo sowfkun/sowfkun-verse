@@ -51,3 +51,12 @@ Tuyệt đối không dùng mã màu Hex (VD: `#fff`, `#333`). Bắt buộc dùn
 *   `var(--primary-color)` / `var(--accent-primary)`: Màu thương hiệu chính, dùng cho Button chính, text link, trạng thái Focus/Active.
 *   `var(--error-color)`: Dùng cho trạng thái lỗi (Border lỗi, Caption báo lỗi).
 *   **Quy tắc màu sắc Badge/Tag**: Tuyệt đối không được phép hardcode màu sắc Hex hoặc mã màu RGBA cụ thể cho các Badge vai trò hay trạng thái (như `text-[#fbbf24]`, `bg-[rgba(251,191,36,0.12)]`). Bắt buộc phải sử dụng component `<Badge variant="...">` chung để tự động ánh xạ theo hệ màu Semantic Status Colors (`success`, `danger`, `warning`, `info`, `neutral`) thông qua các biến CSS (`--color-success`, `--color-danger`, `--color-warning`, `--color-info`, `--text-muted`).
+
+## D. Quy Tắc Đặt Tên & Nhãn Phân Cấp (Non-Redundant Hierarchical Naming Rules)
+- **Không lặp lại tiêu đề cha**: Khi một khối, nhóm card, modal hoặc khu vực giao diện đã có **Tiêu đề lớn / Tiêu đề nhóm** (Parent/Group Header - ví dụ: "Nhân viên", "Quản trị hệ thống", "Cấu hình"), các tiêu đề con, mục lựa chọn hoặc nhãn con bên trong (Child Items / Checkboxes / Action Labels) **TUYỆT ĐỐI KHÔNG** lặp lại từ khóa của tiêu đề lớn.
+- **Quy tắc Tinh gọn (Chỉ dùng Động từ hành động hoặc Danh từ thuần túy)**:
+  - ✅ **Đúng**: Nhóm "Nhân viên" -> các mục con chỉ ghi "Xem", "Quản lý" (mô tả: "Xem danh sách và hồ sơ", "Tạo mới, chỉnh sửa, phân quyền và xóa").
+  - ❌ **Sai**: Nhóm "Nhân viên" -> mục con ghi "Xem nhân viên", "Quản lý nhân viên", "Xóa nhân viên".
+  - ✅ **Đúng**: Tiêu đề Modal tạo mới là "Thêm mới", modal xóa là "Xóa" (không ghi "Thêm mới vai trò", "Xóa vai trò", "Thêm vai trò mới").
+
+

@@ -20,7 +20,7 @@ Phân hệ User áp dụng các "Luật Thép" về kiến trúc, bảo mật v�
   - **Chặn tự đổi Status**: Tài khoản không được phép tự thay đổi `status` của chính mình qua API quản lý.
 - **Quyền Xem (`USER_VIEW`)**:
   - Được phép xem danh sách nhân viên (`/list`, `/list-for-options`).
-  - **Phân giải Hierarchy Scope**: Danh sách nhân viên hiển thị được lọc tự động qua `HierarchyService` dựa trên phạm vi quyền của Role (`ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWN_ONLY`).
+  - **Phân giải Hierarchy Scope**: Danh sách nhân viên hiển thị được lọc tự động qua `HierarchyService` dựa trên phạm vi quyền của Role (`ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWNER`).
 
 ### 1.3 Quy tắc Phân vai trò (Single Role Assignment)
 - Mỗi nhân viên chỉ được gán **đúng 1 Role** (`len(role_ids) == 1`). Hệ thống validate cả ở tầng Presentation DTO (`validate:"min=1,max=1"`) và tầng UseCase Application.
