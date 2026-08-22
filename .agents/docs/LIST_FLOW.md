@@ -459,3 +459,39 @@ import { DataTable, AddButton } from '@/components';
 />
 ```
 
+---
+
+## 7. Các Tips & Tối Ưu Xương Máu Khi Triển Khai List & API Integration (Best Practices & Gotchas)
+
+Dưới đây là các đúc kết thực chiến bắt buộc phải áp dụng khi triển khai bất kỳ phân hệ List / Bảng dữ liệu nào trên hệ thống:
+
+### 7.1 Tip 1: Chống Duplicate API Fetch Khi Mount Component
+- **Nguyên nhân**: Khai báo object `projection`, `sort`, `defaultFilters` inline bên trong thân Function Component khiến mỗi lần React render sinh ra một object reference mới $\rightarrow$ Dependency array của `useEffect` phát hiện thay đổi liên tục $\rightarrow$ Gây gọi API lặp nhiều lần.
+- **Giải pháp**:
+  1. Khai báo các đối tượng mặc định (`DEFAULT_PROJECTION`, `DEFAULT_SORT`) thành **hằng số tĩnh (static constant)** ở cấp Module bên ngoài Component.
+  2. Bắt buộc dùng `useMemo` cho các query parameters động được truyền vào `useEffect`.
+  3. Chỉ kích hoạt Debounce Search khi `searchQuery.trim() !== debouncedSearch` và có độ dài `>= 3` ký tự hoặc rỗng (reset filter).
+  4. Tránh gọi lại API lấy quyền/options ở layout cha nếu component con đã tự quản lý dữ liệu.
+
+### 7.2 Tip 2: Tối Ưu State Khi Xóa (Zero Index Lag & Local State Optimization)
+- **Vấn đề**: Các cơ chế Search Engine bên Backend (như MongoDB Atlas Search `$search`, OpenSearch) có độ trễ re-indexing từ **500ms đến 2 giây** (Eventual Consistency). Nếu vừa xóa thành công mà gọi lại API `fetchList()` ngay thì Backend có thể vẫn trả về bản ghi cũ vừa xóa do index chưa kịp cập nhật.
+- **Giải pháp**:
+  - Khi xóa thành công: Nếu danh sách hiện tại **chưa đầy trang** (`items.length < size` hoặc `total <= size`):
+    * **TUYỆT ĐỐI KHÔNG gọi lại API `fetchList()`**.
+    * **Chỉ cập nhật Local State**: Lọc bỏ item trực tiếp qua `setItems(prev => prev.filter(x => x.id !== deletedId))` và giảm `setTotal(prev => Math.max(0, prev - 1))`.
+    * **Hiệu quả**: UI phản hồi tức thì 0ms, không tốn tài nguyên mạng và hoàn toàn miễn nhiễm với Index Lag.
+  - Chỉ gọi lại API khi danh sách đang ở trang đầy đủ (`items.length === size`) để kéo bản ghi ở trang tiếp theo lên lấp chỗ trống.
+
+### 7.3 Tip 3: Xử Lý Filter `_id` với MongoDB Atlas Search (`$search`)
+- **Vấn đề**: Atlas Search stage `$search` không hỗ trợ filter `_id: { $in: [ObjectID(...)] }` bên trong `$search.compound.filter`. Nếu truyền `_id` vào `$search` sẽ dẫn đến query trả về 0 bản ghi (gây lỗi `404 ERR_NOT_FOUND` khi xóa/cập nhật bulk).
+- **Giải pháp**: Trong `ConvertQueryToAtlasSearch` và `AbstractMongoRepository`, các điều kiện lọc theo `_id` (từ `IncludeIDs`) bắt buộc phải được tách ra khỏi `$search` stage và đưa vào **`$match` stage riêng biệt** ngay sau `$search` trong Aggregate Pipeline.
+
+### 7.4 Tip 4: Cơ Chế Chặn Spam Refresh Token Vô Hạn (401 Infinite Loop Protection)
+- **Vấn đề**: Khi API trả về `401 Unauthorized`, nếu hàm refresh token hoặc request retry tiếp tục gặp 401 thì client dễ rơi vào vòng lặp vô hạn gọi API liên tục làm đơ trình duyệt.
+- **Giải pháp**: Trong `client.ts` (`apiFetch`), triển khai cờ `_retryCount` với giới hạn cứng `MAX_RETRIES = 1` và gán cờ `skipSilentRefresh: true` cho lần retry duy nhất. Nếu vẫn thất bại, dừng ngay lập tức và redirect người dùng về trang đăng nhập.
+
+### 7.5 Tip 5: Dirty Check & Cập Nhật Cục Bộ Khi Sửa (Update Local State)
+- **Dirty Check (Rule 9)**: Modal chỉnh sửa (Update Modal) luôn so sánh dữ liệu form hiện tại với dữ liệu ban đầu. Chỉ gửi lên API các field có sự thay đổi thực sự và vô hiệu hóa (disable) nút "Lưu thay đổi" nếu `!isDirty`.
+- **Cập nhật Cục bộ**: Khi API Update trả về thành công, cập nhật trực tiếp bản ghi trong Local State `setItems(prev => prev.map(item => item.id === updated.id ? updated : item))` thay vì reload toàn bộ bảng, giúp giao diện người dùng mượt mà và không bị chớp màn hình.
+
+
