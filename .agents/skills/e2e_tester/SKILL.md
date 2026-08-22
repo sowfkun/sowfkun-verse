@@ -21,6 +21,11 @@ Bạn là chuyên gia QA / E2E Automation Lead điều phối kịch bản kiể
 >    - **Đối Soát DB & Index (Backend Contract)**: Đối chiếu câu lệnh `buildQuery` với danh sách Compound Index trong `SetupIndexes` và quy tắc `Strict Projection` (cấm `SELECT *`).
 >    - **Công Cụ Kiểm Thử Tách Biệt**: Nếu cần kiểm tra DB state hay Redis key, chỉ chạy lệnh query qua shell/script đặt hoàn toàn trong thư mục `scratch/`, tuyệt đối không đụng vào source code dự án.
 
+### 1.1 Tài Khoản Kiểm Thử Mặc Định (Default Test Credentials)
+- **Email**: `truongwv1999@gmail.com`
+- **Mật khẩu**: `Truong155@@`
+- **Quy định**: Luôn sử dụng tài khoản này cho mọi kịch bản đăng nhập kiểm thử giao diện trên trình duyệt (`browser_subagent`) cũng như các script gọi API tự động.
+
 ---
 
 ## 2. Tiêu Chuẩn Thẩm Định 6 Phân Hệ Khi Kiểm Thử (The 6 Verification Pillars)
