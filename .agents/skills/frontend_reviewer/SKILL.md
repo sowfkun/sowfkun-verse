@@ -44,5 +44,18 @@ Khi review code, bạn BẮT BUỘC phải kiểm tra gắt gao các lỗi vi ph
 **Cách kiểm tra:** Có component đặt sai thư mục hoặc import trực tiếp từ đường dẫn sâu (như `import { Button } from '@/components/primitives/Button'`) không?
 **Cách sửa:** Chuyển component về đúng nhóm và cập nhật import tập trung từ `@/components`.
 
+### 7. Vi phạm Hiệu năng, Re-render & Network (FE 07)
+**Luật:** Bắt buộc tuân thủ 8 tiêu chuẩn hiệu năng trong [fe_07_performance_and_render_optimization.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/rules/fe_07_performance_and_render_optimization.md):
+- Ổn định tham chiếu: Tách `DEFAULT_PROJECTION`, `DEFAULT_SORT`, options tĩnh ra ngoài Component (Module Level). Bắt buộc `useMemo`/`useCallback` cho objects/callbacks truyền xuống component con hoặc hooks dependencies.
+- Tuyệt đối cấm inline arrow functions trong vòng lặp `.map()`.
+- Cấm dùng `useState` + `useEffect` để sync computed state (gây cascading render).
+- Sau khi xóa thành công và list chưa đầy trang: Cấm gọi lại `fetchList()`, chỉ filter xóa trong local state.
+- Form update bắt buộc Dirty Check: Disable Submit khi `!isDirty` và chỉ gửi trường thay đổi.
+- Cắt tỉa DOM: Dùng Conditional Rendering `{isOpen && <Modal />}` thay vì CSS `display: none` giữ nguyên DOM ẩn.
+- Bắt buộc return cleanup function trong `useEffect` cho mọi timer/listener.
+**Cách kiểm tra:** Soi kỹ khai báo object/array literal trong JSX, vòng lặp `.map()`, `useEffect` dependencies, và logic xử lý sau CUD.
+**Cách sửa:** Yêu cầu tách hằng số tĩnh, bọc `useMemo`/`useCallback`, cập nhật local state và áp dụng Dirty Check.
+
 ## Thực thi
-Nếu bạn phát hiện bất kỳ vi phạm nào trong danh sách trên, hãy CHỈ TRÍCH thẳng thắn, trích dẫn đúng Rule bị vi phạm, và đưa ra giải pháp report chi tiết. KHÔNG ĐƯỢC nương tay với bất kỳ lỗi UI/UX nào.
+Nếu bạn phát hiện bất kỳ vi phạm nào trong danh sách trên, hãy CHỈ TRÍCH thẳng thắn, trích dẫn đúng Rule bị vi phạm, và đưa ra giải pháp report chi tiết. KHÔNG ĐƯỢC nương tay với bất kỳ lỗi UI/UX hay hiệu năng nào.
+
