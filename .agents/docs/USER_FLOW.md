@@ -130,8 +130,9 @@ sequenceDiagram
 | :--- | :--- | :--- | :--- |
 | `email` | `string` | `required,email` | Email đăng nhập của nhân viên. |
 | `name` | `string` | `required,max=100` | Họ và tên nhân viên. |
-| `phone` | `PhoneNumber` | `omitempty` | Số điện thoại (`{"country_code": "+84", "number": "0901234567"}`). |
+| `phone` | `*PhoneNumber` | `omitempty` | Số điện thoại (`{"country_code": "+84", "number": "0901234567"}`). |
 | `role_ids` | `[]string` | `required,min=1,max=1` | Danh sách ID vai trò gán cho nhân viên (đúng 1 role). |
+| `owner_id` | `string` | `required` | ID của người phụ trách / quản lý trực tiếp. |
 
 * **Response (200 OK):**
 ```json

@@ -9,27 +9,24 @@ Tài liệu này đặc tả toàn bộ kiến trúc, cơ chế Lazy Loading (On
 Hệ thống Local Caching phía Frontend được thiết kế xoay quanh 5 nguyên lý cốt lõi nhằm triệt tiêu request dư thừa, tối ưu hóa băng thông mạng và loại bỏ hoàn toàn nguy cơ crash ứng dụng:
 
 1. **Phiên Bản Tập Trung (Single Source of Truth - `tenant.meta[EntityType]`)**:
-   - Mốc phiên bản (Version ETag / Timestamp) của từng danh mục (`ROLE`, `TAG`, `EMPLOYEE`, v.v.) được gắn trực tiếp vào object `Tenant` (trả về lúc đăng nhập hoặc khi làm mới token).
+   - Mốc phiên bản (Version ETag / Timestamp) của từng danh mục (`ROLE`, `TAG`, `USER`, v.v.) được gắn trực tiếp vào object `Tenant` (trả về lúc đăng nhập hoặc khi làm mới token).
    - Bản chất của việc kiểm tra tính hợp lệ là **so sánh bằng nghiêm ngặt (`===`)**:
      $$\text{isCacheValid} = (\text{cached} \neq \text{null}) \land (\text{cached.version} === \text{serverVersion})$$
 2. **Nạp Lười Theo Nhu Cầu (Lazy On-Demand Loading)**:
    - Khi User đăng nhập thành công, Frontend **tuyệt đối KHÔNG tải ngầm** toàn bộ các danh mục về máy.
-   - Dữ liệu chỉ được fetch khi và chỉ khi có một Component giao diện thực sự yêu cầu sử dụng danh mục đó lần đầu.
+   - Dữ liệu chỉ được fetch khi và chỉ khi có một Component giao diện thực sự yêu cầu sử dụng danh mục đó lần đầu (Render cột bảng, mở Filter Popover, mở Form Modal).
 3. **Chống Trùng Lặp Yêu Cầu (In-Flight Request Deduping)**:
    - Quản lý một Map các Promise đang thực thi (`inFlightRequests`). Nếu nhiều Component trên cùng một trang (hoặc cùng một thời điểm) gọi lấy cùng một danh mục, hệ thống sẽ dùng chung 1 Promise duy nhất $\rightarrow$ Server chỉ nhận đúng 1 HTTP request.
 4. **Tải Gom Phân Trang An Toàn (Chunked Paged Fetching)**:
-   - Khi lấy danh sách options/metadata, Frontend gọi API `POST /api/v1/{entity}/list-for-options` theo từng trang (kích thước mặc định `size = 100`) lặp tuần tự cho đến khi hết dữ liệu (`has_more = false`), sau đó gom lại thành 1 mảng hoàn chỉnh.
+   - Khi lấy danh sách options/metadata, Frontend gọi API `POST /api/v1/{entity}/list-for-options` theo từng trang (kích thước mặc định `size = 100`) lặp tuần tự cho đến khi hết dữ liệu, sau đó gom lại thành 1 mảng hoàn chỉnh.
    - Cơ chế này bảo vệ trình duyệt khỏi nguy cơ tràn bộ nhớ RAM (Browser Heap Overflow) khi số lượng bản ghi của Tenant quá lớn.
-5. **Đồng Bộ Lười Khi Nhận Socket (Lazy Realtime Invalidation)**:
-   - Khi có sự kiện `ENTITY_CHANGED` từ WebSocket, Client **không gọi API tải lại ngay lập tức**.
-   - Client cập nhật lại mốc `tenant.meta[EntityType]` trên RAM khi Tenant sync. Việc nạp toàn bộ danh sách mới sẽ được nhường lại cho cơ chế On-Demand ở lần truy cập tiếp theo.
-6. **Vá Dữ Liệu Thời Gian Thực An Toàn (Safe Granular Realtime Patching - UPDATE & DELETE)**:
-   - Khi nhận event `ENTITY_CHANGED` của một danh mục (`ROLE`, `TAG`, `EMPLOYEE`, v.v.):
-   - **Quy tắc Thép về Tính Toàn Vẹn Dữ Liệu (Data Integrity)**:
-     - **CHỈ** thực hiện ghi đè (`UPDATE`) hoặc xoá (`DELETE`) nếu cache của entity đó **ĐÃ TỒN TẠI** trong `localStorage` và **CHỨA CHÍNH XÁC ID ĐÓ** (`cached.data[entityId] !== undefined`).
-     - Nếu cache chưa từng được nạp (người dùng chưa từng mở màn hình dùng danh mục đó), hoặc `entityId` chưa có trong cache: **TUYỆT ĐỐI KHÔNG ghi vào cache**.
-     - *Lý do*: Tránh trường hợp cache rỗng bị nhét 1 item đơn lẻ, khiến các lần đọc sau hiểu lầm là "Cache Hit" nhưng thực tế bị mất sạch toàn bộ các bản ghi khác.
-     - Event `CREATE` được bỏ qua có chủ đích để cơ chế Lazy Versioning tự động tải trọn bộ danh sách khi cần.
+5. **Vá Dữ Liệu Thời Gian Thực An Toàn (Safe Granular Realtime Patching - CREATE, UPDATE & DELETE)**:
+   - Khi nhận event `ENTITY_CHANGED` của một danh mục (`ROLE`, `TAG`, `USER`, v.v.) hoặc khi submit Form Modal:
+   - **BẮT BUỘC sử dụng `patchEntityCacheItem`**:
+     - `CREATE` / `INSERT`: Thêm bản ghi mới vào Map trong `localStorage` nếu cache đã tồn tại.
+     - `UPDATE`: Ghi đè các trường thay đổi của bản ghi trong Map `localStorage`.
+     - `DELETE`: Xóa bản ghi khỏi Map trong `localStorage`.
+   - **TUYỆT ĐỐI CẤM gọi `invalidateEntityCache`** trong các luồng CUD thông thường để không làm mất toàn bộ cache khiến các dropdown khác bị Cache Miss.
 
 ---
 

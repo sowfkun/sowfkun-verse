@@ -51,6 +51,10 @@ Tài liệu này định nghĩa toàn bộ "Luật Thép" về hiệu năng (Per
 - Khi Update thành công: Cập nhật trực tiếp item trong state `setItems(prev => prev.map(it => it.id === updated.id ? updated : it))`.
 - Modal Edit: Áp dụng Dirty Check so sánh với initial data, chỉ gửi các field thay đổi lên API và disable nút Submit khi `!isDirty`.
 
+### 3.3 Cấm Gọi API Get List Khi Nhận WebSocket ENTITY_CHANGED (Event-Driven In-Place Mutation)
+- **TUYỆT ĐỐI CẤM** dùng sự kiện `ENTITY_CHANGED` làm trigger để gọi lại các hàm truy vấn danh sách (`fetchList()`, `fetchEmployees()`, `fetchRoles()`, v.v.).
+- **BẮT BUỘC**: Cập nhật trực tiếp vào Local Storage Cache DTO (`patchEntityCacheItem`) hoặc In-place Mutation trên RAM State của Component (`setItems(prev => prev.map(...))` hoặc `setItems(prev => prev.filter(...))`).
+
 ---
 
 ## 4. Debounce, Throttling & Resource Cleanups
@@ -89,3 +93,5 @@ Khi Review code Frontend, Reviewer bắt buộc đối chiếu danh sách kiểm
 | 6 | **DOM Bloat** | Render modal/drawer ẩn bằng CSS `display: none` | Dùng Conditional Rendering `{isOpen && <Modal />}` |
 | 7 | **Memory Leak** | Thiếu return cleanup trong `useEffect` (timers/listeners) | Thêm `clearTimeout`, `removeEventListener` ở return |
 | 8 | **Network Dirty Check** | Form Edit gửi toàn bộ payload dù không sửa gì | Áp dụng Dirty Check, chỉ gửi trường thay đổi |
+| 9 | **WebSocket List Refetch** | Gọi `fetchList()` khi nhận sự kiện `ENTITY_CHANGED` | Cập nhật trực tiếp vào cache/state tại chỗ (In-place Mutation) |
+

@@ -38,6 +38,7 @@ trigger: always_on
   - **Kiểm tra xung đột tại Presentation (`PopulateCommonQuery`)**: Nếu `query.IsSelAll == true` VÀ `len(query.IncludeIDs) > 0` thì lập tức trả về `errors.New(coreDomain.ErrBadRequest)` (không được vừa chọn tất cả vừa chỉ định danh sách ID cụ thể).
 - **Rule 2.7 - Cấm lạm quyền**: TUYỆT ĐỐI KHÔNG gọi thẳng DB, Cache, ES ở layer này. Phải đi qua Interface của Repo. 
 - **Rule 2.8 - Soft Delete Data Tracking**: Khi thực hiện xóa (Delete UseCase), bắt buộc chuẩn bị `updateData` chứa thông tin actor (`u_by`) và `tracking_id` (nếu có từ `cmd.TrackingID`) truyền vào `SoftDeleteManyIDs` của Repository để lưu vết dữ liệu thao tác.
+- **Rule 2.9 - Multi-Tenant Data Isolation Check**: Mọi UseCase đọc hoặc ghi dữ liệu đơn lẻ theo ID/Code (`GetByID`, `GetByCode`, `GetOne`, `Update`, `Delete`): **BẮT BUỘC** kiểm tra quyền sở hữu Tenant: `if entity == nil || entity.TenantID != q.TenantID { return nil, errors.New(coreDomain.ErrNotFound) }` để ngăn chặn triệt để rủi ro rò rỉ hoặc can thiệp dữ liệu chéo giữa các Tenant.
 
 ## 3. Infrastructure Layer (`infrastructure/`)
 - **Rule 3.1 - Naming Convention**: Tên file BẮT BUỘC là `repository.go` (Ví dụ: `internal/[domain]/infrastructure/repository.go`). Trong trường hợp có caching (Redis), caching logic sẽ được tích hợp trực tiếp vào trong file repository này để làm cổng Gateway dữ liệu hợp nhất.
@@ -58,6 +59,7 @@ trigger: always_on
     - Đối với các hàm List nhận vào đối tượng Query (kế thừa từ `CommonQuery`), tham số `projection` sẽ được trích xuất trực tiếp từ trong `CommonQuery.Projection` (không cần tham số projection riêng biệt ở chữ ký hàm).
     - Đối với các hàm Get nhận đối số projection riêng biệt, bắt buộc phải truyền projection map cụ thể.
     - Khi gọi bất kỳ hàm Get/List nào, Agent/Reviewer bắt buộc phải đối chiếu và đánh giá xem projection đã được gán/truyền đi hay chưa. Nếu truyền `nil` để lấy đầy đủ document (Full Document), **BẮT BUỘC** phải có comment giải thích rõ lý do.
+    - **Bảo toàn trường `tid` và `is_del` trong Projection:** `AbstractMongoRepository` (tại `GetByID`, `GetOne`) **BẮT BUỘC** luôn tự động gán thêm `"tid": 1` và `"is_del": 1` vào projection map gửi xuống MongoDB để tầng UseCase và Soft-delete filter luôn có đủ dữ liệu kiểm tra quyền sở hữu Tenant.
 - **Rule 3.5 - Master Function (Add/Update/Delete)**: 
   - `Add`: Chỉ insert DB và trigger `onChange()`, cấm build entity ở đây.
   - `Update/Delete`: Hàm nghiệp vụ lẻ phải gom data rồi gọi về hàm **Master Update** / **Master Delete** để thực thi DB và kích hoạt `onChange()`. Các hàm update phải nhận model update đã được xử lí ở usecases. Chỉ check field giá trị để build data và gọi master update. được được xử lí logic gì trong này

@@ -322,6 +322,18 @@ Dưới đây là các "luật thép" kỹ thuật bắt buộc phải tuân th�
 * **Range Conflict Check**: Nếu cursor gửi mốc thời gian nằm ngoài khoảng `ranges[field]`, Backend lập tức từ chối với lỗi `ERR_CURSOR_OUT_OF_RANGE`.
 * **Safe `$or` Merger**: Khi kết hợp thêm điều kiện phân quyền `$or`, bắt buộc dùng `mongodb.AppendOrClause(baseQuery, clauses)` để tự động gom vào `$and` mà không ghi đè điều kiện Cursor của hệ thống.
 
+### 4.6 Quy Chuẩn Nạp Options Lười (Lazy On-Demand Options & Cache 0ms)
+* **3 Trigger DUY NHẤT**: Chỉ nạp options khi (1) Cột đang hiển thị trên bảng, (2) Click mở Filter Popover (`onOpen`), hoặc (3) Mở Modal Thêm/Sửa. Nếu cột ẩn và filter chưa mở $\rightarrow$ Tuyệt đối 0 request.
+* **Ổn định tham chiếu**: Hàm nạp options (`ensureRolesLoaded`, `ensureEmployeesLoaded`) bắt buộc dùng `useRef(tenant)` để không bị gọi lại mỗi khi `tenant` thay đổi state.
+
+### 4.7 Vá Cache Cục Bộ `patchEntityCacheItem` & Cấm `invalidateEntityCache`
+* Mọi thao tác `CREATE`, `UPDATE`, `DELETE` bắt buộc dùng `patchEntityCacheItem(type, id, op, data)` để vá trực tiếp vào `localStorage`.
+* **TUYỆT ĐỐI CẤM gọi `invalidateEntityCache`** trong các luồng CUD thông thường để không làm các dropdown khác bị Cache Miss.
+
+### 4.8 Đồng Bộ Thời Gian Thực Không Refetch (Zero-Refetch WebSocket)
+* Khi nhận WebSocket `ENTITY_CHANGED` của thực thể đang xem trên bảng: Cập nhật trực tiếp vào State trên RAM và gọi `patchEntityCacheItem`.
+* **TUYỆT ĐỐI CẤM gọi `fetchList()`** từ sự kiện WebSocket.
+
 ---
 
 ## 5. Các Mã Lỗi Thường Gặp (Common Error Codes)

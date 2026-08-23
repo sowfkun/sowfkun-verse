@@ -35,3 +35,9 @@ Hệ thống WebSocket sử dụng mô hình sự kiện 2 chiều (Bidirectiona
   - **Global/System events**: Các sự kiện ảnh hưởng diện rộng hoặc trạng thái kết nối chung (như `CLIENT_PONG`, `NOTIFICATION_RECEIVED`) được quản lý thông qua custom hook `useGlobalSocketHandlers.ts` và tích hợp tại `SocketProvider`.
   - **Local/Domain-specific events**: Các sự kiện đặc thù (ví dụ: Chat, Task, Project changes) **không được** gọi `subscribe` trực tiếp từ giao diện (Component View). Chúng phải được bọc trong một Custom Hook riêng biệt của Domain tương ứng (ví dụ: `useChatSocket`), chịu trách nhiệm subscribe, cập nhật state/cache, và tự động cleanup khi unmount.
 - **Tránh kết nối lại vô hạn (Connection Loop Protection)**: Khi viết callback socket hoặc handler, bắt buộc sử dụng cơ chế `useRef` hoặc dependency array rỗng để giữ hàm ổn định, không đưa các hàm động thay đổi liên tục vào dependency array của `connect` / `SocketProvider`.
+- **Nguyên Tắc Xử Lý Sự Kiện `ENTITY_CHANGED` (Event-Driven In-Place Update & Cấm Refetch List)**:
+  - **Mục đích:** Sự kiện WebSocket `ENTITY_CHANGED` mang theo payload rút gọn (`EntityChangedPayload { EntityID, EntityType, OpType, Data }`) sinh ra phục vụ mục đích **Event-driven Patching**:
+    1. Vá trực tiếp vào Local Storage Cache DTO (`patchEntityCacheItem` trong `useGlobalSocketHandlers`).
+    2. Hoặc cập nhật trực tiếp tại chỗ (In-place Mutation) trên RAM State của Component (`setItems(prev => prev.map(...))` hoặc `setItems(prev => prev.filter(...))`).
+  - **TUYỆT ĐỐI CẤM GỌI API GET LIST:** Nghiêm cấm tuyệt đối việc sử dụng `ENTITY_CHANGED` làm trigger để gọi lại các hàm truy vấn danh sách (`fetchList()`, `fetchEmployees()`, `fetchRoles()`, v.v.). Mọi cập nhật sau thao tác Thêm/Sửa/Xóa đều phải được cập nhật lạc quan (Optimistic State Update) hoặc In-place Mutation ngay tại Frontend mà không phát sinh thêm bất kỳ request mạng nào.
+

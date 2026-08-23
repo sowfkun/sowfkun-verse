@@ -66,5 +66,27 @@ Tài liệu này quy định toàn bộ tiêu chuẩn về việc xây dựng, c
   - Chỉ gọi lại API khi danh sách đang ở trang đầy đủ (`items.length === size`) để kéo bản ghi ở trang tiếp theo lên lấp chỗ trống, hoặc khi trang cuối cùng bị xóa hết bản ghi để lùi về trang trước đó.
 - **Khi Cập Nhật Thành Công (Update Success)**:
   - Cập nhật trực tiếp bản ghi trong Local State `setItems(prev => prev.map(item => item.id === updated.id ? updated : item))` thay vì reload toàn bộ bảng.
-  - Kích hoạt `invalidateEntityCache(ENTITY_TYPE)` để xóa cache các dropdown/options phụ thuộc ở client.
+  - Sử dụng `patchEntityCacheItem(ENTITY_TYPE, id, 'UPDATE', data)` để vá trực tiếp bản ghi vào `localStorage` mà không làm mất toàn bộ cache. TUYỆT ĐỐI KHÔNG gọi `invalidateEntityCache`.
+
+---
+
+## 8. Quy Chuẩn Nạp Options Lười & Local Dictionary Cache (Lazy On-Demand Options Loading)
+- **Lazy On-Demand Options Loading**:
+  - Đối với các cột hiển thị thông tin tra cứu ngoại lai (như `role_ids`, `owner_id`, `tag_ids`, `attribute_ids`):
+    - Khi trang vừa load: **Chỉ gọi hàm `get*Map(tenant)` NẾU cột đó đang hiển thị (`visibleColumnKeys.includes(key)`) hoặc bộ lọc tương ứng đang được áp dụng (`selected*.length > 0`)**.
+    - Nếu cột đang bị ẩn và bộ lọc chưa mở: **TUYỆT ĐỐI KHÔNG gọi API lấy Options**.
+  - **Kích hoạt qua Dropdown Trigger (`onOpen`)**:
+    - Truyền callback `onOpen` vào component `<MultiSelect />` để khi người dùng click mở bộ lọc lần đầu tiên mới kích hoạt hàm nạp dữ liệu từ điển.
+  - **Cơ chế Cache Hit 0ms**:
+    - Hàm `getEntityCacheMap` so khớp version với `tenant.meta[entity_type]`. Nếu trùng version, đọc trực tiếp từ `localStorage` với độ trễ 0ms và 0 request mạng.
+
+---
+
+## 9. Quy Chuẩn Đồng Bộ Realtime Không Refetch (Zero-Refetch WebSocket Integration)
+- **Xử lý sự kiện `ENTITY_CHANGED` tại Component View**:
+  - Khi nhận sự kiện WebSocket `ENTITY_CHANGED` của thực thể đang xem trên bảng:
+    - **`op_type === 'UPDATE'`**: Cập nhật trực tiếp trường dữ liệu (`name`, `email`, v.v.) vào Map từ điển (`set*Map`) và mảng State của bảng (`setItems(prev => prev.map(...))`).
+    - **`op_type === 'DELETE'`**: Lọc bỏ trực tiếp khỏi state (`setItems(prev => prev.filter(...))`) và giảm tổng số bản ghi (`setTotal(prev => Math.max(0, prev - 1))`).
+  - **LUẬT THÉP BẤT BIẾN**: **TUYỆT ĐỐI CẤM gọi `fetchList()` hoặc `get*Map()` từ sự kiện WebSocket**. Mọi đồng bộ dữ liệu phải diễn ra tại chỗ (In-place Mutation) trên RAM và Local Storage.
+
 
