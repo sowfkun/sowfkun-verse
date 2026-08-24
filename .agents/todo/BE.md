@@ -1,3 +1,3 @@
 # Backend TODO & Memory List
 
-- [ ] Check lại reflection
+- [ ] Check lại api call từ nhân viên, check quyền
