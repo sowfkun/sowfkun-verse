@@ -71,6 +71,9 @@ trigger: always_on
   - Các hàm `GetByID`, `GetOne` truy vấn trực tiếp vào Primary Database (WiredTiger Storage Engine) đảm bảo tính nhất quán tức thì (Strong Consistency - Realtime 100%).
   - Các hàm `List`, `Count` khi đi qua Search Engine (Atlas Search `$search`, OpenSearch) có độ trễ đồng bộ (Index Ingestion Lag từ 500ms - 2s).
   - Khi thực hiện các luồng nghiệp vụ ghi DB (Add/Update/Delete) mà cần query/get lại entity ngay sau đó: **BẮT BUỘC** dùng `GetByID` hoặc `Find()` trực tiếp từ DB chính để có dữ liệu Realtime, **TUYỆT ĐỐI KHÔNG** dùng search engine để tránh dữ liệu bị stale/bóng ma. Nếu bắt buộc dùng search engine thì phải có cơ chế Delay / Retry.
+- **Rule 3.9 - Atlas Search & Query Builder (AppendOrClause / AppendAndClause)**:
+  - Khi xây dựng BSON Query cho các điều kiện OR / AND phức tạp hoặc phân quyền Scope trong hàm `buildQuery`, **BẮT BUỘC** sử dụng `mongodb.AppendOrClause(query, orClauses)` và `mongodb.AppendAndClause(query, andClauses)`. TUYỆT ĐỐI KHÔNG tự tạo hoặc ghi đè `query["$or"]` / `query["$and"]` thủ công.
+  - Khi cần tìm kiếm / lọc theo ID (`_id`, `IncludeIDs`, Scope `_id`), Search Index của collection tại `cmd/indexer/mongo.go` bắt buộc phải có mapping `"_id": bson.M{"type": "objectId"}` để Atlas Search có thể lọc trực tiếp 100% trong `$search` stage mà không cần fallback `$match`.
 
 ## 4. Presentation Layer (`presentation/`)
 - **Rule 4.1 - Controller "Ngu ngốc"**: Tầng này CHỈ được làm: Nhận HTTP Request -> Parse JWT gán vào DTO -> Gọi Application Layer -> Trả về HTTP Response. KHÔNG chứa business logic.
