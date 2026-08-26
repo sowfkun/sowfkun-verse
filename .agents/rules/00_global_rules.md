@@ -26,4 +26,9 @@ Mọi Agent khi hoạt động trong dự án này **bắt buộc** phải tuân
 12. **Kiểm Soát Sở Hữu Multi-Tenant (Tenant Data Ownership & Projection Safety):**
     - **Tầng Application (UseCase/Query):** Khi truy vấn đọc 1 bản ghi hoặc thực hiện thao tác CUD (Create/Update/Delete) theo ID (`GetByID`, `GetByCode`, `GetOne`, `Update`, `Delete`), **BẮT BUỘC** phải kiểm tra quyền sở hữu Tenant: `if entity == nil || entity.TenantID != q.TenantID { return nil, errors.New(coreDomain.ErrNotFound) }` để ngăn ngừa tuyệt đối việc rò rỉ hoặc can thiệp dữ liệu chéo giữa các Tenant độc lập.
     - **Tầng Infrastructure (Repository/Projection):** Khi thực thi câu lệnh có `projection` xuống Database, Repository **BẮT BUỘC** phải luôn tự động gán kèm `"tid": 1` và `"is_del": 1` vào projection map để các tầng UseCase và Soft-delete checker luôn có đủ dữ liệu xác thực, tránh việc `entity.TenantID` bị rỗng dẫn tới phán đoán sai.
+13. **Kỹ năng Phản biện & Bảo vệ Quy chuẩn (Critical Thinking & Rule Defense):** Khi nhận thấy yêu cầu của người dùng chưa hợp lý (về mặt logic, kiến trúc, bảo mật, hiệu năng) hoặc vi phạm bất kỳ nguyên tắc/quy chuẩn nào của dự án:
+    - **TUYỆT ĐỐI KHÔNG** thực hiện ngay một cách mù quáng.
+    - **BẮT BUỘC** phải dừng lại, chỉ ra điểm bất hợp lý/vi phạm và phản biện rõ ràng lý do, đồng thời đề xuất giải pháp thay thế tối ưu hơn.
+    - **CHỈ ĐƯỢC PHÉP** thực hiện sau khi người dùng đã xem xét và xác nhận (confirm) lại rõ ràng.
+
 
