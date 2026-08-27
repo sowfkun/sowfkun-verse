@@ -1,81 +1,88 @@
 # Attribute Management Workflow Documentation
 
-Tài liệu này đặc tả toàn bộ quy trình nghiệp vụ (Business Rules), luồng xử lý (Step-by-Step Flow), sơ đồ Mermaid và đặc tả API của phân hệ **Bộ Thuộc Tính Động (Module Attribute Set Module)** trong hệ thống Sowfkun-Verse.
+Tài liệu này đặc tả toàn bộ quy trình nghiệp vụ (Business Rules), luồng xử lý (Step-by-Step Flow), sơ đồ Mermaid và đặc tả API của phân hệ **Bộ Thuộc Tính Động (Module Attribute Set Module)** trong hệ thống Sowfkun-Verse sau khi tinh giản theo kiến trúc **1 API Save / Upsert Duy Nhất & Auto-Heal Đa Tầng**.
 
 ---
 
 ## 1. Tổng quan & Quy tắc Nghiệp vụ Đặc thù (Business Rules)
 
-### 1.1 Mục đích & Kiến trúc Thuộc Tính Động (Dynamic Attribute Sets)
-- Cho phép mỗi Tenant linh hoạt cấu hình các trường dữ liệu tùy biến (Custom Fields / Dynamic Attributes) theo từng thực thể (`CUSTOMER`, `TICKET`, v.v.).
-- Mỗi thực thể sở hữu một tài liệu `ModuleAttributeSet` gồm:
-  - **Zones (`map[string]Zone`)**: Các khu vực hiển thị (như General Info, Extended Info).
-  - **Attributes (`map[string]AttributeDetail`)**: Các trường dữ liệu động với các kiểu dữ liệu (`TEXT`, `NUMBER`, `DATETIME`, `SELECT`, v.v.) được ánh xạ vào từng Slot cố định (`t1`..`t10`, `n1`..`n10`, v.v.).
+### 1.1 Mục đích & Cấu Trúc Bộ Thuộc Tính
+- Cho phép mỗi Tenant quản lý các trường dữ liệu tùy biến (Custom Fields / Dynamic Attributes) theo từng thực thể (`CUSTOMER`, `TICKET`, v.v.).
+- Mỗi thực thể sở hữu một tài liệu `ModuleAttributeSet` lưu trong collection `entity_attribute_sets` (`dbConfig1`):
+  - **Zones (`map[string]Zone`)**: Các khu vực hiển thị form giao diện.
+  - **Attributes (`map[string]AttributeDetail`)**: Các trường dữ liệu động với các kiểu dữ liệu (`TEXT_PLAIN`, `TEXT_HTML`, `NUMBER`, `DATETIME`, `SELECT_SINGLE`, `SELECT_MULTI`) được ánh xạ vào từng Slot cố định (`t_1`..`t_50`, `n_1`..`n_50`, v.v.).
 
-### 1.2 Chốt chặn Phân quyền (Authorization Barrier)
-- **API Thay Đổi Cấu Hình (CUD - Add/Update/Delete Attribute/Zone)**: Bắt buộc đi qua kiểm tra quyền `CONFIG_MANAGE` thông qua `RequirePermission(string(roleDomain.PermConfigManage))`.
-- **API Đọc Dữ Liệu (Read/Options/Set)**: Xác thực đăng nhập `RequireAuth` (công khai cho toàn bộ nhân sự trong Tenant để dựng Form động).
+### 1.2 Phân Cấp 3 Zone Hệ Thống Bất Biến
+1. **Zone 1: `zone_basic` ("Thông tin cơ bản", `order: 1`)**:
+   - **Luôn luôn RỖNG** (0 dynamic custom attributes trong DB).
+   - Dành riêng cho Frontend / App ánh xạ các trường tĩnh gốc (Tên, Mã, Email, SĐT, Trạng thái...) lên layout.
+   - **CẤM** thêm mới, chuyển vào, chuyển ra, hoặc ẩn thuộc tính vào Zone này.
+2. **Zone 2: `zone_filters_classification` ("Thông tin phân loại & Tra cứu", `order: 2`)**:
+   - Chứa **cố định $5 \times N$ thuộc tính mẫu hệ thống** có chỉ mục (`apply_idx: true`):
+     - $N$ Text Search (Keywords): `t_search_1` $\dots$ `t_search_N` (`txt_opt: { min_len, max_len }`)
+     - $N$ Số (Sortable): `n_sort_1` $\dots$ `n_sort_N` (`num_opt: { unit, thous_sep }`)
+     - $N$ Ngày (Sortable): `d_sort_1` $\dots$ `d_sort_N` (`dt_opt: { display_type, format }`)
+     - $N$ Chọn 1 (Filterable): `s_filter_1` $\dots$ `s_filter_N` (`sel_opt: [...]`)
+     - $N$ Chọn nhiều (Filterable): `s_filter_N+1` $\dots$ `s_filter_2N` (`sel_opt: [...]`)
+   - Số lượng $N$ được cấu hình qua biến môi trường `DEFAULT_ATTR_COUNT_PER_TYPE` (mặc định: `2` $\rightarrow$ 10 fields).
+   - Cho phép đổi nhãn hiển thị (`label`) và cấu hình tùy chọn (`options`). **CẤM** thêm mới, chuyển vào, chuyển ra hoặc ẩn khỏi Zone 2.
+3. **Zone 3: `zone_hidden` ("Thuộc tính đã ẩn", `order: 9999`)**:
+   - Chứa các thuộc tính custom có `status: "HIDDEN"`.
+   - Cấm sửa đổi cấu hình hoặc xóa Zone này.
+4. **Các Zone Tùy Biến (Custom Zones)**:
+   - Người dùng tự do tạo, sửa tên/thứ tự, xóa khi rỗng, thêm thuộc tính custom (`t_1..`, `n_1..`, `d_1..`, `s_1..`), di chuyển qua lại, ẩn và bỏ ẩn.
 
-### 1.3 Quy tắc Options API (Golden Standard)
-- **Endpoint**: `GET /api/v1/attribute/list-for-options`.
-- **Query Parameters**: `?page=1&size=100` (không bắt buộc).
-- **Không Filter Nghiệp Vụ**: Lấy toàn bộ các bộ thuộc tính đã cấu hình của Tenant.
-- **Hardcoded Projection**: Ép cứng Projection tại Controller:
-  ```go
-  req.Projection = map[string]any{
-      "entity_type": 1,
-      "zones":       1,
-      "attributes":  1,
-  }
-  ```
-- **Đóng gói Response DTO**: Trả về `[]dto.AttributeSetResponse`, tuyệt đối không rò rỉ Domain Entity.
+### 1.3 Cơ Chế Auto-Heal 2 Tầng Khi Đọc (`GET /list-for-options`)
+1. **Tầng 1 (Bù EntityType):** Đối chiếu danh sách `coreDomain.EntityAttribute.GetSupportedTargets()`. Nếu Tenant (kể cả Tenant cũ) bị thiếu bất kỳ EntityType nào $\rightarrow$ Tự động sinh bộ thuộc tính mặc định chuẩn và lưu DB.
+2. **Tầng 2 (Bù Field theo Env):** Đối chiếu với số lượng $N$ trong `DEFAULT_ATTR_COUNT_PER_TYPE`. Nếu thiếu field trong Zone 2 (vd tăng $N=2 \rightarrow 3$) $\rightarrow$ Tự động bổ sung field mới thiếu vào Zone 2 mà không ghi đè tên cũ mà người dùng đã đổi.
 
-### 1.4 Cơ chế Đồng bộ Real-time & Invalidation (Kafka & WebSocket)
-- **Kafka `entity_sync`**: Khi có bất kỳ thay đổi nào (`insert`, `update`, `delete`), Change Stream kích hoạt gửi sự kiện `EventTenantSyncMetaUpdate` (`entity_type = "ATTRIBUTE"`) sang Tenant module để cập nhật `tenant.meta.ATTRIBUTE = nowMs`.
-- **WebSocket `general2` (Granular Realtime Patching)**:
-  - Khi thao tác là `UPDATE` hoặc `DELETE`: Phát sóng sự kiện `ENTITY_CHANGED` (`entity_type = "ATTRIBUTE"`) về Client kèm dữ liệu mới để Client cập nhật trực tiếp vào `AttributeCache`.
-  - Khi thao tác là `INSERT`: **Bỏ qua phát sóng Socket** để tối ưu hóa mạng (Client tự động reload khi phát hiện lệch `meta.ATTRIBUTE`).
+### 1.4 Chống Race Condition & Concurrency Fallback
+- **Bypass Atlas Search:** Hàm `GetByEntityType` ép cờ `bypassAtlas = true` để truy vấn trực tiếp vào **Standard Unique Compound Index (`tid + entity_type`)** trên MongoDB Primary (WiredTiger Storage Engine) đảm bảo Strong Consistency.
+- **Duplicate Key Fallback:** Khi 2 request cùng khởi tạo hoặc lưu trong 1 microsecond, nếu request sau bị lỗi duplicate key $\rightarrow$ Tự động truy vấn lại record vừa tạo từ Primary DB và hoàn tất luồng mà không gây lỗi sập hệ thống.
 
 ---
 
-## 2. Quy trình Từng bước (Step-by-Step Flow)
+## 2. Sơ Đồ Luồng Nghiệp Vụ (Mermaid Workflow)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Admin as Quản trị viên (CONFIG_MANAGE)
-    participant API as Backend API
-    participant DB as MongoDB (entity_attribute_sets Collection)
-    participant ChangeStream as Mongo Change Stream
-    participant KafkaEntitySync as Kafka (entity_sync)
-    participant KafkaGeneral2 as Kafka (general2)
-    participant TenantConsumer as Tenant SyncMeta Consumer
-    participant WS as WebSocket Hub / Client
+    actor Admin as Quản trị viên (Owner / CONFIG_MANAGE)
+    participant FE as Frontend (Local Cache)
+    participant API as Backend API (/api/v1/attribute)
+    participant DB as MongoDB (entity_attribute_sets)
+    participant ChangeStream as Mongo Change Stream / Kafka
+    participant WS as WebSocket Client Hub
 
-    Admin->>API: POST /api/v1/attribute/add | update | delete | zone/*
-    API->>DB: Cập nhật tài liệu AttributeSet trong MongoDB
-    DB-->>ChangeStream: Phát sinh Change Stream Event
-
-    ChangeStream->>KafkaEntitySync: 1. Gửi EventTenantSyncMetaUpdate (meta.ATTRIBUTE)
-    KafkaEntitySync->>TenantConsumer: Cập nhật timestamp vào tenant.meta.ATTRIBUTE
-
-    alt Thao tác là UPDATE hoặc DELETE
-        ChangeStream->>KafkaGeneral2: 2. Gửi EventEntityChanged (ATTRIBUTE, op, data)
-        KafkaGeneral2->>WS: Phát sóng socket ENTITY_CHANGED tới Client
-        WS->>WS: Client kiểm tra AttributeCache & Patch trực tiếp (nếu item đã tồn tại trong cache)
-    else Thao tác là INSERT
-        Note over ChangeStream,WS: Bỏ qua phát sóng Socket (Client tự reload khi lệch Version)
+    Note over FE, API: 1. ĐỌC & LOCAL CACHING (Bootstrap App)
+    FE->>API: GET /api/v1/attribute/list-for-options
+    alt Chưa có record hoặc thiếu EntityType / thiếu field Env
+        API->>DB: Auto-Heal: Bù đắp EntityType/Field thiếu & Lưu DB
     end
+    API-->>FE: Trả về toàn bộ danh sách Attribute Sets
+    FE->>FE: Lưu vào Local Cache (IndexedDB / Global State)
+
+    Note over Admin, DB: 2. QUẢN TRỊ & LƯU CẤU HÌNH (Admin Save)
+    Admin->>FE: Chỉnh sửa Form (Tên, Options, Custom Zones, Ẩn/Hiện...)
+    Admin->>FE: Bấm nút "Lưu thay đổi"
+    FE->>API: POST /api/v1/attribute/save (Gửi nguyên cục zones & attributes)
+    API->>API: Validate nguyên tử 7 lớp bảo vệ (ValidateCompleteAttributeSet)
+    API->>DB: Cập nhật nguyên tử toàn bộ document trong MongoDB
+    DB-->>ChangeStream: Phát sinh Change Stream Event
+    ChangeStream->>WS: Bắn WebSocket ENTITY_CHANGED cập nhật realtime
+    API-->>FE: HTTP 200 OK (Thành công)
 ```
 
 ---
 
-## 3. Đặc tả Kỹ thuật API (API Specification)
+## 3. Đặc Tả Kỹ Thuật API (API Specification)
+
+Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
 
 ### 3.1 `GET /api/v1/attribute/list-for-options`
-- **Mô tả**: Lấy danh sách toàn bộ Set thuộc tính động của Tenant để nạp Local Cache.
-- **Headers**: `Authorization: Bearer <token>`
-- **Query Params**: `page` (int, default 1), `size` (int, default 100)
+- **Mô tả**: Lấy toàn bộ danh sách bộ thuộc tính của Tenant để nạp Local Cache.
+- **Phân quyền**: `RequireAuth` (Mọi user đăng nhập đều đọc được).
+- **Query Params**: `page` (int, default 1), `size` (int, default 100).
 - **Response `200 OK`**:
   ```json
   {
@@ -86,19 +93,29 @@ sequenceDiagram
         "id": "65c1234567890abcdef12346",
         "entity_type": "CUSTOMER",
         "zones": {
-          "general": {
-            "id": "general",
-            "label": { "vi": "Thông tin chung", "en": "General Info" },
-            "order": 1
-          }
+          "zone_basic": { "id": "zone_basic", "label": { "vi": "Thông tin cơ bản", "en": "Basic Information" }, "order": 1 },
+          "zone_filters_classification": { "id": "zone_filters_classification", "label": { "vi": "Thông tin phân loại & Tra cứu", "en": "Filters & Classification Attributes" }, "order": 2 },
+          "zone_hidden": { "id": "zone_hidden", "label": { "vi": "Thuộc tính đã ẩn", "en": "Hidden Attributes" }, "order": 9999 },
+          "zone_custom_1": { "id": "zone_custom_1", "label": { "vi": "Thông tin bổ sung", "en": "Additional Info" }, "order": 3 }
         },
         "attributes": {
-          "t1": {
-            "slot": "t1",
+          "t_search_1": {
+            "slot": "t_search_1",
             "label": { "vi": "Mã số thuế", "en": "Tax Code" },
-            "data_type": "TEXT",
+            "data_type": "TEXT_PLAIN",
             "status": "ACTIVE",
-            "zid": "general"
+            "apply_idx": true,
+            "zid": "zone_filters_classification",
+            "txt_opt": { "min_len": 0, "max_len": 255 }
+          },
+          "t_1": {
+            "slot": "t_1",
+            "label": { "vi": "Ghi chú nội bộ", "en": "Internal Note" },
+            "data_type": "TEXT_PLAIN",
+            "status": "ACTIVE",
+            "apply_idx": false,
+            "zid": "zone_custom_1",
+            "txt_opt": { "min_len": 0, "max_len": 500 }
           }
         }
       }
@@ -106,33 +123,49 @@ sequenceDiagram
   }
   ```
 
-### 3.2 `GET /api/v1/attribute/set?entity_type={CUSTOMER}`
-- **Mô tả**: Lấy chi tiết bộ thuộc tính của 1 thực thể cụ thể.
-- **Headers**: `Authorization: Bearer <token>`
-- **Query Params**: `entity_type` (e.g. `CUSTOMER`, `TICKET`)
+---
 
-### 3.3 `POST /api/v1/attribute/add`
-- **Mô tả**: Thêm mới một thuộc tính vào Slot trống của thực thể.
-- **Headers**: `Authorization: Bearer <token>`
+### 3.2 `POST /api/v1/attribute/save`
+- **Mô tả**: Lưu/Cập nhật toàn bộ cấu hình Zone và Attribute của một EntityType trong 1 request duy nhất.
+- **Phân quyền**: `RequireAuth` + `RequirePermission(CONFIG_MANAGE)` + Owner.
 - **Request Body**:
   ```json
   {
     "entity_type": "CUSTOMER",
-    "label": { "vi": "Mã số thuế", "en": "Tax Code" },
-    "data_type": "TEXT",
-    "zid": "general"
+    "zones": {
+      "zone_basic": { "id": "zone_basic", "label": { "vi": "Thông tin cơ bản", "en": "Basic Information" }, "order": 1 },
+      "zone_filters_classification": { "id": "zone_filters_classification", "label": { "vi": "Thông tin phân loại & Tra cứu", "en": "Filters & Classification Attributes" }, "order": 2 },
+      "zone_hidden": { "id": "zone_hidden", "label": { "vi": "Thuộc tính đã ẩn", "en": "Hidden Attributes" }, "order": 9999 },
+      "zone_custom_1": { "id": "zone_custom_1", "label": { "vi": "Thông tin bổ sung", "en": "Additional Info" }, "order": 3 }
+    },
+    "attributes": {
+      "t_search_1": {
+        "slot": "t_search_1",
+        "label": { "vi": "Mã số thuế", "en": "Tax Code" },
+        "data_type": "TEXT_PLAIN",
+        "status": "ACTIVE",
+        "apply_idx": true,
+        "zid": "zone_filters_classification",
+        "txt_opt": { "min_len": 0, "max_len": 255 }
+      },
+      "t_1": {
+        "slot": "t_1",
+        "label": { "vi": "Ghi chú nội bộ", "en": "Internal Note" },
+        "data_type": "TEXT_PLAIN",
+        "status": "ACTIVE",
+        "apply_idx": false,
+        "zid": "zone_custom_1",
+        "txt_opt": { "min_len": 0, "max_len": 500 }
+      }
+    }
   }
   ```
-
-### 3.4 `POST /api/v1/attribute/update`
-- **Mô tả**: Cập nhật nhãn, tùy chọn hoặc trạng thái của một trường thuộc tính.
-- **Headers**: `Authorization: Bearer <token>`
-- **Request Body**:
+- **Response `200 OK`**:
   ```json
   {
-    "id": "65c1234567890abcdef12346",
-    "slot": "t1",
-    "label": { "vi": "Mã số thuế Doanh nghiệp", "en": "Corporate Tax Code" }
+    "code": 200,
+    "message": "success",
+    "data": null
   }
   ```
 
@@ -140,12 +173,12 @@ sequenceDiagram
 
 ## 4. Các Mã Lỗi Thường Gặp (Common Error Codes)
 
-| HTTP Status | Mã Lỗi (`error_code`) | Ý nghĩa & Hướng xử lý |
+| HTTP Status | Mã Lỗi (`error_code`) | Ý nghĩa & Nguyên nhân |
 | :--- | :--- | :--- |
-| `400 Bad Request` | `ERR_BAD_REQUEST` | Payload không hợp lệ hoặc thiếu `entity_type`. |
-| `401 Unauthorized` | `ERR_UNAUTHORIZED` | Token JWT thiếu, hết hạn hoặc không hợp lệ. |
-| `403 Forbidden` | `ERR_FORBIDDEN` | Tài khoản thiếu quyền `CONFIG_MANAGE`. |
-| `404 Not Found` | `ERR_NOT_FOUND` | Không tìm thấy bộ thuộc tính hoặc Zone/Slot chỉ định. |
-| `409 Conflict` | `ERR_DUPLICATE_KEY` | Slot thuộc tính đã bị chiếm dụng hoặc trùng ID Zone. |
-| `422 Unprocessable` | `ERR_VALIDATION_FAILED` | Kiểu dữ liệu hoặc cấu hình validation của thuộc tính không hợp lệ. |
+| `400 Bad Request` | `ERR_BAD_REQUEST` | Cú pháp slot sai, lệch kiểu dữ liệu (`DataType`), slot bị gap, hoặc vi phạm trạng thái ẩn/hiện. |
+| `400 Bad Request` | `ERR_VALIDATION_FAILED` | Thiếu trường bắt buộc (`entity_type`, `zones`, `attributes`). |
+| `400 Bad Request` | `ERR_SLOT_LIMIT_EXCEEDED` | Tổng số thuộc tính trong bộ vượt quá quota 50. |
+| `401 Unauthorized` | `ERR_UNAUTHORIZED` | Token JWT thiếu hoặc không hợp lệ. |
+| `403 Forbidden` | `ERR_FORBIDDEN` | Tài khoản không phải Owner hoặc vi phạm 3 Zone hệ thống (sửa zone_basic, đổi zone field mẫu Zone 2). |
+| `404 Not Found` | `ERR_NOT_FOUND` | Không tìm thấy tài nguyên thuộc Tenant. |
 | `500 Internal Error` | `ERR_INTERNAL_SERVER` | Lỗi kết nối cơ sở dữ liệu MongoDB. |
