@@ -7,10 +7,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-BRANCH="${1:-staging}"
+BRANCH="${1:-dev}"
 
 echo "================================================================="
-echo "🚀 SOWFKUN VERSE - MANUAL DEPLOY STAGING"
+echo "🚀 SOWFKUN VERSE - MANUAL DEPLOY SCRIPT"
 echo "👉 Branch: ${BRANCH}"
 echo "📁 Root: ${ROOT_DIR}"
 echo "================================================================="
@@ -36,10 +36,10 @@ docker compose down || true
 docker compose up -d --build --remove-orphans
 
 # 4. Health check
-echo "🩺 4. Đang kiểm tra sức khỏe API (/healthz)..."
+echo "🩺 4. Đang kiểm tra sức khỏe API (/api/v1/security/public-key)..."
 sleep 5
 for i in {1..10}; do
-  if curl -s -f http://localhost:8080/healthz > /dev/null 2>&1; then
+  if curl -s -f http://localhost:8080/api/v1/security/public-key > /dev/null 2>&1; then
     echo "✅ API KHỞI ĐỘNG THÀNH CÔNG VÀ ĐANG HOẠT ĐỘNG!"
     docker image prune -f > /dev/null 2>&1
     exit 0

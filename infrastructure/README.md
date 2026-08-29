@@ -132,7 +132,7 @@ Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển k
    - File binary `app-api` sẽ tự động được sinh ra trong thư mục `infrastructure/api/app-api`.
 
 2. **Bước 2 — Bàn giao & Triển khai On-Premise**:
-   - Bạn chỉ cần copy duy nhất thư mục `infrastructure/` (đã có `app-api` và `.env.example`) sang máy chủ khách hàng.
+   - Bạn chỉ cần copy duy nhất thư mục `infrastructure/` (đã có `app-api` và các template `.env.<profile>`) sang máy chủ khách hàng.
    - Chạy lệnh:
    ```bash
    cd infrastructure
@@ -142,13 +142,16 @@ Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển k
 
 ---
 
-## 🤖 Tự Động Hóa CI/CD Với GitHub Actions Self-Hosted Runner
+## 🤖 Tự Động Hóa CI/CD Với GitHub Actions (Cloud Build & SSH Deploy)
 
-Tích hợp Runner trực tiếp trên máy chủ để tự động cập nhật Backend mỗi khi Push code:
+Dự án áp dụng mô hình CI/CD tiêu chuẩn công nghiệp: Biên dịch trên GitHub Cloud và tự động triển khai qua SSH để **máy chủ luôn nhẹ 100% không tốn CPU/RAM để compile**:
 
-```bash
-sudo bash bootstrap.sh --service=all --profile=mini --gh-token="YOUR_GITHUB_RUNNER_TOKEN"
-```
-- Khi truyền `--gh-token`, script sẽ tự động tải runner, đăng ký và cài đặt thành **Systemd Service** chạy ngầm vĩnh viễn trên VPS.
-- Từ các lần cập nhật tiếp theo, chỉ cần `git push` là GitHub Actions sẽ tự build và deploy không cần SSH vào server.
+1. **Thêm 3 Secret trong GitHub Repo Settings** (`Settings -> Secrets and variables -> Actions`):
+   - `SERVER_HOST`: IP máy chủ triển khai (ví dụ `35.208.238.32`).
+   - `SERVER_USER`: Username SSH của máy chủ (ví dụ `sowfkun`).
+   - `SSH_PRIVATE_KEY`: Toàn bộ nội dung OpenSSH Private Key để đăng nhập vào máy chủ.
+
+2. **Luồng Triển Khai Tự Động**:
+   - Khi `git push origin dev`: GitHub Cloud Runner (`ubuntu-latest`) tự động biên dịch Go binary siêu tốc (5s), nạp sang máy chủ qua SCP và kích hoạt `docker compose up -d api` an toàn trong 2 giây.
+   - Khi phát hành Production trên `master`: Vào tab Actions, chọn **Manual Deploy Production API**, gõ chữ `DEPLOY` để xác nhận release an toàn.
 

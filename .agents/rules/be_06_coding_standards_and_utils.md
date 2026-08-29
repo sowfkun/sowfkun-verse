@@ -13,6 +13,7 @@ trigger: always_on
 ## 2. Quản lý Constants, Cấu hình & Utils
 - **Cấu hình & Biến môi trường (Environment Variables)**: Tuyệt đối **không được hardcode** các thông tin kết nối (Connection URLs, Port), thông tin nhạy cảm (API Keys, Secrets, Passwords) trong source code. Bắt buộc phải inject thông qua biến môi trường (`.env`, env vars) hoặc các trình quản lý config (VD: `Viper`).
   - **Đồng bộ đặt tên (Naming Consistency):** Khi khai báo các biến môi trường cho cùng một hệ thống hạ tầng (Infrastructure) cụ thể, bắt buộc phải đồng bộ prefix/suffix theo mục đích sử dụng. Ví dụ: Nếu là Redis dùng cho "general", các biến phải được đặt tên đồng nhất như `REDIS_GENERAL_URL`. Tuyệt đối không đặt tên lộn xộn, thiếu tính liên kết.
+  - **Chuẩn hóa Giá trị 1 Dòng (Single-line .env Values):** Tuyệt đối **KHÔNG** để các giá trị đa dòng (multi-line) như RSA Key, Private Key, Certificate ngắt dòng trực tiếp trong file `.env` vì Docker Compose và trình nạp biến môi trường sẽ bị lỗi cắt cụt chuỗi hoặc lỗi cú pháp (`unexpected character`). Mọi giá trị Key/Certificate trong `.env` **BẮT BUỘC** phải được mã hóa thành chuỗi Base64 trên **1 dòng duy nhất** (Single-line Compact Base64).
 - **Constants (Hằng số tĩnh)**:
   - Domain-specific (ví dụ: Enum trạng thái đơn hàng): Đặt ngay bên trong package của lớp `Domain` tương ứng.
   - System-wide (ví dụ: HTTP Status Codes đặc chế, mã lỗi chung): Đặt tại `pkg/constant/`.

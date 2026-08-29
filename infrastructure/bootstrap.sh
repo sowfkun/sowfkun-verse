@@ -17,8 +17,6 @@ SERVICE_INPUT=""
 PROFILE_INPUT=""
 API_MODE_INPUT=""
 API_MODE="binary"
-GITHUB_RUNNER_TOKEN=""
-GITHUB_REPO="https://github.com/sowfkun/sowfkun-verse"
 MODE="fresh"
 PROFILE="standard"
 SWAP_SIZE_GB=2
@@ -31,14 +29,10 @@ while [[ "$#" -gt 0 ]]; do
         --service=*|--services=*) SERVICE_INPUT="${1#*=}" ;;
         --profile=*|--prof=*) PROFILE_INPUT="${1#*=}" ;;
         --api-mode=*|--api-type=*) API_MODE_INPUT="${1#*=}" ;;
-        --github-token=*|--gh-token=*|--github-runner-token=*) GITHUB_RUNNER_TOKEN="${1#*=}" ;;
-        --github-repo=*|--gh-repo=*) GITHUB_REPO="${1#*=}" ;;
         --mode=*) MODE="${1#*=}" ;;
         -s|--service|--services) SERVICE_INPUT="$2"; shift ;;
         -p|--profile|--prof) PROFILE_INPUT="$2"; shift ;;
         --api-mode|--api-type) API_MODE_INPUT="$2"; shift ;;
-        --gh-token|--github-token) GITHUB_RUNNER_TOKEN="$2"; shift ;;
-        --gh-repo|--github-repo) GITHUB_REPO="$2"; shift ;;
         -m|--mode) MODE="$2"; shift ;;
         -i|--interactive) SERVICE_INPUT="interactive" ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -120,17 +114,6 @@ interactive_menu() {
             2|source|Source) API_MODE="source" ;;
             *) API_MODE="binary" ;;
         esac
-    fi
-
-    # Cấu hình GitHub Actions Runner nếu có
-    if [[ -z "$GITHUB_RUNNER_TOKEN" ]]; then
-        echo "================================================================="
-        echo "🤖 TỰ ĐỘNG HÓA CI/CD VỚI GITHUB ACTIONS RUNNER"
-        echo "================================================================="
-        read -r -p "👉 Nhập GitHub Runner Registration Token (Nhấn Enter để bỏ qua): " gh_token_input
-        if [[ -n "$gh_token_input" ]]; then
-            GITHUB_RUNNER_TOKEN="$gh_token_input"
-        fi
     fi
 }
 
@@ -472,134 +455,6 @@ start_services() {
     # Đảm bảo Docker Network tồn tại trước khi compose up
     docker network create "$APP_NETWORK" 2>/dev/null || true
 
-    set_env_kv() {
-        local env_file="$1"
-        local key="$2"
-        local val="$3"
-        if grep -q "^${key}=" "$env_file" 2>/dev/null; then
-            sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
-        else
-            echo "${key}=${val}" >> "$env_file"
-        fi
-    }
-
-    apply_profile_to_target() {
-        local target=$1
-        local env_file="$BASE_DIR/$target/.env"
-        
-        if [ ! -f "$env_file" ]; then
-            return 0
-        fi
-
-        echo "⚙️ Tinh chỉnh thông số [$PROFILE] cho $target..."
-        case "$target" in
-            mongo)
-                case "$PROFILE" in
-                    mini)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "850M" ;;
-                    huge)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "2560M" ;;
-                    standard) set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "1200M" ;;
-                esac
-                ;;
-            redis)
-                case "$PROFILE" in
-                    mini)
-                        set_env_kv "$env_file" "REDIS_MAX_MEMORY" "128mb"
-                        set_env_kv "$env_file" "REDIS_CONTAINER_MEMORY_LIMIT" "200M"
-                        ;;
-                    huge)
-                        set_env_kv "$env_file" "REDIS_MAX_MEMORY" "1536mb"
-                        set_env_kv "$env_file" "REDIS_CONTAINER_MEMORY_LIMIT" "2048M"
-                        ;;
-                    standard)
-                        set_env_kv "$env_file" "REDIS_MAX_MEMORY" "512mb"
-                        set_env_kv "$env_file" "REDIS_CONTAINER_MEMORY_LIMIT" "600M"
-                        ;;
-                esac
-                ;;
-            kafka)
-                case "$PROFILE" in
-                    mini)
-                        set_env_kv "$env_file" "REDPANDA_SMP" "1"
-                        set_env_kv "$env_file" "REDPANDA_MEMORY" "256M"
-                        set_env_kv "$env_file" "REDPANDA_CONTAINER_MEMORY_LIMIT" "380M"
-                        set_env_kv "$env_file" "CONSOLE_CONTAINER_MEMORY_LIMIT" "100M"
-                        ;;
-                    huge)
-                        set_env_kv "$env_file" "REDPANDA_SMP" "2"
-                        set_env_kv "$env_file" "REDPANDA_MEMORY" "1536M"
-                        set_env_kv "$env_file" "REDPANDA_CONTAINER_MEMORY_LIMIT" "2048M"
-                        set_env_kv "$env_file" "CONSOLE_CONTAINER_MEMORY_LIMIT" "256M"
-                        ;;
-                    standard)
-                        set_env_kv "$env_file" "REDPANDA_SMP" "1"
-                        set_env_kv "$env_file" "REDPANDA_MEMORY" "512M"
-                        set_env_kv "$env_file" "REDPANDA_CONTAINER_MEMORY_LIMIT" "600M"
-                        set_env_kv "$env_file" "CONSOLE_CONTAINER_MEMORY_LIMIT" "150M"
-                        ;;
-                esac
-                ;;
-            opensearch)
-                case "$PROFILE" in
-                    mini)
-                        set_env_kv "$env_file" "OPENSEARCH_JVM_HEAP" "\"-Xms256m -Xmx256m\""
-                        set_env_kv "$env_file" "OPENSEARCH_CONTAINER_MEMORY_LIMIT" "450M"
-                        ;;
-                    huge)
-                        set_env_kv "$env_file" "OPENSEARCH_JVM_HEAP" "\"-Xms1536m -Xmx1536m\""
-                        set_env_kv "$env_file" "OPENSEARCH_CONTAINER_MEMORY_LIMIT" "2048M"
-                        ;;
-                    standard)
-                        set_env_kv "$env_file" "OPENSEARCH_JVM_HEAP" "\"-Xms384m -Xmx384m\""
-                        set_env_kv "$env_file" "OPENSEARCH_CONTAINER_MEMORY_LIMIT" "650M"
-                        ;;
-                esac
-                ;;
-            api)
-                case "$PROFILE" in
-                    mini)
-                        set_env_kv "$env_file" "API_CONTAINER_MEMORY_LIMIT" "200M"
-                        set_env_kv "$env_file" "MONGO_MAX_POOL_SIZE" "15"
-                        set_env_kv "$env_file" "MONGO_MIN_POOL_SIZE" "2"
-                        set_env_kv "$env_file" "REDIS_GENERAL_POOL_SIZE" "15"
-                        set_env_kv "$env_file" "REDIS_GENERAL_MIN_IDLE_CONNS" "2"
-                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS" "20"
-                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS_PER_HOST" "5"
-                        set_env_kv "$env_file" "ASYNQ_WORKER_CONCURRENCY" "3"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_BYTES" "65536"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_SIZE" "200"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_TIMEOUT_MS" "20"
-                        ;;
-                    huge)
-                        set_env_kv "$env_file" "API_CONTAINER_MEMORY_LIMIT" "1024M"
-                        set_env_kv "$env_file" "MONGO_MAX_POOL_SIZE" "150"
-                        set_env_kv "$env_file" "MONGO_MIN_POOL_SIZE" "15"
-                        set_env_kv "$env_file" "REDIS_GENERAL_POOL_SIZE" "150"
-                        set_env_kv "$env_file" "REDIS_GENERAL_MIN_IDLE_CONNS" "15"
-                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS" "200"
-                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS_PER_HOST" "50"
-                        set_env_kv "$env_file" "ASYNQ_WORKER_CONCURRENCY" "20"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_BYTES" "1048576"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_SIZE" "1000"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_TIMEOUT_MS" "5"
-                        ;;
-                    standard)
-                        set_env_kv "$env_file" "API_CONTAINER_MEMORY_LIMIT" "400M"
-                        set_env_kv "$env_file" "MONGO_MAX_POOL_SIZE" "50"
-                        set_env_kv "$env_file" "MONGO_MIN_POOL_SIZE" "5"
-                        set_env_kv "$env_file" "REDIS_GENERAL_POOL_SIZE" "50"
-                        set_env_kv "$env_file" "REDIS_GENERAL_MIN_IDLE_CONNS" "5"
-                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS" "50"
-                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS_PER_HOST" "10"
-                        set_env_kv "$env_file" "ASYNQ_WORKER_CONCURRENCY" "10"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_BYTES" "524288"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_SIZE" "500"
-                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_TIMEOUT_MS" "10"
-                        ;;
-                esac
-                ;;
-        esac
-    }
-
     start_target() {
         local target=$1
         local target_dir="$BASE_DIR/$target"
@@ -623,19 +478,16 @@ start_services() {
             chmod -R 777 data 2>/dev/null || true
         fi
 
-        # Tự động tạo .env từ .env.$PROFILE hoặc .env.example nếu chưa có
+        # Tự động nạp cấu hình Profile từ .env.$PROFILE tương ứng
         if [ ! -f .env ]; then
             if [ -f ".env.$PROFILE" ]; then
                 echo "📄 Tạo file .env từ .env.$PROFILE (Profile: $PROFILE) cho $target..."
                 cp ".env.$PROFILE" .env
-            elif [ -f .env.example ]; then
-                echo "📄 Tạo file .env từ .env.example cho $target..."
-                cp .env.example .env
+            elif [ -f .env.standard ]; then
+                echo "📄 Tạo file .env từ .env.standard cho $target..."
+                cp .env.standard .env
             fi
         fi
-
-        # Áp dụng cấu hình Profile
-        apply_profile_to_target "$target"
 
         if [ "$MODE" == "rollback" ]; then
             echo "🔄 Rollback mode: Resetting and restarting containers for $target..."
@@ -705,68 +557,10 @@ start_services() {
     done
 }
 
-# 10. SETUP GITHUB ACTIONS SELF-HOSTED RUNNER (Optional)
-setup_github_runner() {
-    if [[ -z "$GITHUB_RUNNER_TOKEN" ]]; then
-        echo "ℹ️ Bỏ qua cài đặt GitHub Actions Self-Hosted Runner (không cung cấp token)."
-        return 0
-    fi
-
-    echo "================================================================="
-    echo "🤖 [10/10] Đang cài đặt & cấu hình GitHub Actions Self-Hosted Runner..."
-    echo "================================================================="
-
-    local runner_user="${SUDO_USER:-$USER}"
-    if [ "$runner_user" == "root" ]; then
-        local found_user=$(awk -F: '$3 >= 1000 && $3 < 60000 {print $1; exit}' /etc/passwd)
-        if [ -n "$found_user" ]; then
-            runner_user="$found_user"
-        fi
-    fi
-
-    local user_home=$(eval echo "~$runner_user")
-    local runner_dir="$user_home/actions-runner"
-
-    mkdir -p "$runner_dir"
-    cd "$runner_dir"
-
-    # Tải runner nếu chưa có
-    if [ ! -f ./config.sh ]; then
-        echo "📥 Đang tải GitHub Actions Runner package..."
-        curl -o actions-runner-linux-x64-2.322.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.322.0/actions-runner-linux-x64-2.322.0.tar.gz
-        tar xzf ./actions-runner-linux-x64-2.322.0.tar.gz
-        rm -f actions-runner-linux-x64-2.322.0.tar.gz
-    fi
-
-    chown -R "$runner_user:$runner_user" "$runner_dir"
-
-    echo "⚙️ Đang cấu hình GitHub Runner cho repository: $GITHUB_REPO..."
-    sudo -u "$runner_user" ./config.sh --url "$GITHUB_REPO" --token "$GITHUB_RUNNER_TOKEN" --name "$(hostname)-runner" --labels self-hosted,linux,x64 --unattended --replace
-
-    # Cài đặt service systemd chạy nền
-    echo "🚀 Đang cài đặt Runner dưới dạng Systemd Daemon Service..."
-    ./svc.sh install "$runner_user" 2>/dev/null || true
-    ./svc.sh start 2>/dev/null || true
-
-    echo "✅ GitHub Actions Self-Hosted Runner đã được cài đặt và đang chạy ngầm thành công!"
-}
-
-# Thực thi theo luồng
-setup_time_sync
-setup_swap
-tune_kernel
-if [ "$MODE" == "fresh" ]; then
-    debloat_os
-    install_docker
-    setup_security
-    harden_ssh
-    setup_monitoring_and_maintenance
-else
     # Rollback mode: vẫn đảm bảo docker network tồn tại
     docker network create "$APP_NETWORK" 2>/dev/null || true
 fi
 start_services
-setup_github_runner
 
 echo "================================================================="
 echo "🎉 HOÀN TẤT CÀI ĐẶT & GIA CỐ BẢO MẬT CÁC DỊCH VỤ: [ $SERVICES_DISPLAY ]!"
