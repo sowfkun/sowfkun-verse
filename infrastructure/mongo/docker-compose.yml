@@ -2,6 +2,7 @@ services:
   mongo:
     image: mongodb/mongodb-atlas-local:latest
     container_name: ${MONGO_CONTAINER_NAME:-app_mongo}
+    hostname: ${MONGO_CONTAINER_HOSTNAME:-app_mongo}
     restart: unless-stopped
     ports:
       - "${MONGO_PORT:-27017}:27017"
@@ -16,7 +17,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${MONGO_CONTAINER_MEMORY_LIMIT:-750M}
+          memory: ${MONGO_CONTAINER_MEMORY_LIMIT:-850M}
 
 volumes:
   mongo_data:
@@ -26,5 +27,3 @@ networks:
   default:
     name: ${APP_NETWORK:-app_net}
     external: true
-
-

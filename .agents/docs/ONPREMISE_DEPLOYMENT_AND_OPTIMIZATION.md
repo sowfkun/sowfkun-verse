@@ -60,6 +60,7 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
   - `secondary1`: Lưu trữ DB phụ trợ (`logging`).
 - **Connection Pool**: Nạp động qua `MONGO_MAX_POOL_SIZE`, `MONGO_MIN_POOL_SIZE`, `MONGO_MAX_CONN_IDLE_TIME_MS`.
 - **WiredTiger Engine Cache**: Cấu hình 50% RAM máy chủ cho MongoDB cache trên các profile `standard` và `huge`.
+- **Replica Set & Change Streams (Advertised Host)**: Cấu hình `MONGO_ADVERTISED_HOST` (IP Public hoặc Private VPC của node) trong `.env`. Script `init_replica.sh` tự động cấu hình node thành viên Replica Set tương ứng để Change Streams (`Watch()`) hoạt động thông suốt.
 
 ---
 
@@ -74,9 +75,10 @@ Khi chuẩn bị đóng gói và triển khai sản phẩm lên hạ tầng On-P
   - `OPENSEARCH_CONTAINER_NAME`, `OPENSEARCH_CLUSTER_NAME`
 - [ ] **IP & Domain nội bộ doanh nghiệp:**
   - `API_PORT`, `API_HOST`, `CORS_ALLOWED_ORIGINS` (cập nhật dải domain/IP nội bộ khách hàng).
+  - `MONGO_ADVERTISED_HOST`: Điền IP mạng LAN / Private VPC của node MongoDB để Replica Set và Change Streams kết nối đúng.
   - `REDPANDA_ADVERTISED_HOST`: Điền IP mạng LAN / Private VPC của node Kafka.
 - [ ] **Connection Strings:** Cập nhật trỏ tới các node/cluster nội bộ:
-  - `MONGO_*_URI`: Cập nhật user/pass, IP/Host và `authSource=admin`.
+  - `MONGO_*_URI`: Cập nhật user/pass, IP/Host và `authSource=admin` (kèm `?directConnection=true`).
   - `REDIS_*_URL`: Cập nhật mật khẩu và IP node Redis.
   - `KAFKA_*_BROKERS`: Cập nhật dải IP:Port broker.
   - `OPENSEARCH_*_URL`: Cập nhật URL node OpenSearch.

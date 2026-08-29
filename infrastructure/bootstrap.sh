@@ -495,9 +495,9 @@ start_services() {
         case "$target" in
             mongo)
                 case "$PROFILE" in
-                    mini)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "400M" ;;
+                    mini)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "850M" ;;
                     huge)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "2560M" ;;
-                    standard) set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "750M" ;;
+                    standard) set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "1200M" ;;
                 esac
                 ;;
             redis)
@@ -687,6 +687,12 @@ start_services() {
         else
             echo "🚀 Đang kéo images và chạy $target container..."
             docker compose up -d
+            
+            if [ "$target" == "mongo" ] && [ -f "$target_dir/init_replica.sh" ]; then
+                echo "⚙️ Tự động cấu hình MongoDB Replica Set Advertised Host..."
+                chmod +x "$target_dir/init_replica.sh" 2>/dev/null || true
+                "$target_dir/init_replica.sh" || true
+            fi
         fi
         docker compose ps
     }
