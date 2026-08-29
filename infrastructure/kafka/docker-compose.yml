@@ -13,10 +13,9 @@ services:
       - --node-id=0
       - --check=false
       - --kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
-      - --advertise-kafka-addr=PLAINTEXT://0.0.0.0:9092,OUTSIDE://${REDPANDA_ADVERTISED_HOST:-127.0.0.1}:9094
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092,OUTSIDE://${REDPANDA_ADVERTISED_HOST:-127.0.0.1}:9094
       - --pandaproxy-addr=0.0.0.0:8082
       - --schema-registry-addr=0.0.0.0:8081
-      - --admin-addr=0.0.0.0:9644
     ports:
       - "${KAFKA_PORT:-9092}:9092"
       - "${KAFKA_OUTSIDE_PORT:-9094}:9094"
@@ -52,7 +51,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 150M
+          memory: ${CONSOLE_CONTAINER_MEMORY_LIMIT:-150M}
 
 networks:
   default:

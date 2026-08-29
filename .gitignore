@@ -6,3 +6,8 @@ tmp/
 .idea
 *.pem
 sowfkun-verse.pem
+server-test/
+app-api
+infrastructure/api/app-api
+*.tar.gz
+*.zip

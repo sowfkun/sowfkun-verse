@@ -56,43 +56,39 @@ Lưu trữ các tài nguyên tĩnh hoặc cấu hình vận hành nội bộ c�
 
 ## 2. Redis (Cache, Rate Limit & Job Queue)
 
-Dự án chia nhỏ Redis thành 4 cụm độc lập (logical connections) để tối ưu hiệu suất, tránh tắc nghẽn Pool:
+Dự án chuẩn hóa Redis thành **2 cụm kết nối độc lập** để tối ưu hóa quản lý tài nguyên và kết nối:
 
 | Tên biến cấu hình | Cụm/Mục đích | Key Pattern | Nghiệp vụ cụ thể | TTL / Cách dọn dẹp |
 | :--- | :--- | :--- | :--- | :--- |
-| `REDIS_GENERAL_URL` | **General Cache** | `mail_quota:{apiKeyHash}:{date}` | Tracking quota (số lượng) email gửi đi trong ngày của từng API key để chống spam. | Tự hết hạn sau 24h |
-| `REDIS_GATEWAY_URL` | **Gateway Redis** | `session:{sessionID}` | Lưu trữ AES Session Key giải mã payload E2EE (Hybrid Encryption). | 30 phút - 1 giờ |
+| `REDIS_GENERAL1_URL` | **General Cluster (DB 0)** | `mail_quota:{apiKeyHash}:{date}` | Tracking quota email gửi đi trong ngày để chống spam. | Tự hết hạn sau 24h |
+| | | `session:{sessionID}` | Lưu trữ AES Session Key giải mã payload E2EE (Hybrid Encryption). | 30 phút - 1 giờ |
 | | | `rate_limit:{path}:{ip}:tokens` | Theo dõi token bucket để giới hạn số request/phút của mỗi IP. | Tự hết hạn ngắn |
-| | | `rate_limit:{path}:{ip}:ts` | Lưu timestamp của request cuối cùng phục vụ thuật toán Token Bucket. | Tự hết hạn ngắn |
-| `REDIS_JOB_URL` | **Asynq Task Queue** | `asynq:*` | Quản lý hàng đợi công việc nền chạy bất đồng bộ (Background Jobs) thông qua thư viện Asynq. | Quản lý tự động bởi Asynq |
-| `REDIS_AGENT_BUSINESS_URL` | **Agent Business** | `role:profile:{roleID}` | Cache thông tin chi tiết quyền hạn của một Role. | 24 giờ. Bị xóa chủ động khi Role được cập nhật qua Kafka. |
-| | | `user:acc_users:{userID}:{permission}` | Cache danh sách IDs các user cấp dưới/cùng bộ phận mà user hiện tại có quyền truy cập. | 24 giờ. Bị xóa hàng loạt khi User đổi phân cấp/chức vụ qua Kafka. |
-| | | `user:activation:{token}` | Cache token tạm thời khi mời nhân viên mới làm việc. | 24 giờ. Xóa ngay khi kích hoạt xong. |
-| | | `user:online:{userID}` | Lưu trạng thái online của user phục vụ websocket ping/pong và kiểm tra trạng thái online. | 120 giây (tự động gia hạn bởi sự kiện CLIENT_PING hoặc nhận Pong). |
+| | | `rate_limit:{path}:{ip}:ts` | Lưu timestamp của request cuối cùng phục vụ Token Bucket. | Tự hết hạn ngắn |
+| | | `role:profile:{roleID}` | Cache thông tin chi tiết quyền hạn của một Role. | 24 giờ. Xóa khi Role cập nhật qua Kafka. |
+| | | `user:acc_users:{userID}:{permission}` | Cache danh sách IDs users cấp dưới/cùng bộ phận có quyền truy cập. | 24 giờ. Xóa khi User/Role cập nhật qua Kafka. |
+| | | `user:activation:{token}` | Cache token tạm thời khi mời nhân viên mới. | 24 giờ. Xóa khi kích hoạt. |
+| | | `user:online:{userID}` | Lưu trạng thái online của user phục vụ websocket ping/pong. | 10 phút (gia hạn bởi ping). |
+| `REDIS_JOB1_URL` | **Asynq Task Queue (DB 2)** | `asynq:*` | Quản lý hàng đợi công việc nền chạy bất đồng bộ (Background Jobs) thông qua thư viện Asynq. | Quản lý tự động bởi Asynq |
 
 ---
 
-## 3. Apache Kafka (Event-Driven Broker)
+## 3. Apache Kafka / Redpanda (Event-Driven Broker)
 
-Hệ thống sử dụng **3 cụm Kafka vật lý độc lập** để tách biệt luồng xử lý nghiệp vụ thông thường, luồng truyền tin socket thời gian thực và luồng đồng bộ trạng thái thực thể tải cao:
+Hệ thống sử dụng **2 cụm Kafka / Redpanda độc lập** (kết nối Plaintext TCP self-hosted):
 
 ### 3.1. Cụm 1: General Kafka Cluster 1 (`KAFKA_GENERAL1_BROKERS`)
-*   *Mục đích:* Trao đổi sự kiện nội bộ giữa các module nghiệp vụ (bất đồng bộ hóa các tác vụ gửi email, logging, hoặc job nền).
+*   *Mục đích:* Trao đổi sự kiện nội bộ giữa các module nghiệp vụ, logging, batch processing, và phân phối WebSocket realtime.
 *   *Các Topics:*
     *   `low-traffics-order-progress` (FIFO per Key): Xử lý các sự kiện yêu cầu độ tuần tự chính xác cao, lưu lượng thấp.
     *   `single-parallel-progress` (Parallel High-throughput): Xử lý các sự kiện song song hiệu suất cao, không yêu cầu chặt chẽ về thứ tự.
-    *   `batch-progress` (Batching): Gom nhóm sự kiện (tối đa 50 tin nhắn hoặc 2 giây timeout) để xử lý hàng loạt nhằm giảm tải database/API ngoài.
+    *   `batch-progress` (Batching): Gom nhóm sự kiện (tối đa 50 tin nhắn hoặc 2 giây timeout) để xử lý hàng loạt nhằm giảm tải database/OpenSearch.
+    *   `send-socket-progress` (FIFO per Key - Ordered): Chiều Server phát tin xuống Client. Đồng bộ trạng thái và nội dung tin nhắn socket trên toàn hệ thống đa server.
+    *   `receive-socket-progress` (FIFO per Key - Ordered): Chiều Client gửi tin lên Server. Thu nhận các sự kiện như ping/heartbeat để đưa lên Kafka xử lý bất đồng bộ.
 
-### 3.2. Cụm 2: General Kafka Cluster 2 (`KAFKA_GENERAL2_BROKERS`)
-*   *Mục đích:* Xử lý các sự kiện truyền thông tin thời gian thực qua socket (realtime socket progress synchronization).
+### 3.2. Cụm 2: Entity Sync Kafka Cluster 1 (`KAFKA_ENTITY_SYNC1_BROKERS`)
+*   *Mục đích:* Truyền tải luồng thay đổi dữ liệu thời gian thực (CDC - Change Data Capture) từ MongoDB phục vụ việc cập nhật `SyncMeta` và dọn dẹp cache.
 *   *Các Topics:*
-    *   `send-socket-progress` (FIFO per Key - Ordered): Chiều Server phát tin xuống Client. Đồng bộ trạng thái và nội dung tin nhắn socket trên toàn hệ thống đa server, đảm bảo thứ tự gói tin theo trình tự thời gian.
-    *   `receive-socket-progress` (FIFO per Key - Ordered): Chiều Client gửi tin lên Server. Thu nhận các sự kiện như ping/heartbeat hoặc các action từ client đẩy qua socket để đưa lên Kafka xử lý nghiệp vụ bất đồng bộ.
-
-### 3.3. Cụm 3: Entity Sync Kafka Cluster (`KAFKA_ENTITY_SYNC_BROKERS`)
-*   *Mục đích:* Truyền tải luồng thay đổi dữ liệu thời gian thực (CDC - Change Data Capture) từ MongoDB phục vụ việc cập nhật và dọn dẹp cache.
-*   *Các Topics:*
-    *   `low-entity-sync-order-progress`: Nơi `ChangeStreamWatcher` đẩy các sự kiện thay đổi dữ liệu từ MongoDB `tenant1`.
+    *   `low-entity-sync-order-progress`: Nơi `ChangeStreamWatcher` đẩy các sự kiện thay đổi dữ liệu từ MongoDB.
 
 ```mermaid
 graph TD
@@ -100,15 +96,12 @@ graph TD
         A[ChangeStreamWatcher]
     end
     
-    subgraph Entity Sync Kafka Cluster
+    subgraph Entity Sync Kafka Cluster 1
         TopicSync[Topic: low-entity-sync-order-progress]
     end
 
     subgraph General Kafka Cluster 1
         TopicGeneral[Topic: single-parallel-progress / batch-progress]
-    end
-
-    subgraph General Kafka Cluster 2
         TopicSend[Topic: send-socket-progress]
         TopicReceive[Topic: receive-socket-progress]
     end
@@ -132,7 +125,7 @@ graph TD
     TopicSend -->|Consume| SocketSendConsumer
     ClientWS[Client WebSocket] -->|Relay client ping/msg| TopicReceive
     TopicReceive -->|Consume| SocketReceiveConsumer
-    SocketReceiveConsumer -->|Update user online status| Redis[Redis Agent Business]
+    SocketReceiveConsumer -->|Update user online status| Redis[Redis General 1 DB 0]
 ```
 
 ### 3.4. Ánh xạ Event & MQ Handlers

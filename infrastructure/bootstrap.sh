@@ -4,16 +4,23 @@ set -eo pipefail
 # ==============================================================================
 # ENTERPRISE INFRASTRUCTURE BOOTSTRAP SCRIPT (Ubuntu 24.04 LTS)
 # Supports: Redpanda (Kafka), Redis, MongoDB (Atlas Local), OpenSearch, Go API
+# Resource Profiles: mini (1-2GB RAM), standard (2-4GB RAM), huge (4-8GB+ RAM)
 # Usage:
-#   sudo bash bootstrap.sh --service=redis --mode=fresh
-#   sudo bash bootstrap.sh --service=redis,api --mode=fresh
-#   sudo bash bootstrap.sh --services=mongo,redis,kafka --mode=fresh
-#   sudo bash bootstrap.sh --service=all --mode=fresh
+#   sudo bash bootstrap.sh --service=redis --profile=mini --mode=fresh
+#   sudo bash bootstrap.sh --service=redis,api --profile=mini --mode=fresh
+#   sudo bash bootstrap.sh --services=mongo,redis,kafka --profile=huge --mode=fresh
+#   sudo bash bootstrap.sh --service=all --profile=mini --mode=fresh
 #   sudo bash bootstrap.sh (Interactive Multi-Select Menu)
 # ==============================================================================
 
 SERVICE_INPUT=""
+PROFILE_INPUT=""
+API_MODE_INPUT=""
+API_MODE="binary"
+GITHUB_RUNNER_TOKEN=""
+GITHUB_REPO="https://github.com/sowfkun/sowfkun-verse"
 MODE="fresh"
+PROFILE="standard"
 SWAP_SIZE_GB=2
 APP_NETWORK="app_net"
 SELECTED_SERVICES=()
@@ -22,8 +29,16 @@ SELECTED_SERVICES=()
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --service=*|--services=*) SERVICE_INPUT="${1#*=}" ;;
+        --profile=*|--prof=*) PROFILE_INPUT="${1#*=}" ;;
+        --api-mode=*|--api-type=*) API_MODE_INPUT="${1#*=}" ;;
+        --github-token=*|--gh-token=*|--github-runner-token=*) GITHUB_RUNNER_TOKEN="${1#*=}" ;;
+        --github-repo=*|--gh-repo=*) GITHUB_REPO="${1#*=}" ;;
         --mode=*) MODE="${1#*=}" ;;
         -s|--service|--services) SERVICE_INPUT="$2"; shift ;;
+        -p|--profile|--prof) PROFILE_INPUT="$2"; shift ;;
+        --api-mode|--api-type) API_MODE_INPUT="$2"; shift ;;
+        --gh-token|--github-token) GITHUB_RUNNER_TOKEN="$2"; shift ;;
+        --gh-repo|--github-repo) GITHUB_REPO="$2"; shift ;;
         -m|--mode) MODE="$2"; shift ;;
         -i|--interactive) SERVICE_INPUT="interactive" ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -69,6 +84,54 @@ interactive_menu() {
             *) echo "⚠️ Bỏ qua lựa chọn không hợp lệ: $choice" ;;
         esac
     done
+
+    # Chọn Resource Profile
+    if [[ -z "$PROFILE_INPUT" ]]; then
+        echo "================================================================="
+        echo "⚙️ CHỌN HỒ SƠ TẢI TRỌNG (RESOURCE PROFILE)"
+        echo "================================================================="
+        echo "  1) Mini     (VPS 1-2GB RAM / Test GCP Free / Swap 4GB / Tiết kiệm RAM tối đa)"
+        echo "  2) Standard (VPS 2-4GB RAM / Cân đối tài nguyên & hiệu năng)"
+        echo "  3) Huge     (Server 4-8 Cores, 4-8GB+ RAM / Tối đa hiệu năng cho Production)"
+        echo "================================================================="
+        read -r -p "👉 Nhập lựa chọn Profile [1-3] (Mặc định: 1 - Mini): " profile_choice
+        case "$profile_choice" in
+            2|standard|Standard) PROFILE="standard" ;;
+            3|huge|Huge) PROFILE="huge" ;;
+            *) PROFILE="mini" ;;
+        esac
+    fi
+
+    # Kiểm tra nếu có service api được chọn thì hỏi API Mode
+    local has_api=false
+    for s in "${SELECTED_SERVICES[@]}"; do
+        if [ "$s" == "api" ]; then has_api=true; break; fi
+    done
+
+    if [ "$has_api" = true ] && [ -z "$API_MODE_INPUT" ]; then
+        echo "================================================================="
+        echo "📦 CHỌN PHƯƠNG THỨC TRIỂN KHAI GO API BACKEND"
+        echo "================================================================="
+        echo "  1) Binary (On-Premise: Chạy từ file thực thi app-api có sẵn)"
+        echo "  2) Source (Build từ mã nguồn Go sowfkun-verse-api)"
+        echo "================================================================="
+        read -r -p "👉 Nhập lựa chọn [1-2] (Mặc định: 1 - Binary): " api_choice
+        case "$api_choice" in
+            2|source|Source) API_MODE="source" ;;
+            *) API_MODE="binary" ;;
+        esac
+    fi
+
+    # Cấu hình GitHub Actions Runner nếu có
+    if [[ -z "$GITHUB_RUNNER_TOKEN" ]]; then
+        echo "================================================================="
+        echo "🤖 TỰ ĐỘNG HÓA CI/CD VỚI GITHUB ACTIONS RUNNER"
+        echo "================================================================="
+        read -r -p "👉 Nhập GitHub Runner Registration Token (Nhấn Enter để bỏ qua): " gh_token_input
+        if [[ -n "$gh_token_input" ]]; then
+            GITHUB_RUNNER_TOKEN="$gh_token_input"
+        fi
+    fi
 }
 
 # Parse danh sách service từ CLI input
@@ -92,6 +155,31 @@ else
     done
 fi
 
+# Xử lý Profile nếu được truyền qua CLI
+if [[ -n "$PROFILE_INPUT" ]]; then
+    case "$PROFILE_INPUT" in
+        mini|Mini|MINI) PROFILE="mini" ;;
+        huge|Huge|HUGE) PROFILE="huge" ;;
+        standard|Standard|STANDARD) PROFILE="standard" ;;
+        *)
+            echo "⚠️ Profile '$PROFILE_INPUT' không hợp lệ (hợp lệ: mini, standard, huge). Sử dụng mặc định: standard."
+            PROFILE="standard"
+            ;;
+    esac
+fi
+
+# Xử lý API Mode nếu được truyền qua CLI
+if [[ -n "$API_MODE_INPUT" ]]; then
+    case "$API_MODE_INPUT" in
+        source|Source|src) API_MODE="source" ;;
+        binary|Binary|bin) API_MODE="binary" ;;
+        *)
+            echo "⚠️ API Mode '$API_MODE_INPUT' không hợp lệ (hợp lệ: binary, source). Mặc định sử dụng: binary."
+            API_MODE="binary"
+            ;;
+    esac
+fi
+
 # Loại bỏ trùng lặp trong mảng SELECTED_SERVICES
 SELECTED_SERVICES=($(echo "${SELECTED_SERVICES[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
 
@@ -100,16 +188,31 @@ if [[ ${#SELECTED_SERVICES[@]} -eq 0 ]]; then
     exit 1
 fi
 
-# Tự động tăng Swap nếu chạy từ 3 service trở lên trên cùng 1 VPS
-if [[ ${#SELECTED_SERVICES[@]} -ge 3 ]]; then
-    SWAP_SIZE_GB=4
-fi
+# Cấu hình Swap và tài nguyên theo Profile
+case "$PROFILE" in
+    mini)
+        SWAP_SIZE_GB=4
+        ;;
+    huge)
+        SWAP_SIZE_GB=2
+        if [[ ${#SELECTED_SERVICES[@]} -ge 3 ]]; then
+            SWAP_SIZE_GB=4
+        fi
+        ;;
+    standard)
+        SWAP_SIZE_GB=2
+        if [[ ${#SELECTED_SERVICES[@]} -ge 3 ]]; then
+            SWAP_SIZE_GB=4
+        fi
+        ;;
+esac
 
 SERVICES_DISPLAY=$(IFS=', '; echo "${SELECTED_SERVICES[*]}")
 
 echo "================================================================="
 echo "🚀 ENTERPRISE INFRA PROVISIONING & PRODUCTION HARDENING"
 echo "👉 Target Services : [ $SERVICES_DISPLAY ]"
+echo "👉 Resource Profile: [ $PROFILE ]"
 echo "👉 Mode            : $MODE"
 echo "👉 Swap Size Guard : ${SWAP_SIZE_GB} GB"
 echo "👉 Docker Network  : $APP_NETWORK"
@@ -239,12 +342,22 @@ install_docker() {
 }
 EOF
         systemctl enable docker
-        systemctl restart docker
-        usermod -aG docker ubuntu 2>/dev/null || true
+        # Phân quyền cho tất cả regular users trên hệ điều hành vào nhóm docker
+        if [ -n "$SUDO_USER" ]; then
+            usermod -aG docker "$SUDO_USER" 2>/dev/null || true
+        fi
+        for u in $(awk -F: '$3 >= 1000 && $3 < 60000 {print $1}' /etc/passwd); do
+            usermod -aG docker "$u" 2>/dev/null || true
+        done
         echo "✅ Đã cài đặt Docker và cấu hình Log Rotation thành công!"
     else
         echo "ℹ️ Docker đã được cài đặt sẵn."
-        usermod -aG docker ubuntu 2>/dev/null || true
+        if [ -n "$SUDO_USER" ]; then
+            usermod -aG docker "$SUDO_USER" 2>/dev/null || true
+        fi
+        for u in $(awk -F: '$3 >= 1000 && $3 < 60000 {print $1}' /etc/passwd); do
+            usermod -aG docker "$u" 2>/dev/null || true
+        done
     fi
 
     # Tạo Shared Docker Network cho các container trên cùng VPS
@@ -351,13 +464,141 @@ EOF
 
 # 9. START DOCKER COMPOSE STACK
 start_services() {
-    echo "🚀 [9/9] Khởi chạy danh sách dịch vụ: [ $SERVICES_DISPLAY ] (Mode: $MODE)..."
+    echo "🚀 [9/9] Khởi chạy danh sách dịch vụ: [ $SERVICES_DISPLAY ] (Profile: $PROFILE, Mode: $MODE)..."
     
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     BASE_DIR="$SCRIPT_DIR"
 
     # Đảm bảo Docker Network tồn tại trước khi compose up
     docker network create "$APP_NETWORK" 2>/dev/null || true
+
+    set_env_kv() {
+        local env_file="$1"
+        local key="$2"
+        local val="$3"
+        if grep -q "^${key}=" "$env_file" 2>/dev/null; then
+            sed -i "s|^${key}=.*|${key}=${val}|" "$env_file"
+        else
+            echo "${key}=${val}" >> "$env_file"
+        fi
+    }
+
+    apply_profile_to_target() {
+        local target=$1
+        local env_file="$BASE_DIR/$target/.env"
+        
+        if [ ! -f "$env_file" ]; then
+            return 0
+        fi
+
+        echo "⚙️ Tinh chỉnh thông số [$PROFILE] cho $target..."
+        case "$target" in
+            mongo)
+                case "$PROFILE" in
+                    mini)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "400M" ;;
+                    huge)     set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "2560M" ;;
+                    standard) set_env_kv "$env_file" "MONGO_CONTAINER_MEMORY_LIMIT" "750M" ;;
+                esac
+                ;;
+            redis)
+                case "$PROFILE" in
+                    mini)
+                        set_env_kv "$env_file" "REDIS_MAX_MEMORY" "128mb"
+                        set_env_kv "$env_file" "REDIS_CONTAINER_MEMORY_LIMIT" "200M"
+                        ;;
+                    huge)
+                        set_env_kv "$env_file" "REDIS_MAX_MEMORY" "1536mb"
+                        set_env_kv "$env_file" "REDIS_CONTAINER_MEMORY_LIMIT" "2048M"
+                        ;;
+                    standard)
+                        set_env_kv "$env_file" "REDIS_MAX_MEMORY" "512mb"
+                        set_env_kv "$env_file" "REDIS_CONTAINER_MEMORY_LIMIT" "600M"
+                        ;;
+                esac
+                ;;
+            kafka)
+                case "$PROFILE" in
+                    mini)
+                        set_env_kv "$env_file" "REDPANDA_SMP" "1"
+                        set_env_kv "$env_file" "REDPANDA_MEMORY" "256M"
+                        set_env_kv "$env_file" "REDPANDA_CONTAINER_MEMORY_LIMIT" "380M"
+                        set_env_kv "$env_file" "CONSOLE_CONTAINER_MEMORY_LIMIT" "100M"
+                        ;;
+                    huge)
+                        set_env_kv "$env_file" "REDPANDA_SMP" "2"
+                        set_env_kv "$env_file" "REDPANDA_MEMORY" "1536M"
+                        set_env_kv "$env_file" "REDPANDA_CONTAINER_MEMORY_LIMIT" "2048M"
+                        set_env_kv "$env_file" "CONSOLE_CONTAINER_MEMORY_LIMIT" "256M"
+                        ;;
+                    standard)
+                        set_env_kv "$env_file" "REDPANDA_SMP" "1"
+                        set_env_kv "$env_file" "REDPANDA_MEMORY" "512M"
+                        set_env_kv "$env_file" "REDPANDA_CONTAINER_MEMORY_LIMIT" "600M"
+                        set_env_kv "$env_file" "CONSOLE_CONTAINER_MEMORY_LIMIT" "150M"
+                        ;;
+                esac
+                ;;
+            opensearch)
+                case "$PROFILE" in
+                    mini)
+                        set_env_kv "$env_file" "OPENSEARCH_JVM_HEAP" "\"-Xms256m -Xmx256m\""
+                        set_env_kv "$env_file" "OPENSEARCH_CONTAINER_MEMORY_LIMIT" "450M"
+                        ;;
+                    huge)
+                        set_env_kv "$env_file" "OPENSEARCH_JVM_HEAP" "\"-Xms1536m -Xmx1536m\""
+                        set_env_kv "$env_file" "OPENSEARCH_CONTAINER_MEMORY_LIMIT" "2048M"
+                        ;;
+                    standard)
+                        set_env_kv "$env_file" "OPENSEARCH_JVM_HEAP" "\"-Xms384m -Xmx384m\""
+                        set_env_kv "$env_file" "OPENSEARCH_CONTAINER_MEMORY_LIMIT" "650M"
+                        ;;
+                esac
+                ;;
+            api)
+                case "$PROFILE" in
+                    mini)
+                        set_env_kv "$env_file" "API_CONTAINER_MEMORY_LIMIT" "200M"
+                        set_env_kv "$env_file" "MONGO_MAX_POOL_SIZE" "15"
+                        set_env_kv "$env_file" "MONGO_MIN_POOL_SIZE" "2"
+                        set_env_kv "$env_file" "REDIS_GENERAL_POOL_SIZE" "15"
+                        set_env_kv "$env_file" "REDIS_GENERAL_MIN_IDLE_CONNS" "2"
+                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS" "20"
+                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS_PER_HOST" "5"
+                        set_env_kv "$env_file" "ASYNQ_WORKER_CONCURRENCY" "3"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_BYTES" "65536"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_SIZE" "200"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_TIMEOUT_MS" "20"
+                        ;;
+                    huge)
+                        set_env_kv "$env_file" "API_CONTAINER_MEMORY_LIMIT" "1024M"
+                        set_env_kv "$env_file" "MONGO_MAX_POOL_SIZE" "150"
+                        set_env_kv "$env_file" "MONGO_MIN_POOL_SIZE" "15"
+                        set_env_kv "$env_file" "REDIS_GENERAL_POOL_SIZE" "150"
+                        set_env_kv "$env_file" "REDIS_GENERAL_MIN_IDLE_CONNS" "15"
+                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS" "200"
+                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS_PER_HOST" "50"
+                        set_env_kv "$env_file" "ASYNQ_WORKER_CONCURRENCY" "20"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_BYTES" "1048576"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_SIZE" "1000"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_TIMEOUT_MS" "5"
+                        ;;
+                    standard)
+                        set_env_kv "$env_file" "API_CONTAINER_MEMORY_LIMIT" "400M"
+                        set_env_kv "$env_file" "MONGO_MAX_POOL_SIZE" "50"
+                        set_env_kv "$env_file" "MONGO_MIN_POOL_SIZE" "5"
+                        set_env_kv "$env_file" "REDIS_GENERAL_POOL_SIZE" "50"
+                        set_env_kv "$env_file" "REDIS_GENERAL_MIN_IDLE_CONNS" "5"
+                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS" "50"
+                        set_env_kv "$env_file" "OPENSEARCH_MAX_IDLE_CONNS_PER_HOST" "10"
+                        set_env_kv "$env_file" "ASYNQ_WORKER_CONCURRENCY" "10"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_BYTES" "524288"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_SIZE" "500"
+                        set_env_kv "$env_file" "KAFKA_PRODUCER_BATCH_TIMEOUT_MS" "10"
+                        ;;
+                esac
+                ;;
+        esac
+    }
 
     start_target() {
         local target=$1
@@ -370,25 +611,83 @@ start_services() {
 
         cd "$target_dir"
         
-        # Thiết lập quyền ghi volume cho MongoDB nếu cần
+        # Thiết lập quyền ghi volume cho các services nếu cần
+        mkdir -p data
         if [ "$target" == "mongo" ]; then
             mkdir -p data/db data/configdb
+            chmod -R 777 data/db 2>/dev/null || true
+            chmod 755 data/configdb 2>/dev/null || true
+            chown -R 1000:1000 data/configdb 2>/dev/null || true
+            chmod 400 data/configdb/* 2>/dev/null || true
+        else
             chmod -R 777 data 2>/dev/null || true
         fi
 
-        # Tự động tạo .env từ .env.example nếu chưa có
-        if [ ! -f .env ] && [ -f .env.example ]; then
-            echo "📄 Tạo file .env từ .env.example cho $target..."
-            cp .env.example .env
+        # Tự động tạo .env từ .env.$PROFILE hoặc .env.example nếu chưa có
+        if [ ! -f .env ]; then
+            if [ -f ".env.$PROFILE" ]; then
+                echo "📄 Tạo file .env từ .env.$PROFILE (Profile: $PROFILE) cho $target..."
+                cp ".env.$PROFILE" .env
+            elif [ -f .env.example ]; then
+                echo "📄 Tạo file .env từ .env.example cho $target..."
+                cp .env.example .env
+            fi
         fi
+
+        # Áp dụng cấu hình Profile
+        apply_profile_to_target "$target"
 
         if [ "$MODE" == "rollback" ]; then
             echo "🔄 Rollback mode: Resetting and restarting containers for $target..."
             docker compose down --remove-orphans 2>/dev/null || true
         fi
 
-        echo "🚀 Đang kéo images và chạy $target container..."
-        docker compose up -d
+        if [ "$target" == "api" ]; then
+            if [ "$API_MODE" == "binary" ]; then
+                if [ ! -f "$target_dir/app-api" ]; then
+                    echo "❌ Lỗi: Bạn đã chọn --api-mode=binary nhưng không tìm thấy file: $target_dir/app-api!"
+                    echo "👉 Vui lòng biên dịch trước bằng './build_onpremise.sh' (hoặc '.\\build_onpremise.ps1')."
+                    return 1
+                fi
+                chmod +x "$target_dir/app-api" 2>/dev/null || true
+                echo "📦 Khởi chạy Go API ở chế độ [On-Premise Binary] (Dockerfile.binary)..."
+                export API_BUILD_CONTEXT="."
+                export API_DOCKERFILE="Dockerfile.binary"
+            elif [ "$API_MODE" == "source" ]; then
+                if [ ! -d "$BASE_DIR/../sowfkun-verse-api" ] && [ ! -d "$target_dir/../../sowfkun-verse-api" ]; then
+                    echo "❌ Lỗi: Bạn đã chọn --api-mode=source nhưng không tìm thấy thư mục mã nguồn sowfkun-verse-api!"
+                    return 1
+                fi
+                echo "🚀 Khởi chạy Go API ở chế độ [Build từ Source Code] (Dockerfile)..."
+                export API_BUILD_CONTEXT="../../sowfkun-verse-api"
+                export API_DOCKERFILE="Dockerfile"
+            fi
+            docker compose up -d --build
+            
+            # Tự động chuyển ENABLE_AUTO_INDEX_SYNC về false trong .env sau khi xác nhận API đã đồng bộ xong
+            echo "⏳ Đang chờ API khởi tạo và hoàn tất đồng bộ index / topics..."
+            local max_attempts=25
+            local attempt=0
+            local synced=false
+            while [ $attempt -lt $max_attempts ]; do
+                if docker logs "${API_CONTAINER_NAME:-app_api}" 2>&1 | grep -q "Kafka Topic Indexing completed successfully"; then
+                    synced=true
+                    break
+                fi
+                sleep 1
+                attempt=$((attempt + 1))
+            done
+
+            if [ "$synced" == "true" ] && [ -f "$target_dir/.env" ]; then
+                set_env_kv "$target_dir/.env" "ENABLE_AUTO_INDEX_SYNC" "false"
+                echo "✅ Đã xác nhận hoàn tất đồng bộ! Tự động chuyển ENABLE_AUTO_INDEX_SYNC=false trong .env."
+            elif [ -f "$target_dir/.env" ]; then
+                echo "⚠️ Cảnh báo: Chưa nhận được xác nhận đồng bộ sau ${max_attempts}s. Giữ nguyên ENABLE_AUTO_INDEX_SYNC=true để thử lại ở lần khởi động sau."
+            fi
+        else
+            echo "🚀 Đang kéo images và chạy $target container..."
+            docker compose up -d
+        fi
         docker compose ps
     }
 
@@ -398,6 +697,52 @@ start_services() {
         echo "-----------------------------------------------------------------"
         start_target "$s"
     done
+}
+
+# 10. SETUP GITHUB ACTIONS SELF-HOSTED RUNNER (Optional)
+setup_github_runner() {
+    if [[ -z "$GITHUB_RUNNER_TOKEN" ]]; then
+        echo "ℹ️ Bỏ qua cài đặt GitHub Actions Self-Hosted Runner (không cung cấp token)."
+        return 0
+    fi
+
+    echo "================================================================="
+    echo "🤖 [10/10] Đang cài đặt & cấu hình GitHub Actions Self-Hosted Runner..."
+    echo "================================================================="
+
+    local runner_user="${SUDO_USER:-$USER}"
+    if [ "$runner_user" == "root" ]; then
+        local found_user=$(awk -F: '$3 >= 1000 && $3 < 60000 {print $1; exit}' /etc/passwd)
+        if [ -n "$found_user" ]; then
+            runner_user="$found_user"
+        fi
+    fi
+
+    local user_home=$(eval echo "~$runner_user")
+    local runner_dir="$user_home/actions-runner"
+
+    mkdir -p "$runner_dir"
+    cd "$runner_dir"
+
+    # Tải runner nếu chưa có
+    if [ ! -f ./config.sh ]; then
+        echo "📥 Đang tải GitHub Actions Runner package..."
+        curl -o actions-runner-linux-x64-2.322.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.322.0/actions-runner-linux-x64-2.322.0.tar.gz
+        tar xzf ./actions-runner-linux-x64-2.322.0.tar.gz
+        rm -f actions-runner-linux-x64-2.322.0.tar.gz
+    fi
+
+    chown -R "$runner_user:$runner_user" "$runner_dir"
+
+    echo "⚙️ Đang cấu hình GitHub Runner cho repository: $GITHUB_REPO..."
+    sudo -u "$runner_user" ./config.sh --url "$GITHUB_REPO" --token "$GITHUB_RUNNER_TOKEN" --name "$(hostname)-runner" --labels self-hosted,linux,x64 --unattended --replace
+
+    # Cài đặt service systemd chạy nền
+    echo "🚀 Đang cài đặt Runner dưới dạng Systemd Daemon Service..."
+    ./svc.sh install "$runner_user" 2>/dev/null || true
+    ./svc.sh start 2>/dev/null || true
+
+    echo "✅ GitHub Actions Self-Hosted Runner đã được cài đặt và đang chạy ngầm thành công!"
 }
 
 # Thực thi theo luồng
@@ -415,6 +760,7 @@ else
     docker network create "$APP_NETWORK" 2>/dev/null || true
 fi
 start_services
+setup_github_runner
 
 echo "================================================================="
 echo "🎉 HOÀN TẤT CÀI ĐẶT & GIA CỐ BẢO MẬT CÁC DỊCH VỤ: [ $SERVICES_DISPLAY ]!"

@@ -87,8 +87,24 @@ Khi một MQ Handler, Consumer hoặc Job thực hiện tác động lên DB (In
   - TUYỆT ĐỐI KHÔNG dựa dẫm vào `fullDocument` trong event payload và KHÔNG truyền projection `nil` (SELECT *) khi không thực sự cần thiết.
 
 ## 11. Cấu Hình Kafka Producer (Non-blocking Asynchronous & Fast Batch Timeout)
-- **Cơ chế**: Kafka Producer (`NewProducer`) phải được cấu hình `Async: true` và `BatchTimeout: 10 * time.Millisecond`.
-- **Mục đích**: 
-  - `Async: true` đảm bảo hàm `Publish()` ghi message vào memory buffer và trả về ngay tức thì (< 0.1ms), không bị block chờ round-trip mạng tới Kafka Cluster.
-  - `BatchTimeout: 10ms` khắc phục triệt để hành vi mặc định của thư viện `segmentio/kafka-go` (vốn bị treo 1.0 giây để gom batch nếu không có thêm message mới).
+- **Cơ chế**: Kafka Producer (`NewProducer`) được cấu hình `Async: true` và nạp động các tham số gom batch từ biến môi trường:
+  - `KAFKA_PRODUCER_BATCH_BYTES`: Giới hạn dung lượng byte của mỗi batch (mini: 64KB, standard: 512KB, huge: 1MB).
+  - `KAFKA_PRODUCER_BATCH_SIZE`: Số lượng message tối đa trong 1 batch (mini: 200, standard: 500, huge: 1000).
+  - `KAFKA_PRODUCER_BATCH_TIMEOUT_MS`: Thời gian chờ gom batch tối đa trước khi xả đi (mini: 20ms, standard: 10ms, huge: 5ms).
+- **Mục đích**: `Async: true` đảm bảo hàm `Publish()` ghi message vào memory buffer và trả về ngay tức thì (< 0.1ms), không bị block chờ round-trip mạng.
+
+## 12. Cụm Kafka Chuẩn Hóa (Kafka 2-Clusters Standard)
+Hệ thống chuẩn hóa thành **2 Cụm Kafka vật lý/logic độc lập**:
+1. **Cụm `general1` (`KAFKA_GENERAL1_BROKERS`)**: Tiếp nhận toàn bộ sự kiện nghiệp vụ liên Domain (`low-traffics-order-progress`, `single-parallel-progress`, `batch-progress`), sự kiện WebSocket (`send-socket-progress`, `receive-socket-progress`), và logging events.
+2. **Cụm `entity_sync1` (`KAFKA_ENTITY_SYNC1_BROKERS`)**: Kênh chuyên biệt vận chuyển sự kiện CDC từ MongoDB Change Stream (`low-entity-sync-order-progress`) để cập nhật `SyncMeta` và xóa Cache thực thể.
+
+## 13. Kết Nối Redpanda / Kafka Self-Hosted (Plaintext TCP) & Port Mapping
+- **Giao thức**: Gỡ bỏ hoàn toàn lớp bảo mật rườm rà (SASL / SCRAM / TLS) trong `pkg/mq/kafka/manager.go`, sử dụng kết nối Plaintext TCP gọn nhẹ, tối ưu hóa tốc độ I/O.
+- **Cổng kết nối**:
+  - **Cổng nội bộ `9092` (`PLAINTEXT`)**: Dành cho các container chạy cùng mạng Docker `app_net` (vd: `app_api`).
+  - **Cổng ngoài `9094` (`OUTSIDE`)**: Dành cho môi trường Local Dev kết nối từ xa hoặc ngoài Host. Bắt buộc mở firewall trên Cloud/GCP (`tcp:9094`) và khai báo `REDPANDA_ADVERTISED_HOST` là IP Public của Server.
+
+## 14. Dynamic Consumer Worker Scaling theo Partition
+- Số lượng Goroutine Workers của Consumer (`StartConsumerGroup`) được tự động đồng bộ theo số lượng partition: `numWorkers := config.DefaultPartitions` (nạp từ `KAFKA_DEFAULT_PARTITIONS`, mặc định `4`).
+- Đảm bảo tỷ lệ tối ưu **1 Consumer Worker : 1 Partition**, ngăn ngừa lãng phí tài nguyên CPU và tránh hiện tượng Consumer Goroutine dư thừa bị nhàn rỗi (idle).
 

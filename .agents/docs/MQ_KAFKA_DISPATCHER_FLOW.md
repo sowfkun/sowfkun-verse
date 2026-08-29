@@ -105,11 +105,17 @@ const (
 Tại thư mục `internal/[domain_name]/presentation/mq/route.go`, lập trình viên đăng ký handler với dispatcher bằng hằng số chuẩn:
 
 ```go
-func RegisterMQHandlers(dispatcher *kafkaPkg.EventDispatcher, userRepo domain.IUserRepository, redisClient *redis.Client, agentBusinessRedisClient *redis.Client, producer kafkaPkg.Producer) {
-	userHandler := NewUserMQHandler(userRepo, redisClient, agentBusinessRedisClient, producer)
+func RegisterMQHandlers(
+	dispatcher *kafkaPkg.EventDispatcher,
+	userRepo domain.IUserRepository,
+	generalRedisClient *redis.Client,
+	general1Producer kafkaPkg.Producer,
+	entitySyncProducer kafkaPkg.Producer,
+) {
+	userHandler := NewUserMQHandler(userRepo, generalRedisClient, general1Producer, entitySyncProducer)
 	
 	// Đăng ký sử dụng hằng số chuẩn, cấm hardcode chuỗi string
-	dispatcher.Register(coreDomain.EventUserChanged, userHandler.HandleUserChanged)
+	dispatcher.Register(coreDomain.EntityChangedEventPrefix+strings.ToUpper(domain.User{}.CollectionName()), userHandler.HandleUserChanged)
 	dispatcher.Register(coreDomain.EventClientPing, userHandler.HandleClientPing)
 }
 ```
@@ -117,7 +123,10 @@ func RegisterMQHandlers(dispatcher *kafkaPkg.EventDispatcher, userRepo domain.IU
 ### 3.4 Change Stream Zero-Waste & Consumer-Side Projection
 - **MongoDB ChangeStreamWatcher**: Không sử dụng `SetFullDocument(options.UpdateLookup)` để tránh overhead lookup ngầm trên MongoDB Oplog. Payload phát ra Kafka chỉ chứa metadata tối giản: `id`, `op`, `collection`, `updateDescription`.
 - **Consumer Projection**: Các MQ Consumer khi cần dữ liệu để xử lý socket notification hoặc xóa cache bắt buộc gọi `repo.GetByID(ctx, id, projection)` với `projection` chỉ định đích danh các trường cần thiết (cấm `SELECT *`).
-- **Kafka Producer Configuration**: `NewProducer` được cấu hình `Async: true` và `BatchTimeout: 10 * time.Millisecond` để đảm bảo lệnh `Publish` trả về ngay tức thì (< 0.1ms) mà không bị block.
+- **Kafka Producer Configuration**: `NewProducer` được cấu hình `Async: true` kết hợp nạp động các tham số gom batch từ biến môi trường (`KAFKA_PRODUCER_BATCH_BYTES`, `KAFKA_PRODUCER_BATCH_SIZE`, `KAFKA_PRODUCER_BATCH_TIMEOUT_MS`) để tối ưu hóa theo từng profile phần cứng (`mini`, `standard`, `huge`).
+- **Dynamic Consumer Worker Scaling**:
+  - `OrderedConsumer`: Tự động cấp phát số lượng Reader Instances bằng số lượng partition (`KAFKA_DEFAULT_PARTITIONS`, mặc định `4`), bảo đảm tỷ lệ 1 Reader : 1 Partition (1 Goroutine đồng bộ/partition).
+  - `ParallelConsumer`: Hỗ trợ tùy biến `StartParallelConsumers(ctx, cluster, topic, groupID, numPartitions, workersPerPartition, handler)` — khởi tạo `numPartitions` Readers (khớp partitions 1:1), mỗi Reader sở hữu một Bounded Worker Pool gồm `workersPerPartition` Goroutines (ví dụ: 4 partitions x 3 workers = 12 concurrent threads) giúp xử lý song song tốc độ cao và kiểm soát RAM tuyệt đối (chống Goroutine explosion).
 
 ---
 

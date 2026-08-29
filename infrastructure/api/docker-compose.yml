@@ -1,11 +1,12 @@
 services:
   api:
-    build:
-      context: ../../sowfkun-verse-api
-      dockerfile: Dockerfile
-    image: ${API_IMAGE:-app-api:latest}
+    image: ${API_IMAGE:-alpine:3.21}
     container_name: ${API_CONTAINER_NAME:-app_api}
     restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./app-api:/app/app-api:ro
+    entrypoint: ["/app/app-api"]
     env_file:
       - .env
     ports:
@@ -19,4 +20,3 @@ networks:
   default:
     name: ${APP_NETWORK:-app_net}
     external: true
-

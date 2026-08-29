@@ -37,21 +37,26 @@ Hệ thống sẽ hiển thị menu chọn các dịch vụ cần chạy:
 
 ### Cách 2: Chọn Tổ Hợp Nhiều Dịch Vụ Chạy Chung 1 VPS (CLI)
 
-Chạy danh sách service phân tách bằng dấu phẩy:
+Chạy danh sách service phân tách bằng dấu phẩy, kèm theo `--profile=mini|huge|standard`:
 
-#### Chạy Redis + Go API trên cùng 1 VPS:
+#### Profile `mini` (Dành cho VPS 1-2GB RAM / GCP e2-micro/small test):
 ```bash
-sudo bash bootstrap.sh --service=redis,api --mode=fresh
+sudo bash bootstrap.sh --service=all --profile=mini --mode=fresh
+```
+
+#### Profile `huge` (Dành cho Server 4-8 Cores, 4-8GB+ RAM):
+```bash
+sudo bash bootstrap.sh --service=all --profile=huge --mode=fresh
+```
+
+#### Chạy Redis + Go API trên cùng 1 VPS (Profile mini):
+```bash
+sudo bash bootstrap.sh --service=redis,api --profile=mini --mode=fresh
 ```
 
 #### Chạy MongoDB + Redis + Kafka trên cùng 1 VPS:
 ```bash
-sudo bash bootstrap.sh --services=mongo,redis,kafka --mode=fresh
-```
-
-#### Chạy All-in-One (Tất cả 5 dịch vụ trên 1 VPS):
-```bash
-sudo bash bootstrap.sh --service=all --mode=fresh
+sudo bash bootstrap.sh --services=mongo,redis,kafka --profile=mini --mode=fresh
 ```
 
 ---
@@ -115,20 +120,35 @@ TELEGRAM_CHAT_ID="123456789"
 
 ---
 
-## 🛡️ Kiến Trúc Bảo Mật Đa Tầng (Multi-Layer Security)
+---
 
-### Lớp 1: Cloud Security Group (Tường lửa Phần cứng Cloud)
-- **SSH (Port 22):** Đóng hoàn toàn với `0.0.0.0/0`. Quản trị qua Cloud Workbench / Web Console / SSH Key nội bộ.
-- **Database & Queue Ports (`27017`, `6379`, `9092`, `9200`):** CHỈ mở cho dải IP Private VPC của cụm API Server.
+## 📦 Chế Độ On-Premise Binary (Bảo Vệ Source Code / 1-Click Deploy)
 
-### Lớp 2: OS Hardening & Network Kernel (`bootstrap.sh`)
-- **Đồng bộ thời gian UTC:** Chuẩn hóa NTP (chống lệch giờ JWT / E2EE / Kafka Clock Drift).
-- **Vô hiệu hóa Password SSH:** Tắt xác thực mật khẩu, chống Brute-force.
-- **Fail2ban & UFW:** Tự động phát hiện và ban IP quét cổng.
-- **Kernel Spoofing Guard & Outbound TCP Tuning:** Bật `tcp_tw_reuse`, mở rộng 64k ephemeral ports, chống nghẽn HTTP request ra ngoài.
+Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển khai không muốn để lộ mã nguồn Go:
 
-### Lớp 3: Docker & Application Security
-- **Shared Network `app_net`:** Kết nối nội bộ container-to-container an toàn qua DNS Docker.
-- **Log Rotation Protection:** Giới hạn log tối đa 50MB x 3 file trong `daemon.json`, chống tràn ổ đĩa.
-- **Tự động dọn rác Docker (Cron):** Dọn images và cache thừa lúc 3h sáng Chủ Nhật hàng tuần.
-- **Resource Guard (Swap 2GB - 4GB):** Tự động scale swap, ngăn ngừa Linux OOM Killer bắn chết tiến trình DB/API.
+1. **Bước 1 — Đóng gói file binary tĩnh trên máy dev**:
+   - Trên Windows: Chạy PowerShell `.\build_onpremise.ps1`
+   - Trên Linux/macOS: Chạy `bash build_onpremise.sh`
+   - File binary `app-api` sẽ tự động được sinh ra trong thư mục `infrastructure/api/app-api`.
+
+2. **Bước 2 — Bàn giao & Triển khai On-Premise**:
+   - Bạn chỉ cần copy duy nhất thư mục `infrastructure/` (đã có `app-api` và `.env.example`) sang máy chủ khách hàng.
+   - Chạy lệnh:
+   ```bash
+   cd infrastructure
+   sudo bash bootstrap.sh --service=all --profile=mini --mode=fresh
+   ```
+   👉 `bootstrap.sh` sẽ tự động nhận diện file binary `app-api`, dùng [Dockerfile.binary](api/Dockerfile.binary) siêu nhẹ (~10MB Alpine) và khởi chạy ngay trong 2 giây mà **không cần cài Go, không build lâu, không lộ 1 dòng source code nào**!
+
+---
+
+## 🤖 Tự Động Hóa CI/CD Với GitHub Actions Self-Hosted Runner
+
+Tích hợp Runner trực tiếp trên máy chủ để tự động cập nhật Backend mỗi khi Push code:
+
+```bash
+sudo bash bootstrap.sh --service=all --profile=mini --gh-token="YOUR_GITHUB_RUNNER_TOKEN"
+```
+- Khi truyền `--gh-token`, script sẽ tự động tải runner, đăng ký và cài đặt thành **Systemd Service** chạy ngầm vĩnh viễn trên VPS.
+- Từ các lần cập nhật tiếp theo, chỉ cần `git push` là GitHub Actions sẽ tự build và deploy không cần SSH vào server.
+

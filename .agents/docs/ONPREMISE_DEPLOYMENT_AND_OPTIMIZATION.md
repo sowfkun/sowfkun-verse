@@ -12,137 +12,54 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 
 ---
 
-## 2. Bảng Ma Trận So Sánh (Cloud/SaaS vs On-Premise)
+## 2. Bảng Ma Trận So Sánh Theo Profile Hạ Tầng (`mini`, `standard`, `huge`)
 
-| Phân hệ Hạ tầng | Môi trường Cloud / SaaS Free | Cấu hình On-Premise Khuyến nghị | Lợi ích Đạt được trên On-Premise |
+| Thành phần Hạ tầng | Profile `mini` (VPS 1-2GB RAM) | Profile `standard` (Server 4-8GB RAM) | Profile `huge` (Server 16GB+ RAM) |
 |---|---|---|---|
-| **OpenSearch Time-Series** | `PartitionMonth` / `PartitionDay`, Retention: 6 - 12 tháng | `PartitionQuarter` / `PartitionYear`, Retention: 3 - 5 năm | Giảm 70-90% số lượng Shard, tránh tràn RAM JVM Heap, lưu trữ lịch sử dài hạn. |
-| **OpenSearch Replication** | `replicas: 0`, `shards: 1` | `replicas: 1`, `shards: 2 - 4` | Tăng tính sẵn sàng (High Availability), tìm kiếm song song đa luồng. |
-| **Kafka / Redpanda** | Batch: 50 msgs / 2s, Concurrency: 2 | Batch: 200 - 500 msgs / 500ms, Concurrency: 8 - 16 | Tăng Throughput xử lý lên 10,000+ msg/s, độ trễ ingestion thời gian thực (<0.5s). |
-| **Redis In-Memory** | Cache DTO tối giản, TTL ngắn (1 - 24h), LRU eviction gắt gao | Cache DTO chuẩn hóa, TTL dài (7 - 30 ngày), Tăng Rate Limit (500-1000 req/s) | Tăng Cache Hit Ratio > 95%, giảm tải 80% truy vấn xuống MongoDB chính. |
-| **MongoDB Database** | Shared ReplicaSet, Connection Pool: 20 - 50 | Dedicated ReplicaSet, Connection Pool: 100 - 300, WiredTiger 50% RAM | Giảm độ trễ I/O xuống <1ms (Local LAN), tối ưu hóa ghi đồng thời. |
+| **API Memory Limit** | `200M` | `400M` | `1024M` (1GB) |
+| **MongoDB Pool** | `15 max / 2 min` | `50 max / 5 min` | `150 max / 15 min` |
+| **Redis Pool** | `15 max / 2 min` | `50 max / 5 min` | `150 max / 15 min` |
+| **OpenSearch Conns** | `20 idle / 5 per_host` | `50 idle / 10 per_host` | `200 idle / 50 per_host` |
+| **Asynq Workers** | `3 workers` | `10 workers` | `20 workers` |
+| **Kafka Batch Tuning** | `64KB / 200 msgs / 20ms` | `512KB / 500 msgs / 10ms` | `1MB / 1000 msgs / 5ms` |
+| **Kafka Retention** | `3 ngày` | `3 ngày` | `7 ngày` |
 
 ---
 
 ## 3. Chi tiết Tối ưu Từng Loại Hạ Tầng
 
 ### 3.1. OpenSearch & Time-Series Engine
-
-#### Hiện trạng Cloud / SaaS:
-* Phân vùng theo Tháng (`PartitionMonth`) hoặc Ngày (`PartitionDay`).
-* Nguyên nhân: Do dùng các gói Cloud Free/Tier nhỏ (Aiven, AWS OpenSearch t3.small), RAM Heap chỉ 1-2GB, nếu giữ index quá lâu sẽ bị lỗi **Over-sharding** làm sập Cluster.
-
-#### Cấu hình On-Premise tối ưu:
-1. **Chuyển Phân vùng sang Quý (`QUARTER`) hoặc Năm (`YEAR`):**
-   * *Vị trí cấu hình:* Tại `cmd/api/main.go` và `cmd/indexer/opensearch.go`.
-   ```go
-   // Triển khai On-Premise lưu 3 năm theo Quý:
-   customerActivityRepo = activityInfra.NewActivityRepository(
-       customerActivitiesClient,
-       "customer_activities",
-       osPkg.PartitionQuarter, // Sinh: customer_activities-2026.q1
-   )
-   ```
-   * *Retention Rule:*
-   ```go
-   RetentionRule: osPkg.IndexRetentionRule{
-       Name:            "Customer Activities",
-       Prefix:          "customer_activities",
-       Partition:       osPkg.PartitionQuarter,
-       RetentionAmount: 12, // 12 quý = 3 năm
-   }
-   ```
-2. **Tăng Shards & Replicas trong Index Template (`cmd/indexer/opensearch.go`):**
-   ```json
-   "settings": {
-       "number_of_shards": 2,
-       "number_of_replicas": 1,
-       "refresh_interval": "1s"
-   }
-   ```
-3. **Lợi ích:**
-   * Tiết kiệm số lượng Shards từ **36 shards** (theo tháng) xuống còn **12 shards** (theo quý) hoặc **3 shards** (theo năm).
-   * Tận dụng tốc độ đọc ghi vượt trội của ổ cứng Enterprise NVMe SSD On-Premise.
+- **2 Cụm kết nối độc lập**: `logging1` (System & Danger Logs) và `activities1` (Customer & User Activities).
+- **Index Retention & Partitioning**:
+  - `mini` / Cloud: Phân vùng theo Tháng (`PartitionMonth`), Retention 6-12 tháng.
+  - `standard` / `huge`: Phân vùng theo Quý (`PartitionQuarter`) hoặc Năm (`PartitionYear`), Retention 3-5 năm.
+- **Connection Pool**: Nạp qua `OPENSEARCH_MAX_IDLE_CONNS`, `OPENSEARCH_MAX_IDLE_CONNS_PER_HOST`, `OPENSEARCH_IDLE_CONN_TIMEOUT_MS`.
 
 ---
 
-### 3.2. Message Queue (Kafka / Redpanda)
-
-#### Hiện trạng Cloud / SaaS:
-* Sử dụng Kafka Serverless hoặc cụm nhỏ, cấu hình batch 50 messages / 2 giây, Concurrency = 2.
-
-#### Cấu hình On-Premise tối ưu:
-1. **Tăng Kích thước Mẻ Gom (Batch Size) & Giảm Độ Trễ (Latency Window):**
-   * *Vị trí cấu hình:* `cmd/api/setup_kafka.go`.
-   ```go
-   // Cụm general2 - Logging & Activity Batch Ingestion
-   kafkaManager.StartBatchConsumer(
-       ctx,
-       "general2",
-       kafkaPkg.TopicEntityActivitiesProgress,
-       "entity-activities-batch-group",
-       200,                // Tăng lên 200 items mỗi mẻ
-       500*time.Millisecond, // Gom nhanh trong 500ms
-       dispatcher.HandleBatchMessage,
-   )
-   ```
-2. **Tăng Số lượng Worker Xử lý Song song (Concurrency):**
-   ```go
-   concurrency := 8 // Tăng từ 2 lên 8 hoặc 16 tùy số nhân CPU server
-   ```
-3. **Lợi ích:**
-   * Tăng Throughput ghi dữ liệu Activity/Audit Logs lên gấp 4-8 lần.
-   * Người dùng thao tác trên Web/App thấy lịch sử tương tác cập nhật gần như tức thì.
+### 3.2. Message Queue (Kafka / Redpanda Self-Hosted)
+- **2 Cụm chuẩn hóa**: `general1` (Sự kiện nghiệp vụ, Socket progress, Logging) và `entity_sync1` (CDC Entity sync).
+- **Kết nối Plaintext TCP**: Gỡ bỏ overhead mã hóa/xác thực không cần thiết trong mạng nội bộ.
+- **Tự động Scale Consumer Worker**: `StartConsumerGroup` khởi tạo số worker Goroutines bằng đúng số partition (`KAFKA_DEFAULT_PARTITIONS`, mặc định `4`) đảm bảo tỷ lệ 1 Worker : 1 Partition.
+- **Cổng kết nối**: Cổng `9092` nội bộ trong Docker network `app_net`, cổng `9094` mở ra ngoài cho máy Dev ở Local.
 
 ---
 
-### 3.3. Redis Caching & In-Memory Storage
-
-#### Hiện trạng Cloud / SaaS:
-* RAM Redis bị giới hạn (25MB - 256MB), phải dùng Cache DTO lược bỏ trường, TTL ngắn 1 - 24h để tránh OOM.
-* `RATE_LIMIT_MAX_REQUESTS=100`.
-
-#### Cấu hình On-Premise tối ưu:
-1. **Luôn Tuân Thủ Golden Standard Cache DTO:**
-   * Dù triển khai trên On-Premise có RAM dồi dào, hệ thống **bắt buộc vẫn sử dụng Cache DTO** (như `TenantCacheModel`, `RoleCacheModel`, `UserCacheModel`) thay vì lưu thẳng raw Entity xuống Redis.
-   * *Mục đích:* Chỉ cache các trường thực sự cần thiết cho nghiệp vụ đọc nhanh, loại bỏ các trường nặng (desc, raw metadata, hash không dùng) để giữ Redis luôn gọn nhẹ, serialization nhanh và tránh rò rỉ dữ liệu.
-2. **Mở rộng Dung lượng RAM & Nâng Rate Limit (`.env`):**
-   ```env
-   # Nâng ngưỡng giới hạn request cho mạng nội bộ/doanh nghiệp
-   RATE_LIMIT_MAX_REQUESTS=1000
-   RATE_LIMIT_WINDOW_SECONDS=60
-   ```
-3. **Mở rộng TTL Cache Domain (`pkg/cache/redis/`):**
-   * Session Token TTL: Tăng từ 1 ngày lên 7 - 30 ngày.
-   * Metadata/Role/Permission Cache TTL: Tăng lên 7 ngày.
-4. **Lợi ích:**
-   * Giảm thiểu 90% truy vấn xác thực quyền và thông tin người dùng xuống MongoDB.
-   * Trải nghiệm ứng dụng mượt mà, phản hồi API trung bình dưới 5ms.
+### 3.3. Redis In-Memory Caching & Asynq Queue
+- **2 Cụm chuẩn hóa**:
+  - `general1` (DB 0): Quản lý Cache, Session Key (E2EE), Rate Limit Token Bucket, User Hierarchy & Online Status Cache, Entity Change Cache.
+  - `job1` (DB 2): Quản lý Asynq Background Job Task Queue.
+- **Tuân thủ Cache DTO**: Bắt buộc sử dụng Cache DTO tối giản (`TenantCacheModel`, `RoleCacheModel`, `UserCacheModel`) để giảm 80% RAM Redis.
+- **Pool Tuning**: Nạp động qua `REDIS_GENERAL_POOL_SIZE`, `REDIS_GENERAL_MIN_IDLE_CONNS`, `REDIS_GENERAL_MAX_CONN_IDLE_TIME_MS`.
 
 ---
 
 ### 3.4. Cơ sở Dữ liệu MongoDB
-
-#### Hiện trạng Cloud / SaaS:
-* Kết nối qua Internet tới MongoDB Atlas, Connection Pool mặc định 20-50 kết nối.
-
-#### Cấu hình On-Premise tối ưu:
-1. **Cấu hình Connection Pool & Socket Timeout (`.env`):**
-   ```env
-   MONGO_TENANT1_MAX_POOL_SIZE=200
-   MONGO_TENANT1_MIN_POOL_SIZE=50
-   MONGO_TENANT1_MAX_IDLE_TIME_MS=30000
-   ```
-2. **Cấu hình WiredTiger Cache Size (Tại file cấu hình `mongod.conf` trên Server):**
-   ```yaml
-   storage:
-     wiredTiger:
-       engineConfig:
-         cacheSizeGB: 16 # Dành 50% RAM máy chủ cho MongoDB cache
-   ```
-3. **Lợi ích:**
-   * Không còn độ trễ kết nối mạng công cộng (Network latency LAN < 1ms).
-   * Phục vụ hàng nghìn kết nối đồng thời từ các chi nhánh/phòng ban mà không bị nghẽn Pool.
+- **2 Cụm chuẩn hóa**:
+  - `primary1`: Lưu trữ các DB nghiệp vụ cốt lõi (`tenant`, `system`, `config`, `customer`, `ticket`).
+  - `secondary1`: Lưu trữ DB phụ trợ (`logging`).
+- **Connection Pool**: Nạp động qua `MONGO_MAX_POOL_SIZE`, `MONGO_MIN_POOL_SIZE`, `MONGO_MAX_CONN_IDLE_TIME_MS`.
+- **WiredTiger Engine Cache**: Cấu hình 50% RAM máy chủ cho MongoDB cache trên các profile `standard` và `huge`.
 
 ---
 

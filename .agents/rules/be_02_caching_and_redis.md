@@ -13,9 +13,12 @@ Tuyệt đối **NGHIÊM CẤM** hành vi nối chuỗi cứng (hardcode string 
   - Đối với cache của entity thì định nghĩa trong `entity_cache.go` (ví dụ: `tenant/infrastructure/cache/entity_cache.go`).
   - Đối với cache về nghiệp vụ của domain không liên quan đến entity thì định nghĩa trong `business_cache.go` (ví dụ: `auth/infrastructure/cache/business_cache.go`).
 
-## 2. Rate Limiting
-- **Cơ chế**: Sử dụng thuật toán **Token Bucket** được thực thi nguyên tử (Atomic) qua Lua Script trên Redis.
-- **Connection**: Dùng một instance Redis độc lập hoặc một Pool riêng cho Rate Limit (thông qua `redisManager.GetClient("rate_limit")`), không dùng chung lẫn lộn với General Cache nhằm tránh việc tắc nghẽn (bottleneck) làm nghẽn toàn bộ hệ thống.
+## 2. Cụm Kết Nối Chuẩn (Redis 2-Clusters Standard) & Rate Limiting
+- **Cụm `general1` (DB 0)**: Cổng kết nối hợp nhất cho General Cache, Session Key (E2EE), Rate Limiting, User Hierarchy/Online Cache, và Entity Change Cache.
+  - Cấu hình qua các biến môi trường: `REDIS_GENERAL1_URL`, `REDIS_GENERAL_POOL_SIZE`, `REDIS_GENERAL_MIN_IDLE_CONNS`, `REDIS_GENERAL_MAX_CONN_IDLE_TIME_MS`.
+- **Cụm `job1` (DB 2)**: Cổng kết nối chuyên biệt cho Asynq Background Job Queue.
+  - Cấu hình qua biến: `REDIS_JOB1_URL` và `ASYNQ_WORKER_CONCURRENCY`.
+- **Rate Limiting**: Sử dụng thuật toán **Token Bucket** thực thi nguyên tử (Atomic) qua Lua Script trên cụm `general1`. Cấu hình qua `RATE_LIMIT_WINDOW_MINUTES`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_PUBLIC_MAX_REQUESTS`, `RATE_LIMIT_CUD_MAX_REQUESTS`, `RATE_LIMIT_AUTH_MAX_REQUESTS`.
 
 ## 3. Kháng lỗi Cache (Cache Miss & Volatility)
 - **Redis KHÔNG phải là Source of Truth**: Dự án đang sử dụng gói Redis Free (có giới hạn dung lượng và tự động eviction/xóa key cũ). Vì vậy, **TUYỆT ĐỐI KHÔNG** được coi Redis là nơi lưu trữ dữ liệu vĩnh viễn (Persistent Storage).
