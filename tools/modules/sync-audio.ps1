@@ -21,8 +21,8 @@ function Find-FFmpeg {
 
 function Show-Header {
     Write-Host "=================================================================" -ForegroundColor Cyan
-    Write-Host "🔊 SOWFKUN AUDIO / VIDEO SYNCHRONIZER (LOSSLESS)" -ForegroundColor Green
-    Write-Host "   Fast Stream Remuxer - Zero Quality Loss" -ForegroundColor DarkGray
+    Write-Host "SOWFKUN AUDIO / VIDEO SYNCHRONIZER" -ForegroundColor Green
+    Write-Host "Fast Lossless Stream Remuxer" -ForegroundColor DarkGray
     Write-Host "=================================================================" -ForegroundColor Cyan
 }
 
@@ -36,28 +36,33 @@ function Start-SyncAudio {
     if (-not $SrcFile) {
         Show-Header
         Write-Host ""
-        $SrcFile = Read-Host "Enter video file path (e.g. C:\Downloads\video.mp4)"
+        $SrcFile = Read-Host "Enter video file path"
+    }
+
+    if (-not $SrcFile) {
+        Write-Host "Operation cancelled." -ForegroundColor Gray
+        return
     }
 
     # Remove enclosing quotes if dragged & dropped from Explorer
     $SrcFile = $SrcFile.Trim('"').Trim("'")
 
     if (-not (Test-Path $SrcFile)) {
-        Write-Host "ERROR: Source file '$SrcFile' not found!" -ForegroundColor Red
+        Write-Host ("ERROR: Source file '" + $SrcFile + "' not found!") -ForegroundColor Red
         return
     }
 
     if (-not $Offset) {
         Write-Host ""
         Write-Host "Enter offset in milliseconds (ms):" -ForegroundColor Yellow
-        Write-Host "  -> Positive (+500 or 500): Delays audio (moves sound forward)" -ForegroundColor Cyan
+        Write-Host "  -> Positive (+500): Delays audio (moves sound forward)" -ForegroundColor Cyan
         Write-Host "  -> Negative (-500): Advances audio (moves sound backward)" -ForegroundColor Cyan
         $Offset = Read-Host "Offset in ms"
     }
 
     $offsetNum = 0
     if (-not [int]::TryParse($Offset, [ref]$offsetNum)) {
-        Write-Host "ERROR: Invalid offset '$Offset'. Please provide an integer (e.g. 500 or -300)." -ForegroundColor Red
+        Write-Host ("ERROR: Invalid offset '" + $Offset + "'. Please provide an integer like 500 or -300.") -ForegroundColor Red
         return
     }
 
@@ -69,7 +74,7 @@ function Start-SyncAudio {
 
     if (-not $DstFile) {
         $sign = if ($offsetNum -ge 0) { "+$offsetNum" } else { "$offsetNum" }
-        $DstFile = Join-Path $fileDir "${fileName}_sync_${sign}ms${fileExt}"
+        $DstFile = Join-Path $fileDir ($fileName + "_sync_" + $sign + "ms" + $fileExt)
     } else {
         $DstFile = $DstFile.Trim('"').Trim("'")
     }
@@ -79,9 +84,9 @@ function Start-SyncAudio {
     Write-Host ""
     Write-Host "=================================================================" -ForegroundColor Cyan
     Write-Host "Processing Audio Synchronization..." -ForegroundColor Yellow
-    Write-Host "  Source:      $SrcFile" -ForegroundColor White
-    Write-Host "  Offset:      $offsetNum ms ($offsetSec seconds)" -ForegroundColor Cyan
-    Write-Host "  Destination: $DstFile" -ForegroundColor White
+    Write-Host ("  Source:      " + $SrcFile) -ForegroundColor White
+    Write-Host ("  Offset:      " + $offsetNum + " ms [" + $offsetSec + " seconds]") -ForegroundColor Cyan
+    Write-Host ("  Destination: " + $DstFile) -ForegroundColor White
     Write-Host "=================================================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -100,7 +105,7 @@ function Start-SyncAudio {
         Write-Host ""
         Write-Host "=================================================================" -ForegroundColor Green
         Write-Host "SUCCESS: Audio synchronized perfectly!" -ForegroundColor Green
-        Write-Host "Output File: $DstFile ($outSize MB)" -ForegroundColor Cyan
+        Write-Host ("Saved File: " + $DstFile + " [" + $outSize + " MB]") -ForegroundColor Cyan
         Write-Host "=================================================================" -ForegroundColor Green
     } else {
         Write-Host ""
