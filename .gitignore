@@ -7,6 +7,8 @@ tmp/
 *.pem
 sowfkun-verse.pem
 server-test/
+tools/*.exe
+tools/*.bin
 app-api
 infrastructure/api/app-api
 *.tar.gz

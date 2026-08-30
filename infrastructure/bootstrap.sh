@@ -545,26 +545,7 @@ start_services() {
             fi
             docker compose up -d --build
             
-            # Tự động chuyển ENABLE_AUTO_INDEX_SYNC về false trong .env sau khi xác nhận API đã đồng bộ xong
-            echo "⏳ Đang chờ API khởi tạo và hoàn tất đồng bộ index / topics..."
-            local max_attempts=25
-            local attempt=0
-            local synced=false
-            while [ $attempt -lt $max_attempts ]; do
-                if docker logs "${API_CONTAINER_NAME:-app_api}" 2>&1 | grep -q "Kafka Topic Indexing completed successfully"; then
-                    synced=true
-                    break
-                fi
-                sleep 1
-                attempt=$((attempt + 1))
-            done
-
-            if [ "$synced" == "true" ] && [ -f "$target_dir/.env" ]; then
-                set_env_kv "$target_dir/.env" "ENABLE_AUTO_INDEX_SYNC" "false"
-                echo "✅ Đã xác nhận hoàn tất đồng bộ! Tự động chuyển ENABLE_AUTO_INDEX_SYNC=false trong .env."
-            elif [ -f "$target_dir/.env" ]; then
-                echo "⚠️ Cảnh báo: Chưa nhận được xác nhận đồng bộ sau ${max_attempts}s. Giữ nguyên ENABLE_AUTO_INDEX_SYNC=true để thử lại ở lần khởi động sau."
-            fi
+            echo "🚀 Khởi chạy Go API container thành công!"
         else
             echo "🚀 Đang kéo images và chạy $target container..."
             docker compose up -d
