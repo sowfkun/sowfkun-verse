@@ -23,20 +23,22 @@ function Show-Banner {
 function Show-Help {
     Show-Banner
     Write-Host "Supported Commands:" -ForegroundColor Yellow
-    Write-Host "  [General Media Utilities]" -ForegroundColor Cyan
-    Write-Host "    1. download | dl <URL> [output_name] [referer]" -ForegroundColor White
+    Write-Host "  [Media Utilities]" -ForegroundColor Cyan
+    Write-Host "    1. download <URL> [output_name] [referer]" -ForegroundColor White
     Write-Host "       -> Download video / m3u8 stream with auto metadata & subtitles." -ForegroundColor DarkGray
-    Write-Host "    2. sync-audio | sync <file_path> <offset_ms> [output_file]" -ForegroundColor White
+    Write-Host "    2. download-subtitle <URL> [output_name] [referer]" -ForegroundColor White
+    Write-Host "       -> Download subtitle file directly (.vtt, .srt, .ass)." -ForegroundColor DarkGray
+    Write-Host "    3. sync-audio <file_path> <offset_ms> [output_file]" -ForegroundColor White
     Write-Host "       -> Lossless Audio/Video Synchronizer (Shift sound forward/backward by ms)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [Project: Sowfkun Verse]" -ForegroundColor Cyan
-    Write-Host "    3. verse-deploy [dev|prod]" -ForegroundColor White
+    Write-Host "    4. verse-deploy [dev|prod]" -ForegroundColor White
     Write-Host "       -> Build and deploy Go API to Server via Google IAP in 15 seconds." -ForegroundColor DarkGray
-    Write-Host "    4. verse-tunnel" -ForegroundColor White
+    Write-Host "    5. verse-tunnel" -ForegroundColor White
     Write-Host "       -> Open secure IAP tunnels to internal services (Mongo, Redis, Kafka, SSH)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    5. help" -ForegroundColor White
+    Write-Host "    6. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -48,12 +50,13 @@ if (-not $Command) {
     Show-Banner
     Write-Host "Select a tool to use:" -ForegroundColor Yellow
     Write-Host "  [1] Video / M3U8 Stream Downloader (download)" -ForegroundColor Cyan
-    Write-Host "  [2] Audio / Video Synchronizer (sync-audio)" -ForegroundColor Cyan
-    Write-Host "  [3] Deploy Go API to Server 2 (verse-deploy)" -ForegroundColor Cyan
-    Write-Host "  [4] Open Google IAP Tunnels (verse-tunnel)" -ForegroundColor Cyan
-    Write-Host "  [5] Exit" -ForegroundColor Gray
+    Write-Host "  [2] Subtitle Downloader (download-subtitle)" -ForegroundColor Cyan
+    Write-Host "  [3] Audio / Video Synchronizer (sync-audio)" -ForegroundColor Cyan
+    Write-Host "  [4] Deploy Go API to Server 2 (verse-deploy)" -ForegroundColor Cyan
+    Write-Host "  [5] Open Google IAP Tunnels (verse-tunnel)" -ForegroundColor Cyan
+    Write-Host "  [6] Exit" -ForegroundColor Gray
     Write-Host ""
-    $choice = Read-Host "Enter option [1-5]"
+    $choice = Read-Host "Enter option [1-6]"
 
     switch ($choice) {
         "1" {
@@ -61,14 +64,18 @@ if (-not $Command) {
             & $script
         }
         "2" {
-            $script = Join-Path $modulesDir "sync-audio.ps1"
+            $script = Join-Path $modulesDir "download-video.ps1"
             & $script
         }
         "3" {
-            $script = Join-Path $serverTestDir "deploy-api.ps1"
+            $script = Join-Path $modulesDir "sync-audio.ps1"
             & $script
         }
         "4" {
+            $script = Join-Path $serverTestDir "deploy-api.ps1"
+            & $script
+        }
+        "5" {
             $script = Join-Path $serverTestDir "iap-tunnel.ps1"
             & $script
         }
@@ -81,7 +88,7 @@ if (-not $Command) {
 
 $cmdLower = $Command.ToLower()
 
-# Handle "sowfkun sync audio ..." two-word command
+# Support "sync audio" as an alias to sync-audio
 if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() -eq "audio") {
     $cmdLower = "sync-audio"
     if ($ArgsList.Count -gt 1) {
@@ -91,26 +98,33 @@ if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() 
     }
 }
 
-if ($cmdLower -in @("download", "dl", "video", "m3u8", "sub", "subtitle", "vtt", "srt")) {
+if ($cmdLower -eq "download") {
     $script = Join-Path $modulesDir "download-video.ps1"
     $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
     $ref = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
     & $script -Url $url -OutputName $outName -Referer $ref
 }
-elseif ($cmdLower -in @("sync-audio", "sync_audio", "syncaudio", "sync", "audio-sync", "delay", "offset")) {
+elseif ($cmdLower -in @("download-subtitle", "download-sub")) {
+    $script = Join-Path $modulesDir "download-video.ps1"
+    $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
+    $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
+    $ref = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
+    & $script -Url $url -OutputName $outName -Referer $ref
+}
+elseif ($cmdLower -eq "sync-audio") {
     $script = Join-Path $modulesDir "sync-audio.ps1"
     $src = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $offset = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
     $dst = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
     & $script -FilePath $src -OffsetMs $offset -OutputPath $dst
 }
-elseif ($cmdLower -in @("verse-deploy", "verse:deploy", "deploy-verse", "verse-api", "deploy")) {
+elseif ($cmdLower -eq "verse-deploy") {
     $script = Join-Path $serverTestDir "deploy-api.ps1"
     $targetEnv = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "dev" }
     & $script -TargetEnv $targetEnv
 }
-elseif ($cmdLower -in @("verse-tunnel", "verse:tunnel", "tunnel-verse", "verse-iap", "tunnel", "iap")) {
+elseif ($cmdLower -eq "verse-tunnel") {
     $script = Join-Path $serverTestDir "iap-tunnel.ps1"
     $target = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     & $script -Target $target
