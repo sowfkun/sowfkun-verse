@@ -1,56 +1,124 @@
 param(
-    [string]$Url,
-    [string]$OutputName,
-    [string]$Referer
+    [string]$Url = "",
+    [string]$OutputName = "",
+    [string]$Referer = ""
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$userDownloads = [System.IO.Path]::Combine($env:USERPROFILE, "Downloads")
-if (-not (Test-Path $userDownloads)) {
-    $userDownloads = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "downloads"
-    if (-not (Test-Path $userDownloads)) { New-Item -ItemType Directory -Path $userDownloads -Force | Out-Null }
-}
+$userDownloads = [Environment]::GetFolderPath("UserProfile") + "\Downloads"
 
 # ------------------------------------------------------------------------------
-# 1. AUTO-BOOTSTRAP PACKAGE (PIP / WINGET / PYTHON MODULE)
+# 1. AUTO-BOOTSTRAP YT-DLP & FFMPEG
 # ------------------------------------------------------------------------------
 function Ensure-YtDlp {
-    # 1. Check direct yt-dlp in PATH
-    if (Get-Command yt-dlp -ErrorAction SilentlyContinue) {
-        return @{ Type = "Direct"; Command = "yt-dlp" }
+    $ytdlp = Get-Command yt-dlp -ErrorAction SilentlyContinue
+    if ($ytdlp) {
+        return @{ Type = "Direct"; Command = "yt-dlp"; ModuleArgs = @() }
     }
 
-    # 2. Check Python yt_dlp module
-    $pyCheck = & python -c "import yt_dlp; print('OK')" 2>$null
-    if ($pyCheck -eq "OK") {
-        return @{ Type = "Python"; Command = "python"; ModuleArgs = @("-m", "yt_dlp") }
-    }
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
 
-    # 3. Auto-install via pip
-    Write-Host "[Auto-Install] Installing yt-dlp package via pip..." -ForegroundColor Yellow
-    & pip install --user yt-dlp --quiet 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[Auto-Install] Installed yt-dlp successfully via pip!" -ForegroundColor Green
-        return @{ Type = "Python"; Command = "python"; ModuleArgs = @("-m", "yt_dlp") }
-    }
+    if ($python) {
+        $hasModule = & $python.Name -c "import yt_dlp; print('OK')" 2>$null
+        if ($hasModule -match "OK") {
+            return @{ Type = "Python"; Command = $python.Name; ModuleArgs = @("-m", "yt_dlp") }
+        }
 
-    # 4. Fallback via winget
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Host "[Auto-Install] Installing yt-dlp package via winget..." -ForegroundColor Yellow
-        & winget install yt-dlp --silent --accept-source-agreements --accept-package-agreements 2>$null
-        if (Get-Command yt-dlp -ErrorAction SilentlyContinue) {
-            return @{ Type = "Direct"; Command = "yt-dlp" }
+        Write-Host "Installing yt-dlp via pip..." -ForegroundColor Yellow
+        & $python.Name -m pip install --quiet --upgrade yt-dlp
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "yt-dlp installed successfully!" -ForegroundColor Green
+            return @{ Type = "Python"; Command = $python.Name; ModuleArgs = @("-m", "yt_dlp") }
         }
     }
 
-    Write-Host "ERROR: Failed to auto-install yt-dlp. Please run: pip install yt-dlp" -ForegroundColor Red
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Host "Installing yt-dlp via winget..." -ForegroundColor Yellow
+        winget install --id yt-dlp.yt-dlp --silent --accept-package-agreements --accept-source-agreements
+        $ytdlp = Get-Command yt-dlp -ErrorAction SilentlyContinue
+        if ($ytdlp) {
+            return @{ Type = "Direct"; Command = "yt-dlp"; ModuleArgs = @() }
+        }
+    }
+
+    Write-Host "ERROR: Could not find or install yt-dlp." -ForegroundColor Red
     return $null
 }
 
+function Find-FFmpeg {
+    $ffmpegCmd = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
+    if ($ffmpegCmd) { return $ffmpegCmd }
+
+    $packagesDir = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
+    if (Test-Path $packagesDir) {
+        $found = (Get-ChildItem -Path $packagesDir -Filter "ffmpeg.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+        if ($found) { return $found }
+    }
+    return "ffmpeg.exe"
+}
+
 # ------------------------------------------------------------------------------
-# 2. DOWNLOAD ENGINE
+# 2. AUTO-REPAIR OBFUSCATED STREAMS (FAKE PNG HEADERS)
+# ------------------------------------------------------------------------------
+function Repair-ObfuscatedStream {
+    param([string]$FilePath)
+
+    if (-not (Test-Path $FilePath)) { return }
+
+    # Check first 8 bytes for \x89PNG\r\n\x1a\n
+    $fs = [System.IO.File]::OpenRead($FilePath)
+    $buf = New-Object byte[] 8
+    $readCount = $fs.Read($buf, 0, 8)
+    $fs.Close()
+
+    if ($readCount -ge 4 -and $buf[0] -eq 0x89 -and $buf[1] -eq 0x50 -and $buf[2] -eq 0x4E -and $buf[3] -eq 0x47) {
+        Write-Host "[Auto-Repair] Obfuscated stream detected (fake PNG headers). Stripping headers and remuxing..." -ForegroundColor Yellow
+
+        $cleanTsPath = "$FilePath.clean.ts"
+        $fixedMp4Path = "$FilePath.fixed.mp4"
+        $ffmpegExe = Find-FFmpeg
+
+        # Python script to strip PNG headers from all segments
+        $pyCode = @"
+import sys
+
+src = r'$FilePath'
+dst = r'$cleanTsPath'
+
+with open(src, 'rb') as fin, open(dst, 'wb') as fout:
+    data = fin.read()
+    segments = data.split(b'\x89PNG\r\n\x1a\n')
+    for seg in segments:
+        if not seg:
+            continue
+        ts_start = seg.find(b'\x47')
+        if ts_start != -1:
+            valid_data = seg[ts_start:]
+            rem = len(valid_data) % 188
+            if rem > 0:
+                valid_data = valid_data[:-rem]
+            fout.write(valid_data)
+"@
+        python -c $pyCode 2>$null
+
+        if (Test-Path $cleanTsPath) {
+            & $ffmpegExe -y -loglevel error -i $cleanTsPath -c copy -bsf:a aac_adtstoasc -movflags +faststart $fixedMp4Path
+            if (Test-Path $fixedMp4Path) {
+                Remove-Item $cleanTsPath -Force
+                Remove-Item $FilePath -Force
+                Move-Item $fixedMp4Path $FilePath -Force
+                Write-Host "[Auto-Repair] Video stream successfully repaired into standard MP4!" -ForegroundColor Green
+            }
+        }
+    }
+}
+
+# ------------------------------------------------------------------------------
+# 3. DOWNLOAD ENGINE
 # ------------------------------------------------------------------------------
 function Start-DownloadVideo {
     param(
@@ -112,9 +180,12 @@ function Start-DownloadVideo {
     & $runner.Command $dlArgs
 
     if ($LASTEXITCODE -eq 0) {
+        # Check and auto-repair if stream was obfuscated with fake PNG headers
+        Repair-ObfuscatedStream -FilePath $outputPath
+
         Write-Host ""
         Write-Host "=================================================================" -ForegroundColor Green
-        Write-Host "SUCCESS: Video download completed!" -ForegroundColor Green
+        Write-Host "SUCCESS: Video download and post-processing completed!" -ForegroundColor Green
         Write-Host "Saved file: $outputPath" -ForegroundColor Cyan
         Write-Host "=================================================================" -ForegroundColor Green
     } else {
@@ -124,7 +195,7 @@ function Start-DownloadVideo {
 }
 
 # ------------------------------------------------------------------------------
-# 3. ENTRY POINT
+# 4. ENTRY POINT
 # ------------------------------------------------------------------------------
 if ($Url) {
     Start-DownloadVideo -TargetUrl $Url -TargetName $OutputName -CustomReferer $Referer
