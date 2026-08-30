@@ -26,7 +26,7 @@ function Show-Help {
     Write-Host "  [General Media Utilities]" -ForegroundColor Cyan
     Write-Host "    1. download | dl <URL> [output_name] [referer]" -ForegroundColor White
     Write-Host "       -> Download video / m3u8 stream with auto metadata & subtitles." -ForegroundColor DarkGray
-    Write-Host "    2. sync | sync-audio <file_path> <offset_ms> [output_file]" -ForegroundColor White
+    Write-Host "    2. sync-audio | sync <file_path> <offset_ms> [output_file]" -ForegroundColor White
     Write-Host "       -> Lossless Audio/Video Synchronizer (Shift sound forward/backward by ms)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [Project: Sowfkun Verse]" -ForegroundColor Cyan
@@ -47,10 +47,10 @@ function Show-Help {
 if (-not $Command) {
     Show-Banner
     Write-Host "Select a tool to use:" -ForegroundColor Yellow
-    Write-Host "  [1] Video / M3U8 Stream Downloader" -ForegroundColor Cyan
-    Write-Host "  [2] Audio / Video Synchronizer (Fix Audio Delay by ms)" -ForegroundColor Cyan
-    Write-Host "  [3] Deploy Go API to Server 2 (Sowfkun Verse)" -ForegroundColor Cyan
-    Write-Host "  [4] Open Google IAP Tunnels (Sowfkun Verse)" -ForegroundColor Cyan
+    Write-Host "  [1] Video / M3U8 Stream Downloader (download)" -ForegroundColor Cyan
+    Write-Host "  [2] Audio / Video Synchronizer (sync-audio)" -ForegroundColor Cyan
+    Write-Host "  [3] Deploy Go API to Server 2 (verse-deploy)" -ForegroundColor Cyan
+    Write-Host "  [4] Open Google IAP Tunnels (verse-tunnel)" -ForegroundColor Cyan
     Write-Host "  [5] Exit" -ForegroundColor Gray
     Write-Host ""
     $choice = Read-Host "Enter option [1-5]"
@@ -81,6 +81,16 @@ if (-not $Command) {
 
 $cmdLower = $Command.ToLower()
 
+# Handle "sowfkun sync audio ..." two-word command
+if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() -eq "audio") {
+    $cmdLower = "sync-audio"
+    if ($ArgsList.Count -gt 1) {
+        $ArgsList = $ArgsList[1..($ArgsList.Count - 1)]
+    } else {
+        $ArgsList = @()
+    }
+}
+
 if ($cmdLower -in @("download", "dl", "video", "m3u8")) {
     $script = Join-Path $modulesDir "download-video.ps1"
     $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
@@ -88,7 +98,7 @@ if ($cmdLower -in @("download", "dl", "video", "m3u8")) {
     $ref = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
     & $script -Url $url -OutputName $outName -Referer $ref
 }
-elseif ($cmdLower -in @("sync", "sync-audio", "audio-sync", "delay", "offset")) {
+elseif ($cmdLower -in @("sync-audio", "sync_audio", "syncaudio", "sync", "audio-sync", "delay", "offset")) {
     $script = Join-Path $modulesDir "sync-audio.ps1"
     $src = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $offset = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
