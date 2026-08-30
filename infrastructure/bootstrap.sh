@@ -46,6 +46,17 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+set_env_kv() {
+    local file=$1
+    local key=$2
+    local val=$3
+    if grep -q "^${key}=" "$file" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=${val}|" "$file"
+    else
+        echo "${key}=${val}" >> "$file"
+    fi
+}
+
 # Hàm hiển thị Interactive Menu khi không truyền tham số
 interactive_menu() {
     echo "================================================================="
@@ -351,59 +362,69 @@ EOF
     fi
 }
 
-# 6. CONFIGURE FIREWALL (UFW), FAIL2BAN & DOCKER SECURITY
+# 6. CONFIGURE FIREWALL (UFW), FAIL2BAN & CLOUD METADATA PROTECTION
 setup_security() {
-    echo "🛡️ [6/9] Đang thiết lập UFW Firewall, Fail2ban & Cấu hình Port Dịch Vụ..."
+    echo "🛡️ [6/9] Đang thiết lập Tường lửa, Fail2ban & Chặn Cloud Metadata (GCP, Alibaba, AWS)..."
     systemctl enable fail2ban 2>/dev/null || true
     systemctl start fail2ban 2>/dev/null || true
 
-    ufw default deny incoming
-    ufw default allow outgoing
-    
-    # Cho phép SSH nội bộ hoặc quản lý qua Cloud Workbench
-    ufw allow 22/tcp comment 'SSH Port'
-    
-    # Quét danh sách service để mở port tường lửa tương ứng
-    for s in "${SELECTED_SERVICES[@]}"; do
-        case "$s" in
-            "api")
-                ufw allow 8080/tcp comment 'Go API Port'
-                ;;
-            "mongo")
-                ufw allow 27017/tcp comment 'MongoDB Atlas Local Port'
-                ;;
-            "redis")
-                ufw allow 6379/tcp comment 'Redis Port'
-                ;;
-            "kafka")
-                ufw allow 9092/tcp comment 'Kafka Internal Broker'
-                ufw allow 9094/tcp comment 'Kafka External Broker'
-                ufw allow 8085/tcp comment 'Redpanda Web Console'
-                ;;
-            "opensearch")
-                ufw allow 9200/tcp comment 'OpenSearch HTTP API'
-                ;;
-        esac
-    done
+    # Chặn Cloud Metadata IP chống SSRF (GCP 169.254.169.254 & Alibaba 100.100.100.200)
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -C OUTPUT -d 169.254.169.254 -j DROP 2>/dev/null || iptables -A OUTPUT -d 169.254.169.254 -j DROP
+        iptables -C OUTPUT -d 100.100.100.200 -j DROP 2>/dev/null || iptables -A OUTPUT -d 100.100.100.200 -j DROP
+    fi
 
-    # Kích hoạt UFW
-    ufw --force enable
+    if command -v ufw >/dev/null 2>&1; then
+        ufw default deny incoming
+        ufw default allow outgoing
+        
+        # Cho phép SSH nội bộ hoặc quản lý qua Cloud Workbench
+        ufw allow 22/tcp comment 'SSH Port'
+        
+        # Quét danh sách service để mở port tường lửa tương ứng
+        for s in "${SELECTED_SERVICES[@]}"; do
+            case "$s" in
+                "api")
+                    ufw allow 8080/tcp comment 'Go API Port'
+                    ;;
+                "mongo")
+                    ufw allow 27017/tcp comment 'MongoDB Atlas Local Port'
+                    ;;
+                "redis")
+                    ufw allow 6379/tcp comment 'Redis Port'
+                    ;;
+                "kafka")
+                    ufw allow 9092/tcp comment 'Kafka Internal Broker'
+                    ufw allow 9094/tcp comment 'Kafka External Broker'
+                    ufw allow 8085/tcp comment 'Redpanda Web Console'
+                    ;;
+                "opensearch")
+                    ufw allow 9200/tcp comment 'OpenSearch HTTP API'
+                    ;;
+            esac
+        done
+
+        # Kích hoạt UFW
+        ufw --force enable 2>/dev/null || true
+    fi
     
     # Kích hoạt tự động vá lỗi bảo mật định kỳ
     systemctl enable unattended-upgrades 2>/dev/null || true
     systemctl start unattended-upgrades 2>/dev/null || true
 
-    echo "✅ Đã kích hoạt Firewall UFW & Hardening an toàn!"
+    echo "✅ Đã kích hoạt Firewall & Chặn Cloud Metadata SSRF an toàn!"
 }
 
 # 7. SECURE SSH CONFIGURATION
 harden_ssh() {
-    echo "🔑 [7/9] Khóa bảo mật SSH (Chặn password brute-force)..."
+    echo "🔑 [7/8] Khóa bảo mật SSH (Chặn password brute-force)..."
     local ssh_d="/etc/ssh/sshd_config.d/99-hardening.conf"
+    mkdir -p /etc/ssh/sshd_config.d
     cat << 'EOF' > "$ssh_d"
 # Vô hiệu hóa login bằng password nếu đã có Workbench / SSH Key
 PasswordAuthentication no
 PermitEmptyPasswords no
+PermitRootLogin no
 MaxAuthTries 3
 ClientAliveInterval 300
 ClientAliveCountMax 2
@@ -419,16 +440,24 @@ setup_monitoring_and_maintenance() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # Cài đặt script monitor vào /usr/local/bin
-    if [ -f "$SCRIPT_DIR/scripts/monitor.sh" ]; then
+    if [ -f "$SCRIPT_DIR/scripts/app/monitor.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/app/monitor.sh" /usr/local/bin/app-monitor.sh
+        chmod +x /usr/local/bin/app-monitor.sh
+    elif [ -f "$SCRIPT_DIR/scripts/monitor.sh" ]; then
         cp "$SCRIPT_DIR/scripts/monitor.sh" /usr/local/bin/app-monitor.sh
         chmod +x /usr/local/bin/app-monitor.sh
     fi
 
     # Tạo thư mục config cảnh báo nếu chưa có
     mkdir -p /etc/infra
-    if [ ! -f /etc/infra/alert.conf ] && [ -f "$SCRIPT_DIR/scripts/alert.conf.example" ]; then
-        cp "$SCRIPT_DIR/scripts/alert.conf.example" /etc/infra/alert.conf
-        echo "ℹ️ Đã tạo file cấu hình cảnh báo tại /etc/infra/alert.conf (Điền Telegram Token vào đây)"
+    if [ ! -f /etc/infra/alert.conf ]; then
+        if [ -f "$SCRIPT_DIR/scripts/app/alert.conf.example" ]; then
+            cp "$SCRIPT_DIR/scripts/app/alert.conf.example" /etc/infra/alert.conf
+            echo "ℹ️ Đã tạo file cấu hình cảnh báo tại /etc/infra/alert.conf (Điền Telegram Token vào đây)"
+        elif [ -f "$SCRIPT_DIR/scripts/alert.conf.example" ]; then
+            cp "$SCRIPT_DIR/scripts/alert.conf.example" /etc/infra/alert.conf
+            echo "ℹ️ Đã tạo file cấu hình cảnh báo tại /etc/infra/alert.conf (Điền Telegram Token vào đây)"
+        fi
     fi
 
     # Đăng ký Cron Job kiểm tra sức khỏe mỗi 5 phút + Dọn dẹp Docker rác 3h sáng Chủ Nhật
@@ -557,14 +586,24 @@ start_services() {
     done
 }
 
+if [ "$MODE" == "fresh" ]; then
+    setup_time_sync
+    setup_swap
+    debloat_os
+    tune_kernel
+    install_docker
+    setup_security
+    harden_ssh
+    setup_monitoring_and_maintenance
+else
     # Rollback mode: vẫn đảm bảo docker network tồn tại
     docker network create "$APP_NETWORK" 2>/dev/null || true
 fi
+
 start_services
 
 echo "================================================================="
 echo "🎉 HOÀN TẤT CÀI ĐẶT & GIA CỐ BẢO MẬT CÁC DỊCH VỤ: [ $SERVICES_DISPLAY ]!"
-echo "👉 Cấu hình cảnh báo Telegram/Discord: /etc/infra/alert.conf"
 echo "👉 Kiểm tra tất cả container: docker ps"
 echo "👉 Mạng Docker nội bộ: $APP_NETWORK"
 echo "================================================================="

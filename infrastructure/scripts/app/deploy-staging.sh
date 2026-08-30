@@ -5,12 +5,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 BRANCH="${1:-dev}"
 
 echo "================================================================="
-echo "🚀 SOWFKUN VERSE - MANUAL DEPLOY SCRIPT"
+echo "🚀 APPLICATION BACKEND - MANUAL DEPLOY SCRIPT"
 echo "👉 Branch: ${BRANCH}"
 echo "📁 Root: ${ROOT_DIR}"
 echo "================================================================="

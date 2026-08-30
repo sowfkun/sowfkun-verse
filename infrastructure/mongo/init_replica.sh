@@ -60,6 +60,6 @@ try {
 }
 "
 
-echo "$RECONFIG_JS" | docker exec -i "$CONTAINER_NAME" mongosh --quiet 2>/dev/null || true
+docker exec -i "$CONTAINER_NAME" mongosh --quiet --eval "$RECONFIG_JS" 2>/dev/null || true
 
 echo "✅ Hoàn tất cấu hình MongoDB Replica Set ($TARGET_HOST)!"

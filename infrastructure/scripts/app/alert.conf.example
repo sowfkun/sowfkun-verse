@@ -1,0 +1,15 @@
+# /etc/infra/alert.conf (Configuration)
+
+SERVER_NAME="app-server-01"
+
+# Telegram Bot Alerts
+TELEGRAM_BOT_TOKEN="your_bot_token_here"
+TELEGRAM_CHAT_ID="your_chat_id_here"
+
+# Discord Webhook Alerts
+DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your/webhook/url"
+
+# Thresholds (Percentages)
+RAM_THRESHOLD=85
+SWAP_THRESHOLD=70
+DISK_THRESHOLD=85

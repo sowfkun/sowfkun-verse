@@ -127,8 +127,8 @@ TELEGRAM_CHAT_ID="123456789"
 Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển khai không muốn để lộ mã nguồn Go:
 
 1. **Bước 1 — Đóng gói file binary tĩnh trên máy dev**:
-   - Trên Windows: Chạy PowerShell `.\build_onpremise.ps1`
-   - Trên Linux/macOS: Chạy `bash build_onpremise.sh`
+   - Trên Windows: Chạy PowerShell `.\scripts\app\build_onpremise.ps1`
+   - Trên Linux/macOS: Chạy `bash scripts/app/build_onpremise.sh`
    - File binary `app-api` sẽ tự động được sinh ra trong thư mục `infrastructure/api/app-api`.
 
 2. **Bước 2 — Bàn giao & Triển khai On-Premise**:
@@ -142,13 +142,44 @@ Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển k
 
 ---
 
+## 🛠️ Cấu Trúc Script Hạ Tầng & Triển Khai (Scripts Hierarchy)
+
+Toàn bộ script được phân tách rõ ràng theo mục đích:
+```text
+infrastructure/scripts/
+├── app/                        # Quản lý vòng đời ứng dụng
+│   ├── deploy-staging.sh       # Deploy / Cập nhật API thủ công trên Staging
+│   ├── build_onpremise.sh      # Build Linux Static Binary (AMD64)
+│   ├── build_onpremise.ps1     # Build Static Binary trên Windows
+│   ├── monitor.sh              # Giám sát RAM/Disk + Bắn Alert Telegram/Discord
+│   └── alert.conf.example      # File cấu hình mẫu cho hệ thống cảnh báo
+│
+└── provisioning/               # Khởi tạo & Bảo mật hạ tầng đa nền tảng
+    ├── common/
+    │   └── os-hardening.sh     # Chặn metadata IP (169.254.169.254), SSH Hardening, Sysctl
+    ├── gcp/                    # Google Cloud Platform (Zero-Trust VPC & Firewall 1 chiều)
+    │   ├── case1-single-server/            # [Slot] All-in-One trên 1 VM
+    │   ├── case2-single-account-multi-server/ # [Slot] 2 VM trên 1 Account cùng Subnet
+    │   └── case3-multi-account-peering/    # 2 VM trên 2 Account kết nối 2-Way VPC Peering
+    │       ├── master-gcp.sh / .ps1        # [All-in-One] Bảng điều khiển trung tâm
+    │       ├── 01-create-vpc.sh            # Tạo Custom VPC & Subnet
+    │       ├── 02-setup-vpc-peering.sh     # Thiết lập kết nối 2-way VPC Peering
+    │       ├── 03-apply-firewalls.sh       # Áp dụng Tường lửa Zero-Trust đối xứng & IAP
+    │       ├── 04-attach-vm-to-vpc.sh      # Chuyển VM sang Subnet (Zero Data Loss)
+    │       └── 05-audit-and-verify-security.sh # Kiểm toán an ninh & quét lệch cấu hình
+    ├── alibaba/                # Alibaba Cloud (Sẵn sàng mở rộng ECS, CEN, Security Group)
+    └── onpremise/              # On-Premise / Bare-Metal (VLAN, Subnet Isolation, UFW)
+```
+
+---
+
 ## 🤖 Tự Động Hóa CI/CD Với GitHub Actions (Cloud Build & SSH Deploy)
 
 Dự án áp dụng mô hình CI/CD tiêu chuẩn công nghiệp: Biên dịch trên GitHub Cloud và tự động triển khai qua SSH để **máy chủ luôn nhẹ 100% không tốn CPU/RAM để compile**:
 
 1. **Thêm 3 Secret trong GitHub Repo Settings** (`Settings -> Secrets and variables -> Actions`):
-   - `SERVER_HOST`: IP máy chủ triển khai (ví dụ `35.208.238.32`).
-   - `SERVER_USER`: Username SSH của máy chủ (ví dụ `sowfkun`).
+   - `SERVER_HOST`: IP máy chủ triển khai (ví dụ `35.209.234.134`).
+   - `SERVER_USER`: Username SSH của máy chủ (ví dụ `ubuntu`).
    - `SSH_PRIVATE_KEY`: Toàn bộ nội dung OpenSSH Private Key để đăng nhập vào máy chủ.
 
 2. **Luồng Triển Khai Tự Động**:
