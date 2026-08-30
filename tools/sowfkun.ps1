@@ -91,7 +91,7 @@ if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() 
     }
 }
 
-if ($cmdLower -in @("download", "dl", "video", "m3u8")) {
+if ($cmdLower -in @("download", "dl", "video", "m3u8", "sub", "subtitle", "vtt", "srt")) {
     $script = Join-Path $modulesDir "download-video.ps1"
     $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }

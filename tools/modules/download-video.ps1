@@ -141,7 +141,75 @@ with open(src, 'rb') as fin, open(dst, 'wb') as fout:
 }
 
 # ------------------------------------------------------------------------------
-# 3. DOWNLOAD ENGINE
+# 3. DIRECT SUBTITLE DOWNLOADER (.vtt, .srt, .ass)
+# ------------------------------------------------------------------------------
+function Download-Subtitle {
+    param(
+        [string]$SubUrl,
+        [string]$SubName,
+        [string]$CustomReferer
+    )
+
+    $subExt = ".vtt"
+    if ($SubUrl -match "\.(vtt|srt|ass|sub)($|\?)") {
+        $subExt = "." + $Matches[1]
+    }
+
+    if (-not $SubName) {
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $SubName = "sub_$timestamp$subExt"
+    }
+    if (-not ($SubName.EndsWith(".vtt") -or $SubName.EndsWith(".srt") -or $SubName.EndsWith(".ass") -or $SubName.EndsWith(".sub"))) {
+        $SubName = "$SubName$subExt"
+    }
+
+    $outputPath = Join-Path $userDownloads $SubName
+
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host ">>> SOWFKUN DOWNLOADER - DOWNLOADING SUBTITLE FILE..." -ForegroundColor Green
+    Write-Host "  URL:         $SubUrl" -ForegroundColor White
+    Write-Host "  Destination: $outputPath" -ForegroundColor White
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    $pyCode = @"
+import urllib.request
+import ssl
+
+url = r'$SubUrl'
+out = r'$outputPath'
+ref = r'$CustomReferer'
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+}
+if ref:
+    headers['Referer'] = ref
+
+req = urllib.request.Request(url, headers=headers)
+with urllib.request.urlopen(req, context=ctx) as resp, open(out, 'wb') as fout:
+    fout.write(resp.read())
+"@
+    python -c $pyCode 2>$null
+
+    if (Test-Path $outputPath) {
+        $subSize = [math]::Round((Get-Item $outputPath).Length / 1KB, 2)
+        Write-Host "=================================================================" -ForegroundColor Green
+        Write-Host "SUCCESS: Subtitle downloaded successfully!" -ForegroundColor Green
+        Write-Host "Saved Subtitle: $outputPath ($subSize KB)" -ForegroundColor Cyan
+        Write-Host "=================================================================" -ForegroundColor Green
+    } else {
+        Write-Host "ERROR: Failed to download subtitle from $SubUrl" -ForegroundColor Red
+    }
+}
+
+# ------------------------------------------------------------------------------
+# 4. DOWNLOAD ENGINE
 # ------------------------------------------------------------------------------
 function Start-DownloadVideo {
     param(
@@ -151,7 +219,13 @@ function Start-DownloadVideo {
     )
 
     if (-not $TargetUrl) {
-        Write-Host "ERROR: Please provide a video or m3u8 stream URL!" -ForegroundColor Red
+        Write-Host "ERROR: Please provide a video, stream, or subtitle URL!" -ForegroundColor Red
+        return
+    }
+
+    # If URL is a direct subtitle file (.vtt, .srt, .ass, /subtitle/)
+    if ($TargetUrl -match "\.(vtt|srt|ass|sub)($|\?)" -or $TargetUrl -match "/subtitle/") {
+        Download-Subtitle -SubUrl $TargetUrl -SubName $TargetName -CustomReferer $CustomReferer
         return
     }
 
@@ -218,15 +292,15 @@ function Start-DownloadVideo {
 }
 
 # ------------------------------------------------------------------------------
-# 4. ENTRY POINT
+# 5. ENTRY POINT
 # ------------------------------------------------------------------------------
 if ($Url) {
     Start-DownloadVideo -TargetUrl $Url -TargetName $OutputName -CustomReferer $Referer
 } else {
     Write-Host "=================================================================" -ForegroundColor Cyan
-    Write-Host "SOWFKUN VIDEO / M3U8 STREAM DOWNLOADER" -ForegroundColor Green
+    Write-Host "SOWFKUN VIDEO / M3U8 STREAM / SUBTITLE DOWNLOADER" -ForegroundColor Green
     Write-Host "=================================================================" -ForegroundColor Cyan
-    $inputUrl = Read-Host "Enter video or m3u8 stream URL"
+    $inputUrl = Read-Host "Enter video, m3u8 stream, or subtitle URL"
     if ($inputUrl) {
         $inputName = Read-Host "Enter file name (Leave empty for auto name)"
         Start-DownloadVideo -TargetUrl $inputUrl -TargetName $inputName
