@@ -23,18 +23,20 @@ function Show-Banner {
 function Show-Help {
     Show-Banner
     Write-Host "Supported Commands:" -ForegroundColor Yellow
-    Write-Host "  [General Utilities]" -ForegroundColor Cyan
+    Write-Host "  [General Media Utilities]" -ForegroundColor Cyan
     Write-Host "    1. download | dl <URL> [output_name] [referer]" -ForegroundColor White
     Write-Host "       -> Download video / m3u8 stream with auto metadata & subtitles." -ForegroundColor DarkGray
+    Write-Host "    2. sync | sync-audio <file_path> <offset_ms> [output_file]" -ForegroundColor White
+    Write-Host "       -> Lossless Audio/Video Synchronizer (Shift sound forward/backward by ms)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [Project: Sowfkun Verse]" -ForegroundColor Cyan
-    Write-Host "    2. verse-deploy [dev|prod]" -ForegroundColor White
+    Write-Host "    3. verse-deploy [dev|prod]" -ForegroundColor White
     Write-Host "       -> Build and deploy Go API to Server via Google IAP in 15 seconds." -ForegroundColor DarkGray
-    Write-Host "    3. verse-tunnel" -ForegroundColor White
+    Write-Host "    4. verse-tunnel" -ForegroundColor White
     Write-Host "       -> Open secure IAP tunnels to internal services (Mongo, Redis, Kafka, SSH)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    4. help" -ForegroundColor White
+    Write-Host "    5. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -46,11 +48,12 @@ if (-not $Command) {
     Show-Banner
     Write-Host "Select a tool to use:" -ForegroundColor Yellow
     Write-Host "  [1] Video / M3U8 Stream Downloader" -ForegroundColor Cyan
-    Write-Host "  [2] Deploy Go API to Server 2 (Sowfkun Verse)" -ForegroundColor Cyan
-    Write-Host "  [3] Open Google IAP Tunnels (Sowfkun Verse)" -ForegroundColor Cyan
-    Write-Host "  [4] Exit" -ForegroundColor Gray
+    Write-Host "  [2] Audio / Video Synchronizer (Fix Audio Delay by ms)" -ForegroundColor Cyan
+    Write-Host "  [3] Deploy Go API to Server 2 (Sowfkun Verse)" -ForegroundColor Cyan
+    Write-Host "  [4] Open Google IAP Tunnels (Sowfkun Verse)" -ForegroundColor Cyan
+    Write-Host "  [5] Exit" -ForegroundColor Gray
     Write-Host ""
-    $choice = Read-Host "Enter option [1-4]"
+    $choice = Read-Host "Enter option [1-5]"
 
     switch ($choice) {
         "1" {
@@ -58,10 +61,14 @@ if (-not $Command) {
             & $script
         }
         "2" {
-            $script = Join-Path $serverTestDir "deploy-api.ps1"
+            $script = Join-Path $modulesDir "sync-audio.ps1"
             & $script
         }
         "3" {
+            $script = Join-Path $serverTestDir "deploy-api.ps1"
+            & $script
+        }
+        "4" {
             $script = Join-Path $serverTestDir "iap-tunnel.ps1"
             & $script
         }
@@ -80,6 +87,13 @@ if ($cmdLower -in @("download", "dl", "video", "m3u8")) {
     $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
     $ref = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
     & $script -Url $url -OutputName $outName -Referer $ref
+}
+elseif ($cmdLower -in @("sync", "sync-audio", "audio-sync", "delay", "offset")) {
+    $script = Join-Path $modulesDir "sync-audio.ps1"
+    $src = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
+    $offset = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
+    $dst = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
+    & $script -FilePath $src -OffsetMs $offset -OutputPath $dst
 }
 elseif ($cmdLower -in @("verse-deploy", "verse:deploy", "deploy-verse", "verse-api", "deploy")) {
     $script = Join-Path $serverTestDir "deploy-api.ps1"
