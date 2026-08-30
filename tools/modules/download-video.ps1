@@ -69,14 +69,23 @@ function Repair-ObfuscatedStream {
 
     if (-not (Test-Path $FilePath)) { return }
 
-    # Check first 8 bytes for PNG header (\x89PNG\r\n\x1a\n)
+    # Scan first 64KB for PNG magic (\x89PNG\r\n\x1a\n)
+    $hasPngObfuscation = $false
     $fs = [System.IO.File]::OpenRead($FilePath)
-    $buf = New-Object byte[] 8
-    $readCount = $fs.Read($buf, 0, 8)
+    $scanSize = [Math]::Min(65536, $fs.Length)
+    $buf = New-Object byte[] $scanSize
+    $readCount = $fs.Read($buf, 0, $scanSize)
     $fs.Close()
 
-    if ($readCount -ge 4 -and $buf[0] -eq 0x89 -and $buf[1] -eq 0x50 -and $buf[2] -eq 0x4E -and $buf[3] -eq 0x47) {
-        Write-Host "[Auto-Repair] Obfuscated stream detected (fake PNG headers). Synchronizing TS packets..." -ForegroundColor Yellow
+    for ($i = 0; $i -lt ($readCount - 8); $i++) {
+        if ($buf[$i] -eq 0x89 -and $buf[$i+1] -eq 0x50 -and $buf[$i+2] -eq 0x4E -and $buf[$i+3] -eq 0x47) {
+            $hasPngObfuscation = $true
+            break
+        }
+    }
+
+    if ($hasPngObfuscation) {
+        Write-Host "[Auto-Repair] Obfuscated stream detected (fake PNG headers). Synchronizing 188-byte TS packets..." -ForegroundColor Yellow
 
         $cleanTsPath = "$FilePath.clean.ts"
         $fixedMp4Path = "$FilePath.fixed.mp4"
@@ -90,9 +99,13 @@ src = r'$FilePath'
 dst = r'$cleanTsPath'
 
 def find_true_ts_sync(seg):
-    limit = min(len(seg) - 188 * 4, 4096)
+    limit = min(len(seg) - 188 * 5, 8192)
     for i in range(limit):
-        if seg[i] == 0x47 and seg[i+188] == 0x47 and seg[i+376] == 0x47 and seg[i+564] == 0x47:
+        if (seg[i] == 0x47 and 
+            seg[i+188] == 0x47 and 
+            seg[i+376] == 0x47 and 
+            seg[i+564] == 0x47 and
+            seg[i+752] == 0x47):
             return i
     iend = seg.find(b'IEND')
     if iend != -1:
