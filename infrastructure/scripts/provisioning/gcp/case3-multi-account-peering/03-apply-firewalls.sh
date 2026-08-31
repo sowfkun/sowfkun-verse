@@ -41,13 +41,15 @@ echo "✅ Đang thao tác với tài khoản: [ ${ACTIVE_ACCOUNT} ]"
 # 1. Chọn Role
 echo ""
 echo "📌 [BƯỚC 1/4] CHỌN LOẠI MÁY CHỦ CẦN THIẾT LẬP TƯỜNG LỬA:"
-echo "  [1] Data Server (Khóa Egress 0.0.0.0/0, mở IAP, mở DB cho App Subnet)"
-echo "  [2] App Server  (Mở Public 80/443/8080/8085, Mở SSH qua Google IAP)"
-read -rp "👉 Chọn vai trò [1-2, Mặc định: 1]: " role_choice
+echo "  [1] Data Server     (Khóa Egress 0.0.0.0/0, mở IAP, mở DB cho App Subnet)"
+echo "  [2] App Server      (Mở Public 80/443/8080/8085, Khóa Egress, mở IAP)"
+echo "  [3] Egress Gateway  (Mở Egress Webhook/Email 80/443, Mở Ingress từ App Subnet, mở IAP)"
+read -rp "👉 Chọn vai trò [1-3, Mặc định: 1]: " role_choice
 role_choice="${role_choice:-1}"
 
 ROLE="data"
 if [[ "$role_choice" == "2" ]]; then ROLE="app"; fi
+if [[ "$role_choice" == "3" ]]; then ROLE="egress"; fi
 
 # 2. Xác định Project & VPC Name
 echo ""
@@ -76,6 +78,7 @@ fi
 
 DEFAULT_VPC="data-server-vpc"
 if [[ "$ROLE" == "app" ]]; then DEFAULT_VPC="app-server-vpc"; fi
+if [[ "$ROLE" == "egress" ]]; then DEFAULT_VPC="egress-gateway-vpc"; fi
 
 read -rp "👉 VPC Name [Mặc định: ${DEFAULT_VPC}]: " VPC_NAME
 VPC_NAME="${VPC_NAME:-$DEFAULT_VPC}"
@@ -83,8 +86,8 @@ VPC_NAME="${VPC_NAME:-$DEFAULT_VPC}"
 # 3. Dải CIDR được phép
 echo ""
 echo "📌 [BƯỚC 3/4] CẤU HÌNH DẢI MẠNG ĐƯỢC PHÉP TRUY CẬP:"
-if [[ "$ROLE" == "data" ]]; then
-  read -rp "👉 Dải IP của App Subnet được gọi vào DB [Mặc định: 10.20.0.0/24]: " ALLOWED_CIDR
+if [[ "$ROLE" == "data" || "$ROLE" == "egress" ]]; then
+  read -rp "👉 Dải IP của App Subnet được gọi vào (${ROLE^^}) [Mặc định: 10.20.0.0/24]: " ALLOWED_CIDR
   ALLOWED_CIDR="${ALLOWED_CIDR:-10.20.0.0/24}"
 fi
 
@@ -100,13 +103,19 @@ echo "  • Role:           ${ROLE^^} SERVER"
 if [[ "$ROLE" == "data" ]]; then
   echo "  • Ingress DB:     ${ALLOWED_CIDR} (Mongo:27017, Redis:6379, Kafka:9092, OpenSearch:9200)"
   echo "  • Egress Deny:    0.0.0.0/0 (Khóa 100% Internet)"
-  echo "  • Egress Allow:   ${ALLOWED_CIDR} & Google IAP (35.235.240.0/20)"
+  echo "  • Egress Allow:   ${ALLOWED_CIDR}, Google IAP, DNS/NTP"
   echo "  • Ingress IAP:    Google IAP (SSH:22, Grafana:3000)"
 elif [[ "$ROLE" == "app" ]]; then
   echo "  • Ingress Web:    0.0.0.0/0 (Port 80, 443, 8080, 8085)"
   echo "  • Ingress SSH:    Google IAP (35.235.240.0/20 - An toàn tuyệt đối)"
   echo "  • Ingress ICMP:   0.0.0.0/0 (Ping)"
-  echo "  • Egress IAP:     Google IAP (35.235.240.0/20)"
+  echo "  • Egress Deny:    0.0.0.0/0 (Khóa Internet)"
+  echo "  • Egress Allow:   Data Subnet (10.10.0.0/24), Google IAP, DNS/NTP"
+elif [[ "$ROLE" == "egress" ]]; then
+  echo "  • Ingress App:    ${ALLOWED_CIDR} (Port 8090 Dispatcher, Kafka:9092, 9094)"
+  echo "  • Ingress SSH:    Google IAP (35.235.240.0/20)"
+  echo "  • Ingress Public: KHÓA 100% (Không mở bất kỳ cổng nào vào từ Internet)"
+  echo "  • Egress Allow:   0.0.0.0/0 (Port 80/443 Webhook & Email, DNS:53, NTP:123) & App Subnet"
 fi
 echo "================================================================="
 read -rp "❓ Bạn có xác nhận áp dụng bộ quy tắc tường lửa này không? [Y/n, Mặc định: Y]: " confirm
@@ -156,6 +165,17 @@ if [[ "$ROLE" == "data" ]]; then
     --description="Allow outbound reply traffic to Google IAP" \
     || echo "⚠️ Rule data-vpc-allow-egress-iap đã tồn tại."
 
+  gcloud compute firewall-rules create data-vpc-allow-egress-ntp-dns \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=ALLOW \
+    --destination-ranges="169.254.169.254/32,216.239.35.0/24" \
+    --rules="udp:53,tcp:53,udp:123" \
+    --priority=900 \
+    --description="Allow egress to Google Internal DNS and NTP Time Servers for UTC sync" \
+    || echo "⚠️ Rule data-vpc-allow-egress-ntp-dns đã tồn tại."
+
   # 3. Khóa Egress Internet chống Reverse Shell (Priority 1000)
   gcloud compute firewall-rules create data-vpc-deny-egress-internet \
     --project="${PROJECT_ID}" \
@@ -193,16 +213,16 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Allow Google IAP for SSH and Local App Tunnels (API, Kafka, Console)" \
     || echo "⚠️ Rule app-vpc-allow-ingress-iap đã tồn tại."
 
-  # 2. Mở Egress sang Data Server qua Peering & Google IAP (Priority 900)
+  # 2. Mở Egress sang Data Server & Egress Gateway qua Peering, Google IAP & NTP/DNS (Priority 900)
   gcloud compute firewall-rules create app-vpc-allow-egress-peer-data \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=EGRESS \
     --action=ALLOW \
-    --destination-ranges="10.10.0.0/24" \
+    --destination-ranges="10.10.0.0/24,10.30.0.0/24" \
     --rules="all" \
     --priority=900 \
-    --description="Allow outbound to Data Server over Peering" \
+    --description="Allow outbound to Data Server and Egress Gateway over Peering" \
     || echo "⚠️ Rule app-vpc-allow-egress-peer-data đã tồn tại."
 
   gcloud compute firewall-rules create app-vpc-allow-egress-iap \
@@ -215,6 +235,17 @@ elif [[ "$ROLE" == "app" ]]; then
     --priority=900 \
     --description="Allow egress to Google IAP" \
     || echo "⚠️ Rule app-vpc-allow-egress-iap đã tồn tại."
+
+  gcloud compute firewall-rules create app-vpc-allow-egress-ntp-dns \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=ALLOW \
+    --destination-ranges="169.254.169.254/32,216.239.35.0/24" \
+    --rules="udp:53,tcp:53,udp:123" \
+    --priority=900 \
+    --description="Allow egress to Google Internal DNS and NTP Time Servers for UTC sync" \
+    || echo "⚠️ Rule app-vpc-allow-egress-ntp-dns đã tồn tại."
 
   # 3. Khóa Egress Internet chống Reverse Shell / Data Leak (Priority 1000)
   gcloud compute firewall-rules create app-vpc-deny-egress-internet \
@@ -251,6 +282,67 @@ elif [[ "$ROLE" == "app" ]]; then
     --priority=1000 \
     --description="Allow ICMP ping" \
     || echo "⚠️ Rule app-vpc-allow-ingress-icmp đã tồn tại."
+
+  # 6. Khóa 100% Ingress từ Gateway Subnet (Chặn Gateway gọi ngược về Core - Zero-Trust 1 chiều)
+  gcloud compute firewall-rules create app-vpc-deny-ingress-gateway \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=INGRESS \
+    --action=DENY \
+    --source-ranges="10.30.0.0/24" \
+    --rules="all" \
+    --priority=700 \
+    --description="Deny all inbound connections initiated from Gateway VPC (Zero-Trust one-way)" \
+    || echo "⚠️ Rule app-vpc-deny-ingress-gateway đã tồn tại."
+
+elif [[ "$ROLE" == "egress" ]]; then
+  # 1. Mở Google IAP Ingress cho SSH
+  gcloud compute firewall-rules create egress-vpc-allow-ingress-iap \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=INGRESS \
+    --action=ALLOW \
+    --source-ranges="35.235.240.0/20" \
+    --rules="tcp:22" \
+    --priority=1000 \
+    --description="Allow Google IAP for SSH to Egress Gateway" \
+    || echo "⚠️ Rule egress-vpc-allow-ingress-iap đã tồn tại."
+
+  # 2. Mở Ingress nhận dispatch từ App Subnet
+  gcloud compute firewall-rules create egress-vpc-allow-ingress-peer-app \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=INGRESS \
+    --action=ALLOW \
+    --source-ranges="${ALLOWED_CIDR}" \
+    --rules="tcp:8090,tcp:9092,tcp:9094,icmp" \
+    --priority=1000 \
+    --description="Allow App Server (${ALLOWED_CIDR}) to call internal Egress Dispatcher on port 8090" \
+    || echo "⚠️ Rule egress-vpc-allow-ingress-peer-app đã tồn tại."
+
+  # 3. Mở Egress phản hồi cho IAP (Priority 900)
+  gcloud compute firewall-rules create egress-vpc-allow-egress-iap \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=ALLOW \
+    --destination-ranges="35.235.240.0/20" \
+    --rules="all" \
+    --priority=900 \
+    --description="Allow outbound reply traffic to Google IAP" \
+    || echo "⚠️ Rule egress-vpc-allow-egress-iap đã tồn tại."
+
+  # 4. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 900)
+  gcloud compute firewall-rules create egress-vpc-allow-egress-internet \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=ALLOW \
+    --destination-ranges="0.0.0.0/0" \
+    --rules="tcp:80,tcp:443,udp:53,tcp:53,udp:123" \
+    --priority=900 \
+    --description="Allow outbound Webhook, Resend Email HTTP/HTTPS, DNS and NTP" \
+    || echo "⚠️ Rule egress-vpc-allow-egress-internet đã tồn tại."
 fi
 
 echo ""

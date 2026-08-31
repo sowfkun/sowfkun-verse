@@ -1,0 +1,22 @@
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:-alpine:3.21}
+    container_name: ${GATEWAY_CONTAINER_NAME:-app_gateway}
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./app-gateway:/app/app-gateway:ro
+    entrypoint: ["/app/app-gateway"]
+    env_file:
+      - .env
+    ports:
+      - "${GATEWAY_PORT:-8090}:8090"
+    deploy:
+      resources:
+        limits:
+          memory: ${GATEWAY_CONTAINER_MEMORY_LIMIT:-200M}
+
+networks:
+  default:
+    name: ${APP_NETWORK:-app_net}
+    external: true

@@ -33,12 +33,14 @@ function Show-Help {
     Write-Host ""
     Write-Host "  [Project: Sowfkun Verse]" -ForegroundColor Cyan
     Write-Host "    4. verse-deploy [dev|prod]" -ForegroundColor White
-    Write-Host "       -> Build and deploy Go API to Server via Google IAP in 15 seconds." -ForegroundColor DarkGray
-    Write-Host "    5. verse-tunnel" -ForegroundColor White
-    Write-Host "       -> Open secure IAP tunnels to internal services (Mongo, Redis, Kafka, SSH)." -ForegroundColor DarkGray
+    Write-Host "       -> Build and deploy Go API to Server 2 via Google IAP in 15 seconds." -ForegroundColor DarkGray
+    Write-Host "    5. verse-deploy-gateway [dev|prod]" -ForegroundColor White
+    Write-Host "       -> Build and deploy Egress Gateway to Server 3 via Google IAP in 15 seconds." -ForegroundColor DarkGray
+    Write-Host "    6. verse-tunnel [server1|server2|server3|all]" -ForegroundColor White
+    Write-Host "       -> Open secure IAP tunnels to internal services (Mongo, Redis, API, Kafka, Gateway, SSH)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    6. help" -ForegroundColor White
+    Write-Host "    7. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -53,10 +55,11 @@ if (-not $Command) {
     Write-Host "  [2] Subtitle Downloader (download-subtitle)" -ForegroundColor Cyan
     Write-Host "  [3] Audio / Video Synchronizer (sync-audio)" -ForegroundColor Cyan
     Write-Host "  [4] Deploy Go API to Server 2 (verse-deploy)" -ForegroundColor Cyan
-    Write-Host "  [5] Open Google IAP Tunnels (verse-tunnel)" -ForegroundColor Cyan
-    Write-Host "  [6] Exit" -ForegroundColor Gray
+    Write-Host "  [5] Deploy Egress Gateway to Server 3 (verse-deploy-gateway)" -ForegroundColor Cyan
+    Write-Host "  [6] Open Google IAP Tunnels across 3 Servers (verse-tunnel)" -ForegroundColor Cyan
+    Write-Host "  [7] Exit" -ForegroundColor Gray
     Write-Host ""
-    $choice = Read-Host "Enter option [1-6]"
+    $choice = Read-Host "Enter option [1-7]"
 
     switch ($choice) {
         "1" {
@@ -76,6 +79,10 @@ if (-not $Command) {
             & $script
         }
         "5" {
+            $script = Join-Path $serverTestDir "deploy-gateway.ps1"
+            & $script
+        }
+        "6" {
             $script = Join-Path $serverTestDir "iap-tunnel.ps1"
             & $script
         }
@@ -121,6 +128,11 @@ elseif ($cmdLower -eq "sync-audio") {
 }
 elseif ($cmdLower -eq "verse-deploy") {
     $script = Join-Path $serverTestDir "deploy-api.ps1"
+    $targetEnv = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "dev" }
+    & $script -TargetEnv $targetEnv
+}
+elseif ($cmdLower -in @("verse-deploy-gateway", "verse-deploy-gw")) {
+    $script = Join-Path $serverTestDir "deploy-gateway.ps1"
     $targetEnv = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "dev" }
     & $script -TargetEnv $targetEnv
 }

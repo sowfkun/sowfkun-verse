@@ -1,0 +1,25 @@
+# ==============================================================================
+# Ultra-Lean On-Premise Egress Gateway Binary Runner (No source code required)
+# ==============================================================================
+FROM alpine:3.21
+
+WORKDIR /app
+
+# Cài đặt tzdata (chuẩn hóa múi giờ UTC) và ca-certificates (cho HTTPS outgoing)
+RUN apk --no-cache add ca-certificates tzdata \
+    && addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy file binary thực thi đã được biên dịch sẵn
+COPY app-gateway /app/app-gateway
+RUN chmod +x /app/app-gateway
+
+# Chạy dưới quyền non-root user để bảo mật
+USER appuser
+
+EXPOSE 8090
+
+# Health check
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8090/healthz || exit 1
+
+ENTRYPOINT ["/app/app-gateway"]

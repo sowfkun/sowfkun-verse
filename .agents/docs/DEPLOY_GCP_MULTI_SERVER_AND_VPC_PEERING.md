@@ -76,14 +76,21 @@ Do mạng `default` của GCP tự động chiếm trước dải `10.128.0.0/9`
    * Peered project ID: *[Project ID của Account 1]* | Peered VPC: `default`.
 3. **Kết quả:** Trạng thái chuyển sang **Active (Màu xanh lá)** ở cả 2 bên.
 
-### Bước 3: Cấu Hình Firewall Rules
-* **Project 1 (Server 1 DB):**
-  * Tạo Rule `allow-peer-server2`: Direction `Ingress`, Action `Allow`, Targets `All instances`, Source IP `192.168.1.0/24`, TCP Ports: `27017, 6379, 9092, 9200`.
-  * Đóng toàn bộ rule mở port DB ra `0.0.0.0/0`.
-* **Project 2 (Server 2 API):**
-  * Rule `custom-vpc-allow-ssh`: Source `0.0.0.0/0`, TCP `22` (dành cho quản trị & GitHub Actions).
-  * Rule `custom-vpc-allow-icmp`: Cho phép lệnh `ping`.
-  * Rule `custom-vpc-allow-custom`: Mở giao tiếp nội bộ cho dải `10.128.0.0/20`.
+### Bước 3: Cấu Hình Firewall Rules Chuẩn Zero-Trust & IAP
+* **Project 1 (Server 1 Data: `data-server-vpc`):**
+  * `data-vpc-allow-ingress-peer-app`: Mở cổng `27017, 6379, 9092, 9200` cho App Subnet (`10.20.0.0/24`).
+  * `data-vpc-allow-ingress-iap`: Mở cổng `22, 27017, 6379, 9200, 3000` cho Google IAP (`35.235.240.0/20`).
+  * `data-vpc-allow-egress-peer-app`: Mở Egress phản hồi cho App Subnet (`Priority 900`).
+  * `data-vpc-allow-egress-iap`: Mở Egress phản hồi cho Google IAP (`Priority 900`).
+  * `data-vpc-allow-egress-ntp-dns`: Mở Egress UDP `53` (DNS) và UDP `123` (NTP) đến Google Internal Resolver (`169.254.169.254/32`) và Time Server (`216.239.35.0/24`) với `Priority 900` để đồng bộ giờ UTC tuyệt đối.
+  * `data-vpc-deny-egress-internet`: Khóa cứng Egress Internet `0.0.0.0/0` (`Priority 1000`) chống Reverse Shell và rò rỉ dữ liệu.
+* **Project 2 (Server 2 App: `app-server-vpc`):**
+  * `app-vpc-allow-ingress-public`: Mở Public Web `80, 443, 8080, 8085`.
+  * `app-vpc-allow-ingress-iap`: Mở SSH `22`, API `8080`, Console `8085`, Kafka `9092, 9094` cho Google IAP (`35.235.240.0/20`).
+  * `app-vpc-allow-egress-peer-data`: Mở Egress sang Data Subnet `10.10.0.0/24` (`Priority 900`).
+  * `app-vpc-allow-egress-iap`: Mở Egress phản hồi cho Google IAP (`Priority 900`).
+  * `app-vpc-allow-egress-ntp-dns`: Mở Egress UDP `53` (DNS) và UDP `123` (NTP) đến Google Time Server/DNS (`Priority 900`) để đồng bộ giờ UTC.
+  * `app-vpc-deny-egress-internet`: Khóa cứng Egress Internet `0.0.0.0/0` (`Priority 1000`).
 
 ---
 

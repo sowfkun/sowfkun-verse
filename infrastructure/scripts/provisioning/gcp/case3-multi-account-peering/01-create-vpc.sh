@@ -78,23 +78,23 @@ fi
 # 2. Đặt tên VPC
 echo ""
 echo "📌 [BƯỚC 2/5] ĐẶT TÊN MẠNG VPC:"
-echo "Gợi ý: [data-server-vpc] cho Data Server | [app-server-vpc] cho App Server"
-read -rp "👉 Nhập tên VPC [Mặc định: data-server-vpc]: " VPC_NAME
-VPC_NAME="${VPC_NAME:-data-server-vpc}"
+echo "Gợi ý: [data-server-vpc] (Data) | [app-server-vpc] (App) | [egress-gateway-vpc] (Egress)"
+read -rp "👉 Nhập tên VPC [Mặc định: egress-gateway-vpc]: " VPC_NAME
+VPC_NAME="${VPC_NAME:-egress-gateway-vpc}"
 
 # 3. Chọn Dải IP CIDR
 echo ""
 echo "📌 [BƯỚC 3/5] CHỌN DẢI IP NỘI BỘ (CIDR):"
-DEFAULT_RANGE="10.10.0.0/24"
-if [[ "$VPC_NAME" == *"app"* ]]; then
+DEFAULT_RANGE="10.30.0.0/24"
+if [[ "$VPC_NAME" == *"data"* ]]; then
+  DEFAULT_RANGE="10.10.0.0/24"
+elif [[ "$VPC_NAME" == *"app"* ]]; then
   DEFAULT_RANGE="10.20.0.0/24"
-elif [[ "$VPC_NAME" == *"worker"* ]]; then
+elif [[ "$VPC_NAME" == *"egress"* || "$VPC_NAME" == *"gateway"* ]]; then
   DEFAULT_RANGE="10.30.0.0/24"
-elif [[ "$VPC_NAME" == *"mq"* || "$VPC_NAME" == *"kafka"* ]]; then
-  DEFAULT_RANGE="10.40.0.0/24"
 fi
 
-echo "Gợi ý: Data: 10.10.0.0/24 | App: 10.20.0.0/24 | Worker: 10.30.0.0/24"
+echo "Gợi ý: Data: 10.10.0.0/24 | App: 10.20.0.0/24 | Egress Gateway: 10.30.0.0/24"
 read -rp "👉 Nhập dải CIDR [Mặc định: ${DEFAULT_RANGE}]: " SUBNET_RANGE
 SUBNET_RANGE="${SUBNET_RANGE:-$DEFAULT_RANGE}"
 
@@ -149,6 +149,12 @@ if ! gcloud compute networks subnets describe "${SUBNET_NAME}" --region="${REGIO
 else
   echo "✅ Subnet [${SUBNET_NAME}] đã tồn tại."
 fi
+
+# 3. Tự động dọn dẹp các rule default và mạng default nếu có (Zero-Trust)
+echo "🧹 Đang dọn dẹp các firewall rules 'default-*' và mạng default thừa..."
+gcloud compute firewall-rules delete default-allow-icmp default-allow-internal default-allow-rdp default-allow-ssh --project="${PROJECT_ID}" --quiet >/dev/null 2>&1 || true
+gcloud compute networks delete default --project="${PROJECT_ID}" --quiet >/dev/null 2>&1 || true
+echo "✅ Mạng VPC sạch sẽ và bảo mật!"
 
 echo ""
 echo "================================================================="

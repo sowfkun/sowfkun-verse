@@ -14,13 +14,12 @@ Tài liệu này theo dõi và phân định rõ ràng giữa **những giải p
 | **Zero Public Exposure (IAP Protected)** | ✅ **DONE** | Toàn bộ cổng Database & Quản trị (`22, 27017, 6379, 8085, 9092`) bị khóa 100% khỏi Internet, chỉ truy cập qua Google IAP (`35.235.240.0/20`) |
 | **E2EE & Application Crypto** | ✅ **DONE** | Mã hóa lai RSA-2048 + AES-256-GCM, Blind Index Hash Pepper cho tìm kiếm mã hóa |
 | **Multi-Tenant Data Isolation** | ✅ **DONE** | Tầng UseCase & Repository ép buộc Tenant ID Check & Projection Safety (`tid`, `is_del`) |
-| **Egress Webhook Dispatcher / Cloud NAT** | ⏳ **TODO** | Cần thiết lập Stateless Proxy/Relay để chuyển tiếp Webhook/Email an toàn khi App Server bị khóa Internet |
-| **Cloud Metadata Protection (SSRF)** | ⏳ **TODO** | Chặn IP Link-Local `169.254.169.254` qua iptables trên các server |
-| **LAN / RFC 1918 SSRF Validator** | ⏳ **TODO** | Validate URL/IP của đối tác gửi lên, chặn gọi ngược vào dải private (`10.0.0.0/8`, `127.0.0.1`, `172.16.0.0/12`, `192.168.0.0/16`) |
-| **DNS Rebinding & Response Bomb Guard** | ⏳ **TODO** | Ghim IP khi phân giải tên miền (IP Pinning) và giới hạn kích thước Max Response Payload (tránh OOM) |
-| **Prometheus & Grafana Monitoring Stack**| ⏳ **TODO** | Dựng cAdvisor + Prometheus + Grafana giám sát nội bộ qua IAP Tunnel |
+| **DNS & NTP UTC Time Sync Whitelist** | ✅ **DONE** | Mở cổng UDP 53/123 tới Google Internal Resolver (`169.254.169.254`) & NTP Time Server (`216.239.35.0/24`) đảm bảo đồng bộ giờ UTC tuyệt đối |
+| **Egress Webhook Gateway & Dispatcher** | ✅ **DONE** | Đã triển khai Gateway Service (`cmd/gateway`) và Client SDK (`pkg/egress`) theo mô hình Monorepo đa binary trên Server 3 |
+| **Cloud Metadata Protection (SSRF)** | ✅ **DONE** | Chặn phân giải và kết nối tới IP Link-Local `169.254.169.254` trên Egress Engine |
+| **LAN / RFC 1918 SSRF Validator** | ✅ **DONE** | Chặn toàn bộ dải IP Private (`10.0.0.0/8`, `127.0.0.1`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, IPv6 ULA) |
+| **DNS Rebinding & Response Bomb Guard** | ✅ **DONE** | Ghim IP trực tiếp qua `net.Dialer.Control` và giới hạn dung lượng đọc qua `io.LimitReader` (mặc định 2MB) |
 | **Kafka Dead Letter Queue (DLQ) & Retry** | ⏳ **TODO** | Cơ chế Exponential Backoff & Topic DLQ lưu vết khi Consumer retry thất bại quá số lần quy định |
-| **Proactive Alertmanager (Telegram/Slack)** | ⏳ **TODO** | Tự động bắn thông báo khi container crash, RAM/Disk chạm ngưỡng nguy hiểm |
 
 ---
 
@@ -31,6 +30,8 @@ Tài liệu này theo dõi và phân định rõ ràng giữa **những giải p
 - [x] **2-Way VPC Peering Đối Xứng**: Thiết lập peering 2 chiều trạng thái `ACTIVE` giữa `project-cfc4d426-e0f0-47cf-866` và `sowfkun-verse`.
 - [x] **Khóa Chặt Egress Internet (Data Server)**: Luật `data-vpc-deny-egress-internet` (Priority 1000, `0.0.0.0/0`) ngăn chặn tuyệt đối Data Server bị khai thác Reverse Shell hoặc thất thoát dữ liệu ra ngoài.
 - [x] **Khóa Chặt Egress Internet (App Server)**: Luật `app-vpc-deny-egress-internet` (Priority 1000, `0.0.0.0/0`) cô lập App Server khỏi kết nối Internet tự do.
+- [x] **Whitelist Egress Cho DNS & NTP (Đồng Bộ Thời Gian UTC)**:
+  - Luật `data-vpc-allow-egress-ntp-dns` và `app-vpc-allow-egress-ntp-dns` (Priority 900) mở UDP `53` (DNS) và UDP `123` (NTP) đến Google Internal Resolver (`169.254.169.254/32`) và Google Time Servers (`216.239.35.0/24`) đảm bảo đồng hồ giữa 2 node luôn chuẩn xác 100% theo UTC.
 - [x] **Phân Quyền Luồng Nội Bộ (Data Diode / Segmentation)**:
   - Data Server chỉ mở cổng `27017, 6379, 9092, 9200` cho dải IP của App Server (`10.20.0.0/24`).
   - App Server mở Egress sang Data Server (`10.10.0.0/24`) với Priority 900.
@@ -52,30 +53,25 @@ Tài liệu này theo dõi và phân định rõ ràng giữa **những giải p
 
 ---
 
+### C. Hạ Tầng Giao Tiếp An Toàn Ra Ngoài Internet (Egress Gateway & SSRF Protection)
+- [x] **Monorepo Multi-Binary Egress Gateway (`cmd/gateway`)**:
+  - Triển khai Egress Gateway Service độc lập chạy trên Server 3 (`10.30.0.0/24`), nhận HTTP request từ Core API qua cổng nội bộ `:8090` và chuyển tiếp an toàn ra Internet.
+- [x] **Chống Tấn Công SSRF & Cloud Metadata**:
+  - Tự động chặn các URL phân giải về dải IP Link-Local `169.254.0.0/16` (Cloud Metadata của GCP/AWS `169.254.169.254`), Loopback (`127.0.0.0/8`, `::1`), RFC 1918 Private (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), Carrier-grade NAT (`100.64.0.0/10`) và IPv6 ULA/Link-local.
+- [x] **Chống DNS Rebinding (DNS Pinning & Control Hook)**:
+  - Phân giải DNS trước và ép buộc kết nối trực tiếp đến IP đã được kiểm chứng an toàn qua `net.Dialer.Control`, ngăn chặn hacker đổi DNS giữa thời điểm kiểm tra và lúc bắt tay TCP.
+- [x] **Chống Tấn Công Tràn Bộ Nhớ (Response Bomb Mitigation)**:
+  - Giới hạn dung lượng nhận phản hồi tối đa bằng `io.LimitReader` (mặc định 2MB) chống OOM Crash.
+- [x] **Cơ Chế Retry & Timeout Tuỳ Chỉnh**:
+  - Hỗ trợ cấu hình `TimeoutMs` riêng cho từng request, tùy chọn `MaxRetries`, `RetryIntervalMs`, `RetryOnTimeout` và `RetryStatusCodes` (429, 502, 503, 504).
+- [x] **Core Client SDK Tích Hợp (`pkg/egress.Client`)**:
+  - Tự động chuyển tiếp request qua Gateway Server trên Production và Fallback thực thi an toàn cục bộ khi chạy Local Dev.
+
+---
+
 ## 2. Chi Tiết Các Hạng Mục CẦN TRIỂN KHAI TIẾP THEO (TODO)
 
-### A. Hạ Tầng Giao Tiếp Internet Ngoài (Egress Proxy / Webhook Dispatcher)
-- [ ] **Xây Dựng Dịch Vụ Webhook Dispatcher / NAT Relay**:
-  - Do App Server đã bị chặn Egress Internet 100%, cần triển khai một Proxy Service siêu nhẹ (Golang Stateless Egress Dispatcher) nằm trong vùng DMZ hoặc cấu hình Cloud NAT có kiểm soát để nhận payload từ Kafka/Asynq và bắn HTTP Request ra các dịch vụ bên thứ ba (Resend Email, Đối tác Webhook).
-- [ ] **Hardening iptables Drop Cloud Metadata**:
-  - Chạy lệnh chặn IP Link-Local metadata `169.254.169.254` qua `iptables` trên toàn bộ các VM để chống kỹ thuật Cloud SSRF.
-
-### B. Phòng Vệ Tấn Công SSRF & Webhook An Toàn
-- [ ] **Chống LAN / RFC 1918 SSRF**:
-  - Viết validator kiểm tra URL trước khi gửi Webhook, ngăn chặn triệt để trường hợp URL đối tác trỏ về dải IP nội bộ: `127.0.0.1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`.
-- [ ] **Chống DNS Rebinding (IP Pinning)**:
-  - Tự phân giải DNS trước và ghim địa chỉ IP (IP Pinning) khi thực hiện HTTP Client request, tránh việc tên miền thay đổi IP giữa thời điểm validate và thời điểm kết nối thực tế.
-- [ ] **Chống Tấn Công Tràn Bộ Nhớ (Response Bomb Mitigation)**:
-  - Giới hạn kích thước nhận về (`MaxResponseBytes = 1MB`) khi nhận dữ liệu từ các server Webhook đối tác để chống tấn công cạn kiệt RAM (OOM Crash).
-
-### C. Hàng Đợi & Phục Hồi Dữ Liệu (Resilience & DLQ)
+### A. Hàng Đợi & Phục Hồi Dữ Liệu (Resilience & DLQ)
 - [ ] **Kafka Dead Letter Queue (DLQ)**:
   - Thiết lập Topic DLQ (ví dụ: `*-progress-dlq`) tự động hứng các tin nhắn Consumer xử lý thất bại sau số lần Retry tối đa kèm Exponential Backoff.
-- [ ] **Bổ Sung Whitelist Port Nội Bộ Cho DNS & NTP**:
-  - Mở cổng UDP `53` (DNS) và UDP `123` (NTP) tới Google Internal Resolver / Time Server để đảm bảo đồng bộ thời gian UTC tuyệt đối giữa các node.
 
-### D. Giám Sát Chủ Động & Cảnh Báo (Monitoring & Alerting)
-- [ ] **Cụm Monitoring Nội Bộ (cAdvisor + Prometheus + Grafana)**:
-  - Dựng container `cAdvisor` và `Prometheus` thu thập metrics tài nguyên, `Grafana` hiển thị Dashboard và chỉ truy cập qua Google IAP (`localhost:3000`).
-- [ ] **Cảnh Báo Chủ Động (Alertmanager)**:
-  - Tích hợp gửi thông báo khẩn cấp (Telegram / Webhook) khi máy chủ chạm ngưỡng: RAM > 85%, CPU > 90%, hoặc container bị crash bất thường.

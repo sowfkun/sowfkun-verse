@@ -67,10 +67,11 @@ interactive_menu() {
     echo "  3) Redpanda / Kafka (Port 9092 / Console 8085)"
     echo "  4) OpenSearch (Port 9200)"
     echo "  5) Go API Backend (Port 8080)"
-    echo "  6) Tất cả (All-in-One: Cài & chạy toàn bộ 5 dịch vụ)"
+    echo "  6) Egress Gateway / Webhook Dispatcher (Port 8090)"
+    echo "  7) Tất cả (All-in-One: Cài & chạy toàn bộ dịch vụ)"
     echo "================================================================="
-    echo "💡 Gợi ý: Nhập các số phân cách bằng dấu phẩy hoặc khoảng trắng (Ví dụ: 1,5 hoặc 1 2 5)"
-    read -r -p "👉 Nhập lựa chọn của bạn [1-6]: " user_choices
+    echo "💡 Gợi ý: Nhập các số phân cách bằng dấu phẩy hoặc khoảng trắng (Ví dụ: 1,5 hoặc 1 2 6)"
+    read -r -p "👉 Nhập lựa chọn của bạn [1-7]: " user_choices
 
     if [[ -z "$user_choices" ]]; then
         echo "❌ Lỗi: Bạn chưa chọn dịch vụ nào!"
@@ -85,7 +86,8 @@ interactive_menu() {
             3) SELECTED_SERVICES+=("kafka") ;;
             4) SELECTED_SERVICES+=("opensearch") ;;
             5) SELECTED_SERVICES+=("api") ;;
-            6) SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api"); break ;;
+            6) SELECTED_SERVICES+=("gateway") ;;
+            7) SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api" "gateway"); break ;;
             *) echo "⚠️ Bỏ qua lựa chọn không hợp lệ: $choice" ;;
         esac
     done
@@ -137,13 +139,13 @@ else
     for s in "${raw_services[@]}"; do
         trimmed_s=$(echo "$s" | tr -d '[:space:]')
         if [[ "$trimmed_s" == "all" ]]; then
-            SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api")
+            SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api" "gateway")
             break
-        elif [[ "$trimmed_s" =~ ^(kafka|redis|mongo|opensearch|api)$ ]]; then
+        elif [[ "$trimmed_s" =~ ^(kafka|redis|mongo|opensearch|api|gateway)$ ]]; then
             SELECTED_SERVICES+=("$trimmed_s")
         else
             echo "❌ Lỗi: Service '$trimmed_s' không hợp lệ!"
-            echo "Danh sách hợp lệ: redis, mongo, kafka, opensearch, api, all"
+            echo "Danh sách hợp lệ: redis, mongo, kafka, opensearch, api, gateway, all"
             exit 1
         fi
     done
@@ -546,6 +548,17 @@ start_services() {
             docker compose up -d --build
             
             echo "🚀 Khởi chạy Go API container thành công!"
+        elif [ "$target" == "gateway" ]; then
+            if [ ! -f "$target_dir/app-gateway" ]; then
+                echo "❌ Lỗi: Không tìm thấy file: $target_dir/app-gateway!"
+                echo "👉 Vui lòng biên dịch trước bằng './build_onpremise.sh' (hoặc '.\\build_onpremise.ps1')."
+                return 1
+            fi
+            chmod +x "$target_dir/app-gateway" 2>/dev/null || true
+            echo "📦 Khởi chạy Egress Gateway ở chế độ [On-Premise Binary] (Dockerfile.binary)..."
+            docker compose up -d --build
+            
+            echo "🚀 Khởi chạy Egress Gateway container thành công!"
         else
             echo "🚀 Đang kéo images và chạy $target container..."
             docker compose up -d

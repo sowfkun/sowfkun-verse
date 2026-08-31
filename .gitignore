@@ -11,5 +11,8 @@ tools/*.exe
 tools/*.bin
 app-api
 infrastructure/api/app-api
+app-gateway
+infrastructure/gateway/app-gateway
+tools/bin/
 *.tar.gz
 *.zip

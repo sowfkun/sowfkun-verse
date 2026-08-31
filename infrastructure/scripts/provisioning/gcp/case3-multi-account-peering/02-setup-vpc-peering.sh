@@ -41,13 +41,15 @@ echo "✅ Đang thao tác với tài khoản: [ ${ACTIVE_ACCOUNT} ]"
 # 1. Chọn Role (Máy hiện tại đang đứng)
 echo ""
 echo "📌 [BƯỚC 1/5] XÁC ĐỊNH MÁY CHỦ BẠN ĐANG CẤU HÌNH:"
-echo "  [1] Data Server (Data Account - Chứa MongoDB, Redis)"
-echo "  [2] App Server  (App Account - Chứa Go API, Web)"
-read -rp "👉 Chọn vai trò [1-2, Mặc định: 1]: " role_choice
+echo "  [1] Data Server     (Data Account - Chứa MongoDB, Redis)"
+echo "  [2] App Server      (App Account - Chứa Go API, Web)"
+echo "  [3] Egress Gateway  (Egress Account - Chứa Webhook/Email Relay)"
+read -rp "👉 Chọn vai trò [1-3, Mặc định: 1]: " role_choice
 role_choice="${role_choice:-1}"
 
 ROLE="data"
 if [[ "$role_choice" == "2" ]]; then ROLE="app"; fi
+if [[ "$role_choice" == "3" ]]; then ROLE="egress"; fi
 
 # 2. Xác định Local Project & Local VPC
 echo ""
@@ -76,6 +78,7 @@ fi
 
 DEFAULT_LOCAL_VPC="data-server-vpc"
 if [[ "$ROLE" == "app" ]]; then DEFAULT_LOCAL_VPC="app-server-vpc"; fi
+if [[ "$ROLE" == "egress" ]]; then DEFAULT_LOCAL_VPC="egress-gateway-vpc"; fi
 
 read -rp "👉 Local VPC Name [Mặc định: ${DEFAULT_LOCAL_VPC}]: " LOCAL_VPC
 LOCAL_VPC="${LOCAL_VPC:-$DEFAULT_LOCAL_VPC}"
@@ -86,8 +89,19 @@ echo "📌 [BƯỚC 3/5] THÔNG TIN MÁY CHỦ ĐỐI DIỆN CẦN KẾT NỐI (
 DEFAULT_PEER_VPC="app-server-vpc"
 TARGET_LABEL="App Server"
 if [[ "$ROLE" == "app" ]]; then
-  DEFAULT_PEER_VPC="data-server-vpc"
-  TARGET_LABEL="Data Server"
+  echo "  [1] Nối tới Data Server (data-server-vpc)"
+  echo "  [2] Nối tới Egress Gateway (egress-gateway-vpc)"
+  read -rp "👉 Nối tới máy nào [1-2, Mặc định: 1]: " peer_target
+  if [[ "$peer_target" == "2" ]]; then
+    DEFAULT_PEER_VPC="egress-gateway-vpc"
+    TARGET_LABEL="Egress Gateway Server"
+  else
+    DEFAULT_PEER_VPC="data-server-vpc"
+    TARGET_LABEL="Data Server"
+  fi
+elif [[ "$ROLE" == "egress" ]]; then
+  DEFAULT_PEER_VPC="app-server-vpc"
+  TARGET_LABEL="App Server"
 fi
 
 read -rp "👉 Nhập Project ID của máy đối diện (${TARGET_LABEL}): " PEER_PROJECT

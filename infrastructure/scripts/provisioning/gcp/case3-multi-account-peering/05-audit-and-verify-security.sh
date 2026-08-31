@@ -127,7 +127,16 @@ if [[ "$ROLE" == "data" ]]; then
   fi
 
   echo ""
-  echo "🔎 [4/4] Kiểm tra trạng thái 2-Way VPC Peering..."
+  echo "🔎 [4/5] Kiểm tra Egress Whitelist cho DNS & NTP (Đồng bộ thời gian UTC)..."
+  ntp_dns_egress=$(echo "$rules_json" | grep -E 'udp:123|123|udp:53|53' || true)
+  if [[ -n "$ntp_dns_egress" ]]; then
+    echo "✅ [AN TOÀN]: Đã mở Egress UDP 53/123 tới Google Time Server/DNS để đồng bộ giờ UTC."
+  else
+    echo "⚠️ [LƯU Ý]: Chưa cấu hình rule mở Egress NTP/DNS (data-vpc-allow-egress-ntp-dns)."
+  fi
+
+  echo ""
+  echo "🔎 [5/5] Kiểm tra trạng thái 2-Way VPC Peering..."
   peering_status=$(gcloud compute networks describe "${VPC_NAME}" --project="${PROJECT_ID}" --format="value(peerings[0].state)" 2>/dev/null || echo "NONE")
   if [[ "$peering_status" == "ACTIVE" ]]; then
     echo "✅ [AN TOÀN]: Kết nối VPC Peering đang ở trạng thái ACTIVE (Xanh lá - Hoạt động bình thường)."
@@ -141,7 +150,7 @@ if [[ "$ROLE" == "data" ]]; then
 # ------------------------------------------------------------------------------
 elif [[ "$ROLE" == "app" ]]; then
   echo ""
-  echo "🔎 [1/4] Kiểm tra các cổng Web & API Public (80, 443, 8080, 8085)..."
+  echo "🔎 [1/6] Kiểm tra các cổng Web & API Public (80, 443, 8080, 8085)..."
   public_web=$(echo "$rules_json" | grep -E '80|443|8080|8085' || true)
   if [[ -n "$public_web" ]]; then
     echo "✅ [CHUẨN]: Các cổng Web & API cần thiết đã được mở đúng quy chuẩn."
@@ -151,7 +160,7 @@ elif [[ "$ROLE" == "app" ]]; then
   fi
 
   echo ""
-  echo "🔎 [2/4] Kiểm tra cổng SSH Port 22..."
+  echo "🔎 [2/6] Kiểm tra cổng SSH Port 22..."
   ssh_public=$(echo "$rules_json" | grep -B 5 -A 10 '"0.0.0.0/0"' | grep -E 'tcp.*22|"22"' || true)
   if [[ -n "$ssh_public" ]]; then
     echo "🚨 [CẢNH BÁO]: Cổng SSH (22) đang mở Public cho toàn bộ Internet (0.0.0.0/0) thay vì Google IAP!"
@@ -161,7 +170,7 @@ elif [[ "$ROLE" == "app" ]]; then
   fi
 
   echo ""
-  echo "🔎 [3/5] Kiểm tra chính sách Egress (Khóa Internet, chỉ cho phép Peering sang Data & IAP)..."
+  echo "🔎 [3/6] Kiểm tra chính sách Egress (Khóa Internet, chỉ cho phép Peering sang Data & IAP)..."
   deny_egress=$(echo "$rules_json" | grep -B 5 -A 10 '"direction": "EGRESS"' | grep -E '"DENY"|"deny"' || true)
   if [[ -n "$deny_egress" ]]; then
     echo "✅ [AN TOÀN]: Đã kích hoạt chính sách chặn Egress Internet (0.0.0.0/0) cho App Server."
@@ -171,7 +180,16 @@ elif [[ "$ROLE" == "app" ]]; then
   fi
 
   echo ""
-  echo "🔎 [4/5] Kiểm tra xem có mở nhầm cổng DB trên App Server không..."
+  echo "🔎 [4/6] Kiểm tra Egress Whitelist cho DNS & NTP (Đồng bộ thời gian UTC)..."
+  ntp_dns_egress=$(echo "$rules_json" | grep -E 'udp:123|123|udp:53|53' || true)
+  if [[ -n "$ntp_dns_egress" ]]; then
+    echo "✅ [AN TOÀN]: Đã mở Egress UDP 53/123 tới Google Time Server/DNS để đồng bộ giờ UTC."
+  else
+    echo "⚠️ [LƯU Ý]: Chưa cấu hình rule mở Egress NTP/DNS (app-vpc-allow-egress-ntp-dns)."
+  fi
+
+  echo ""
+  echo "🔎 [5/6] Kiểm tra xem có mở nhầm cổng DB trên App Server không..."
   db_on_app=$(echo "$rules_json" | grep -E '27017|6379|9200' || true)
   if [[ -n "$db_on_app" ]]; then
     echo "🚨 [NGUY HIỂM]: App Server không nên mở cổng MongoDB/Redis/OpenSearch!"
@@ -181,7 +199,7 @@ elif [[ "$ROLE" == "app" ]]; then
   fi
 
   echo ""
-  echo "🔎 [5/5] Kiểm tra trạng thái 2-Way VPC Peering sang Data VPC..."
+  echo "🔎 [6/6] Kiểm tra trạng thái 2-Way VPC Peering sang Data VPC..."
   peering_status=$(gcloud compute networks describe "${VPC_NAME}" --project="${PROJECT_ID}" --format="value(peerings[0].state)" 2>/dev/null || echo "NONE")
   if [[ "$peering_status" == "ACTIVE" ]]; then
     echo "✅ [AN TOÀN]: Kết nối VPC Peering sang Data Server đang ACTIVE!"
