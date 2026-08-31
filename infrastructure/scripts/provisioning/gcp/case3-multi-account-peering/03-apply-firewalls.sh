@@ -295,6 +295,29 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Deny all inbound connections initiated from Gateway VPC (Zero-Trust one-way)" \
     || echo "⚠️ Rule app-vpc-deny-ingress-gateway đã tồn tại."
 
+  # 7. Ngoại lệ Monitoring Hub: Cho phép Gateway & Data Node đẩy log Loki (3100) & kéo metrics (9100)
+  gcloud compute firewall-rules create app-vpc-allow-gateway-monitoring \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=INGRESS \
+    --action=ALLOW \
+    --source-ranges="10.30.0.0/24" \
+    --rules="tcp:3100,tcp:9100" \
+    --priority=600 \
+    --description="Allow Gateway Promtail to push logs to Loki (3100) and Prometheus to scrape Node Exporter (9100)" \
+    || echo "⚠️ Rule app-vpc-allow-gateway-monitoring đã tồn tại."
+
+  gcloud compute firewall-rules create app-vpc-allow-data-monitoring \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=INGRESS \
+    --action=ALLOW \
+    --source-ranges="10.10.0.0/24" \
+    --rules="tcp:3100,tcp:9100" \
+    --priority=600 \
+    --description="Allow Data Server Promtail to push logs to Loki (3100) and Prometheus to scrape Node Exporter (9100)" \
+    || echo "⚠️ Rule app-vpc-allow-data-monitoring đã tồn tại."
+
 elif [[ "$ROLE" == "egress" ]]; then
   # 1. Mở Google IAP Ingress cho SSH
   gcloud compute firewall-rules create egress-vpc-allow-ingress-iap \

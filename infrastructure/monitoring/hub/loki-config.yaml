@@ -4,9 +4,10 @@ server:
   http_listen_port: 3100
   grpc_listen_port: 9096
   log_level: warn
+  http_server_read_timeout: 3m
+  http_server_write_timeout: 3m
 
 common:
-  instance_addr: 127.0.0.1
   path_prefix: /loki
   storage:
     filesystem:
@@ -14,6 +15,7 @@ common:
       rules_directory: /loki/rules
   replication_factor: 1
   ring:
+    instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
 
@@ -43,10 +45,11 @@ compactor:
   delete_request_store: filesystem
 
 limits_config:
-  retention_period: 168h # 7 days retention
-  reject_old_samples: true
-  reject_old_samples_max_age: 168h
-  max_cache_freshness_per_query: 10m
+  ingestion_rate_mb: 30
+  ingestion_burst_size_mb: 60
+  max_entries_limit_per_query: 5000
+  retention_period: 168h
+  reject_old_samples: false
   max_query_length: 721h
   max_query_parallelism: 16
   max_streams_per_user: 0

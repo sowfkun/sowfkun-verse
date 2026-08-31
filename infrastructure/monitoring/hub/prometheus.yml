@@ -7,15 +7,15 @@ scrape_configs:
     static_configs:
       - targets: ['10.10.0.2:9100']
         labels:
-          server: 'SOWFKUN-DATA-01'
+          server: 'DATA-NODE-01'
           role: 'Database Cluster (MongoDB + Redis)'
       - targets: ['agent_node_exporter:9100']
         labels:
-          server: 'SOWFKUN-APP-02'
+          server: 'APP-NODE-02'
           role: 'Core API & Redpanda Message Broker'
       - targets: ['10.30.0.2:9100']
         labels:
-          server: 'SOWFKUN-GATEWAY-03'
+          server: 'GATEWAY-NODE-03'
           role: 'Egress Gateway & SSRF Defense Node'
 
   - job_name: 'loki'

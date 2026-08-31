@@ -1,10 +1,10 @@
 # ==============================================================================
-# SOWFKUN-VERSE INFRASTRUCTURE HEALTH & ALERT CONFIGURATION
+# INFRASTRUCTURE HEALTH & ALERT CONFIGURATION (ON-PREMISE TEMPLATE)
 # File location on server: /etc/infra/alert.conf
 # ==============================================================================
 
 # Node Identity
-SERVER_NAME="SOWFKUN-NODE"
+SERVER_NAME="APP-NODE-01"
 SERVER_ROLE="Core Server"
 SERVER_IP="127.0.0.1"
 

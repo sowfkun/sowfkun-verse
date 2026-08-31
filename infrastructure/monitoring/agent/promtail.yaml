@@ -12,64 +12,112 @@ clients:
     batchsize: 102400
 
 scrape_configs:
-  - job_name: docker_containers
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: docker
-          server: ${SERVER_NAME:-sowfkun-node}
-          __path__: /var/lib/docker/containers/*/*-json.log
+  # ===========================================================================
+  # 1. DOCKER CONTAINERS (Chỉ đúng 3 nhãn: service, server, level)
+  # ===========================================================================
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_log_path']
+        target_label: '__path__'
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'service'
+      - target_label: 'server'
+        replacement: '${SERVER_NAME:-APP-NODE-02}'
 
     pipeline_stages:
-      # 1. Parse JSON format of Docker json-file log driver
       - json:
           expressions:
             raw_log: log
-            stream: stream
-            log_time: time
 
-      # 2. Extract container name from log file path
-      - regex:
-          source: filename
-          expression: '^/var/lib/docker/containers/(?P<container_id>[a-f0-9]+)/.*'
-
-      # 3. Classify Layer and Service based on container name
-      - template:
-          source: layer
-          template: |
-            {{- if regexMatch "mongo|redis" .filename -}} database
-            {{- else if regexMatch "redpanda|kafka" .filename -}} broker
-            {{- else if regexMatch "gateway|egress" .filename -}} gateway
-            {{- else if regexMatch "api|backend|app" .filename -}} backend
-            {{- else -}} system {{- end -}}
-
-      # 4. Extract Log Level (ERROR, WARN, INFO, DEBUG)
-      - regex:
-          source: raw_log
-          expression: '(?i)(?P<level>ERROR|ERR|WARN|WARNING|INFO|DEBUG|FATAL|PANIC)'
-
-      # 5. MongoDB Slow Query Extractor (>= 100ms)
+      # 1. Bắt câu lệnh chậm (Duration >= 100ms)
       - regex:
           source: raw_log
           expression: '(?i)(?:durationMillis":\s*(?P<duration_ms>\d+)|(?P<duration_text>\d+)ms)'
 
+      # 2. Bắt log level thông thường
+      - regex:
+          source: raw_log
+          expression: '(?i)(?P<level>ERROR|ERR|WARN|WARNING|INFO|DEBUG|FATAL|PANIC)'
+
+      # 3. Hợp nhất slow_query vào level (>= 300ms)
       - template:
-          source: is_slow_query
+          source: level
           template: |
             {{- if .duration_ms -}}
-              {{- if ge (atoi .duration_ms) 100 -}} true {{- else -}} false {{- end -}}
+              {{- if ge (int .duration_ms) 300 -}} slow_query {{- else if .level -}} {{ ToLower .level }} {{- else -}} info {{- end -}}
             {{- else if .duration_text -}}
-              {{- if ge (atoi .duration_text) 100 -}} true {{- else -}} false {{- end -}}
-            {{- else -}} false {{- end -}}
+              {{- if ge (int .duration_text) 300 -}} slow_query {{- else if .level -}} {{ ToLower .level }} {{- else -}} info {{- end -}}
+            {{- else if .level -}}
+              {{ ToLower .level }}
+            {{- else -}}
+              info
+            {{- end -}}
 
-      # 6. Apply extracted labels for high-speed indexing in Loki
+      # 4. CHỈ LƯU ĐÚNG 3 NHÃN DUY NHẤT VÀO LOKI INDEX
       - labels:
-          stream:
+          service:
+          server:
           level:
-          layer:
-          is_slow_query:
 
-      # 7. Output the clean raw log line
+      - labeldrop:
+          - filename
+          - stream
+          - job
+          - container
+          - service_name
+          - is_slow_query
+
       - output:
           source: raw_log
+
+  # ===========================================================================
+  # 2. HOST OS AUDIT & SECURITY LOGS (/var/log/auth.log)
+  # ===========================================================================
+  - job_name: os_auth
+    static_configs:
+      - targets: [localhost]
+        labels:
+          service: os_auth
+          server: ${SERVER_NAME:-APP-NODE-02}
+          level: info
+          __path__: /var/log/auth.log
+    pipeline_stages:
+      - labeldrop:
+          - filename
+          - job
+
+  # ===========================================================================
+  # 3. HOST OS KERNEL & OOM KILLER LOGS (/var/log/kern.log)
+  # ===========================================================================
+  - job_name: os_kernel
+    static_configs:
+      - targets: [localhost]
+        labels:
+          service: os_kernel
+          server: ${SERVER_NAME:-APP-NODE-02}
+          level: warn
+          __path__: /var/log/kern.log
+    pipeline_stages:
+      - labeldrop:
+          - filename
+          - job
+
+  # ===========================================================================
+  # 4. HOST OS SYSTEM SERVICES LOGS (/var/log/syslog)
+  # ===========================================================================
+  - job_name: os_syslog
+    static_configs:
+      - targets: [localhost]
+        labels:
+          service: os_syslog
+          server: ${SERVER_NAME:-APP-NODE-02}
+          level: info
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - labeldrop:
+          - filename
+          - job

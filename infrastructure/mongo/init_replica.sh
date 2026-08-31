@@ -16,7 +16,7 @@ if [ -f .env ]; then
 fi
 
 CONTAINER_NAME="${MONGO_CONTAINER_NAME:-app_mongo}"
-TARGET_HOST="127.0.0.1:${MONGO_PORT:-27017}"
+TARGET_HOST="${MONGO_ADVERTISED_HOST:-127.0.0.1}:${MONGO_PORT:-27017}"
 
 echo "⏳ Đang chờ MongoDB container [$CONTAINER_NAME] khởi động và đạt trạng thái healthy..."
 
@@ -25,17 +25,13 @@ attempt=0
 health_status="starting"
 
 while [ $attempt -lt $max_attempts ]; do
-    health_status=$(docker inspect "$CONTAINER_NAME" --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
-    if [ "$health_status" == "healthy" ]; then
+    if docker exec "$CONTAINER_NAME" mongosh --host 127.0.0.1 --quiet --eval "db.adminCommand({ ping: 1 }).ok" 2>/dev/null | grep -q "1"; then
+        echo "✅ MongoDB is healthy and accepting connections!"
         break
     fi
     sleep 2
     attempt=$((attempt + 1))
 done
-
-if [ "$health_status" != "healthy" ]; then
-    echo "⚠️ MongoDB chưa đạt trạng thái healthy sau $((max_attempts * 2))s. Vẫn thử kết nối cấu hình..."
-fi
 
 echo "⚙️ Đang kiểm tra & cấu hình Replica Set member host thành: $TARGET_HOST..."
 
@@ -55,11 +51,14 @@ try {
     } else {
         print('ℹ️ Replica Set member host is already: $TARGET_HOST');
     }
+    // Thiết lập Profiling Level 1 (>=300ms) cho MongoDB
+    db.runCommand({ profile: 1, slowms: 300 });
+    print('✅ Global Slow Query Profiling (profile: 1, slowms: 300ms) configured successfully!');
 } catch (e) {
     print('⚠️ Reconfig warning/error: ' + e);
 }
 "
 
-docker exec -i "$CONTAINER_NAME" mongosh --quiet --eval "$RECONFIG_JS" 2>/dev/null || true
+docker exec "$CONTAINER_NAME" mongosh --host 127.0.0.1 --quiet --eval "$RECONFIG_JS" || true
 
 echo "✅ Hoàn tất cấu hình MongoDB Replica Set ($TARGET_HOST)!"

@@ -1,4 +1,4 @@
-name: sowfkun_promtail
+name: mon_agent
 
 services:
   promtail:
@@ -7,12 +7,13 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/promtail/config.yml -config.expand-env=true
     environment:
-      - SERVER_NAME=${SERVER_NAME:-sowfkun-node}
-      - LOKI_HOST=${LOKI_HOST:-10.20.0.2}
+      - SERVER_NAME=${SERVER_NAME:-app-node}
+      - LOKI_HOST=${LOKI_HOST:-mon_loki}
     volumes:
       - ./promtail.yaml:/etc/promtail/config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log:/var/log:ro
     networks:
       - app_net
     logging:
