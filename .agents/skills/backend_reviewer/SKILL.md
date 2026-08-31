@@ -40,6 +40,8 @@ Bạn là một Code Reviewer cực kỳ gắt gao cho `core-backend` (Golang) �
 | 3.5 | **Encrypt/Decrypt Sai Layer** | TUYỆT ĐỐI không gọi `Encrypt()`/`Decrypt()` của các trường nhạy cảm (Email, Phone, v.v.) ngoài Repository layer (như UseCases, Controllers, Services). |
 | 3.6 | **Thiếu Blind Index hoặc Unique Index** | Thực thể cần ràng buộc duy nhất trên trường nhạy cảm phải dùng cột Blind Index hash tương ứng (VD: `e_hash`) kèm standard unique index. Cấm unique index trên trường gốc đã mã hóa. |
 | 3.7 | **Mã hoá đè (Double Encrypt)** | Hàm `Encrypt()` của các trường/Value Objects nhạy cảm phải bọc kiểm tra giải mã trước (idempotency) để tránh mã hoá lồng nhau. |
+| 3.8 | **Zero-Trust Egress Outbound Leak** | Mọi request gửi ra ngoài Internet (Mail Resend/SMTP, Webhooks, Telegram Alert, Third-party APIs) BẮT BUỘC dùng `pkg/egress.Client` hoặc `egress.NewHTTPClient()`. CẤM dùng `http.DefaultClient` hoặc tạo HTTP request trực tiếp từ App Server ra ngoài Internet. |
+
 
 ### 📂 Zone 4: BE_04 Pkg & Shared Libraries
 | STT | Loại Vi Phạm | Mô tả ngắn gọn quy luật |

@@ -34,3 +34,9 @@ trigger: always_on
   - **Mã hoá cục bộ Response:** Server chỉ mã hoá trường `data` trong JSON response, giữ nguyên `error_code` và `error_detail` ở dạng Plain Text để Client hiển thị lỗi nhanh.
 - **Quản lý Key an toàn:** Không dùng file `.pem` tĩnh. Private/Public key nạp từ Env (`RSA_PRIVATE_KEY_BASE64`, v.v.), nếu thiếu sẽ tự động sinh cặp key ngẫu nhiên lưu trên RAM để test (RAM Fallback).
 - **Cờ Bypass:** Debug/Test có thể tắt mã hóa bằng cách cấu hình `ENABLE_PAYLOAD_ENCRYPTION=false` trong `.env`.
+
+## 4. Egress Gateway & Zero-Trust Outbound Protection
+- **Kiến trúc Cách Ly Zero-Trust**: Toàn bộ máy chủ chứa dữ liệu nhạy cảm (Data Server 1, App Server 2) đều bị khóa cứng toàn bộ kết nối đi ra ngoài Internet (`DENY Egress 0.0.0.0/0`).
+- **Cổng Định Tuyến Egress Hợp Nhất**: Mọi thao tác kết nối và truyền dữ liệu ra Internet bên ngoài (gửi Email Resend/SMTP, Webhook Dispatcher, SMS OTP, Telegram Bot Alerts, Third-party APIs) **BẮT BUỘC** phải đi qua Egress Gateway Server (Server 3) thông qua `pkg/egress.Client` hoặc `egress.NewHTTPClient()`.
+- **Sử Dụng Third-Party SDK**: Khi tích hợp các thư viện SDK bên ngoài (như `resend-go`, AWS SDK, Stripe, v.v.), **BẮT BUỘC** phải truyền `egress.NewHTTPClient()` hoặc cấu hình Custom HTTP Transport để SDK gửi request xuyên qua Egress Gateway. Tuyệt đối **NGHIÊM CẤM** sử dụng `http.DefaultClient` hoặc gọi HTTP trực tiếp từ App Server ra ngoài Internet.
+

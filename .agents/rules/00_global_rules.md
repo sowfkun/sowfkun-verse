@@ -30,5 +30,4 @@ Mọi Agent khi hoạt động trong dự án này **bắt buộc** phải tuân
     - **TUYỆT ĐỐI KHÔNG** thực hiện ngay một cách mù quáng.
     - **BẮT BUỘC** phải dừng lại, chỉ ra điểm bất hợp lý/vi phạm và phản biện rõ ràng lý do, đồng thời đề xuất giải pháp thay thế tối ưu hơn.
     - **CHỈ ĐƯỢC PHÉP** thực hiện sau khi người dùng đã xem xét và xác nhận (confirm) lại rõ ràng.
-
-
+14. **Zero-Trust Egress & Outbound Communication Protection:** Mọi thao tác gửi HTTP/HTTPS request ra ngoài Internet (gửi Email Resend/SMTP, Webhook Dispatcher, SMS OTP, Telegram Bot Alerts, Third-party APIs) **TUYỆT ĐỐI KHÔNG** được gọi trực tiếp bằng `http.DefaultClient` hay các thư viện HTTP thuần tự do từ Data/App Server. **BẮT BUỘC** phải định tuyến qua Egress Gateway Server (Server 3) thông qua `pkg/egress.Client` hoặc `egress.NewHTTPClient()` nhằm đảm bảo phòng chống tấn công SSRF, bảo vệ máy chủ cô lập Zero-Trust, và tập trung quản lý hạn mức/retry/logging an toàn.
