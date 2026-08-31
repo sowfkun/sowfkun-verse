@@ -1,15 +1,29 @@
-# /etc/infra/alert.conf (Configuration)
+# ==============================================================================
+# SOWFKUN-VERSE INFRASTRUCTURE HEALTH & ALERT CONFIGURATION
+# File location on server: /etc/infra/alert.conf
+# ==============================================================================
 
-SERVER_NAME="app-server-01"
+# Node Identity
+SERVER_NAME="SOWFKUN-NODE"
+SERVER_ROLE="Core Server"
+SERVER_IP="127.0.0.1"
 
-# Telegram Bot Alerts
-TELEGRAM_BOT_TOKEN="your_bot_token_here"
-TELEGRAM_CHAT_ID="your_chat_id_here"
+# Alert Forwarding URL (For internal private nodes to send via Core API Gateway)
+# Example for Server 1 (Data Node): ALERT_FORWARD_URL="http://10.20.0.2:8080/api/v1/system/alert/telegram"
+ALERT_FORWARD_URL=""
 
-# Discord Webhook Alerts
-DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your/webhook/url"
+# Telegram Bot Alerts (Direct dispatch)
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_CHAT_ID=""
 
-# Thresholds (Percentages)
+# Discord Webhook Alerts (Optional)
+DISCORD_WEBHOOK_URL=""
+
+# Danger Thresholds (Percentage)
+CPU_THRESHOLD=85
 RAM_THRESHOLD=85
 SWAP_THRESHOLD=70
 DISK_THRESHOLD=85
+
+# Anti-Spam Cooldown (Seconds)
+COOLDOWN_SECONDS=1800

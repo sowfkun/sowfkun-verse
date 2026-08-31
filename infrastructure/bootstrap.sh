@@ -462,18 +462,24 @@ setup_monitoring_and_maintenance() {
         fi
     fi
 
-    # Đăng ký Cron Job kiểm tra sức khỏe mỗi 5 phút + Dọn dẹp Docker rác 3h sáng Chủ Nhật
+    # Đăng ký Cron Job: Quét nguy hiểm mỗi 1 phút + Báo cáo định kỳ 3h + Dọn dẹp Docker rác 3h sáng Chủ Nhật
     cat << 'EOF' > /etc/cron.d/app-maintenance
-# Kiểm tra RAM, Swap, Disk, Docker Crash mỗi 5 phút
-*/5 * * * * root /usr/local/bin/app-monitor.sh > /dev/null 2>&1
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-# Dọn dẹp images/cache Docker thừa lúc 3h sáng Chủ Nhật hàng tuần
+# 1. Quét nguy hiểm tức thời (CPU, RAM, Swap, Disk, Docker) mỗi 1 phút
+* * * * * root /usr/local/bin/app-monitor.sh check > /dev/null 2>&1
+
+# 2. Báo cáo định kỳ hạ tầng (Periodic Summary) mỗi 3 tiếng
+0 */3 * * * root /usr/local/bin/app-monitor.sh periodic > /dev/null 2>&1
+
+# 3. Dọn dẹp images/cache Docker thừa lúc 3h sáng Chủ Nhật hàng tuần
 0 3 * * 0 root /usr/bin/docker system prune -af --volumes=false > /dev/null 2>&1
 EOF
     chmod 644 /etc/cron.d/app-maintenance
-    systemctl restart cron 2>/dev/null || true
+    systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true
 
-    echo "✅ Đã đăng ký Cron Job giám sát sức khỏe & dọn dẹp Docker tự động!"
+    echo "✅ Đã đăng ký Cron Job giám sát sức khỏe (1m check + 3h report) & dọn dẹp Docker tự động!"
 }
 
 # 9. START DOCKER COMPOSE STACK
