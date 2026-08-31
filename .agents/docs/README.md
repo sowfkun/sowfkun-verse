@@ -46,3 +46,5 @@ Tài liệu đặc tả các luồng nghiệp vụ chức năng (Domain Flows):
 | 🏷️ [ATTRIBUTE_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/ATTRIBUTE_FLOW.md) | Quản lý thuộc tính động (Dynamic Custom Attributes) cho các module nghiệp vụ như Customer, Ticket. |
 | 🔖 [TAG_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/TAG_FLOW.md) | Hệ thống gán nhãn đa phân hệ (Tagging system) phục vụ phân loại và lọc dữ liệu doanh nghiệp. |
 | 📜 [ACTIVITY_LOGS_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/ACTIVITY_LOGS_FLOW.md) | Luồng ghi nhận và truy vết nhật ký hoạt động của người dùng (Audit Logs & Activities tracking). |
+| 🛡️ [SECURITY_THREAT_SCENARIOS_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/SECURITY_THREAT_SCENARIOS_FLOW.md) | Đặc tả 6 kịch bản tấn công an ninh cấp ứng dụng (OWASP Top 10), thiết kế phòng thủ và lộ trình nâng cấp Go Backend. |
+
