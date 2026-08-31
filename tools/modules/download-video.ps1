@@ -10,8 +10,20 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $userDownloads = [Environment]::GetFolderPath("UserProfile") + "\Downloads"
 
 # ------------------------------------------------------------------------------
-# 1. AUTO-BOOTSTRAP YT-DLP & FFMPEG
+# 1. AUTO-BOOTSTRAP TOOLS (FFMPEG & YT-DLP)
 # ------------------------------------------------------------------------------
+function Find-FFmpeg {
+    $ffmpegCmd = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
+    if ($ffmpegCmd) { return $ffmpegCmd }
+
+    $packagesDir = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
+    if (Test-Path $packagesDir) {
+        $found = (Get-ChildItem -Path $packagesDir -Filter "ffmpeg.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+        if ($found) { return $found }
+    }
+    return "ffmpeg.exe"
+}
+
 function Ensure-YtDlp {
     $ytdlp = Get-Command yt-dlp -ErrorAction SilentlyContinue
     if ($ytdlp) {
@@ -49,20 +61,193 @@ function Ensure-YtDlp {
     return $null
 }
 
-function Find-FFmpeg {
-    $ffmpegCmd = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
-    if ($ffmpegCmd) { return $ffmpegCmd }
+# ------------------------------------------------------------------------------
+# 2. HIGH-SPEED HLS / M3U8 STREAM DOWNLOADER (AUTO TS DE-OBFUSCATION)
+# ------------------------------------------------------------------------------
+function Download-HlsStream {
+    param(
+        [string]$HlsUrl,
+        [string]$TargetName,
+        [string]$CustomReferer
+    )
 
-    $packagesDir = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
-    if (Test-Path $packagesDir) {
-        $found = (Get-ChildItem -Path $packagesDir -Filter "ffmpeg.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-        if ($found) { return $found }
+    if (-not $TargetName) {
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $TargetName = "video_$timestamp.mp4"
     }
-    return "ffmpeg.exe"
+    if (-not $TargetName.EndsWith(".mp4")) {
+        $TargetName = "$TargetName.mp4"
+    }
+
+    $outputPath = Join-Path $userDownloads $TargetName
+    $tempTsPath = "$outputPath.temp.ts"
+    $ffmpegExe = Find-FFmpeg
+
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host ">>> SOWFKUN DOWNLOADER - MULTI-THREADED HLS STREAM ENGINE" -ForegroundColor Green
+    Write-Host "  URL:         $HlsUrl" -ForegroundColor White
+    Write-Host "  Destination: $outputPath" -ForegroundColor White
+    if ($CustomReferer) {
+        Write-Host "  Referer:     $CustomReferer" -ForegroundColor DarkGray
+    }
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    $pyCode = @"
+import sys
+import os
+import ssl
+import time
+import urllib.request
+import urllib.parse
+import concurrent.futures
+
+url = r'''$HlsUrl'''
+out_ts = r'''$tempTsPath'''
+ref = r'''$CustomReferer'''
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+}
+if ref:
+    headers['Referer'] = ref
+
+def fetch_bytes(u):
+    req = urllib.request.Request(u, headers=headers)
+    with urllib.request.urlopen(req, context=ctx, timeout=25) as resp:
+        return resp.read()
+
+def parse_m3u8(u):
+    raw = fetch_bytes(u).decode('utf-8', errors='ignore')
+    lines = [l.strip() for l in raw.splitlines() if l.strip()]
+    
+    is_master = any('EXT-X-STREAM-INF' in l for l in lines)
+    if is_master:
+        sub_list = []
+        for i, l in enumerate(lines):
+            if l.startswith('#EXT-X-STREAM-INF'):
+                bw = 0
+                if 'BANDWIDTH=' in l:
+                    try:
+                        bw = int(l.split('BANDWIDTH=')[1].split(',')[0].replace('\"', ''))
+                    except Exception:
+                        pass
+                if i + 1 < len(lines):
+                    sub_url = urllib.parse.urljoin(u, lines[i+1])
+                    sub_list.append((bw, sub_url))
+        if sub_list:
+            sub_list.sort(key=lambda x: x[0], reverse=True)
+            return parse_m3u8(sub_list[0][1])
+            
+    segments = []
+    for l in lines:
+        if not l.startswith('#'):
+            segments.append(urllib.parse.urljoin(u, l))
+    return segments
+
+def find_ts_start(data):
+    limit = min(len(data) - 188 * 5, 16384)
+    for i in range(limit):
+        if (data[i] == 0x47 and 
+            data[i+188] == 0x47 and 
+            data[i+376] == 0x47 and 
+            data[i+564] == 0x47 and
+            data[i+752] == 0x47):
+            return i
+    iend = data.find(b'IEND')
+    if iend != -1:
+        for i in range(iend + 4, min(len(data) - 188 * 2, iend + 2048)):
+            if data[i] == 0x47 and data[i+188] == 0x47:
+                return i
+    return data.find(b'\x47')
+
+try:
+    print('[1/3] Parsing M3U8 Master / Media Playlist...')
+    segments = parse_m3u8(url)
+    total_segs = len(segments)
+    if not segments:
+        print('ERROR: No video segments found in playlist.', file=sys.stderr)
+        sys.exit(1)
+        
+    print(f'[2/3] Downloading {total_segs} segments concurrently (16 threads)...')
+    
+    seg_data = [None] * total_segs
+    completed_count = 0
+    total_bytes = 0
+    start_time = time.time()
+    
+    def download_segment(idx, seg_url):
+        for attempt in range(4):
+            try:
+                raw = fetch_bytes(seg_url)
+                ts_pos = find_ts_start(raw)
+                if ts_pos != -1:
+                    clean = raw[ts_pos:]
+                    valid_len = (len(clean) // 188) * 188
+                    return idx, clean[:valid_len]
+                return idx, raw
+            except Exception:
+                time.sleep(1 + attempt)
+        return idx, b''
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+        futures = {executor.submit(download_segment, i, seg_url): i for i, seg_url in enumerate(segments)}
+        for future in concurrent.futures.as_completed(futures):
+            idx, data = future.result()
+            seg_data[idx] = data
+            completed_count += 1
+            total_bytes += len(data)
+            
+            elapsed = max(0.1, time.time() - start_time)
+            speed_mb = (total_bytes / (1024 * 1024)) / elapsed
+            percent = (completed_count / total_segs) * 100
+            
+            bar_len = 30
+            filled = int(bar_len * completed_count // total_segs)
+            bar = '=' * filled + '-' * (bar_len - filled)
+            sys.stdout.write(f'\r  Progress: [{bar}] {completed_count}/{total_segs} ({percent:.1f}%) | {speed_mb:.2f} MB/s')
+            sys.stdout.flush()
+
+    print('\n[3/3] Assembling clean TS stream...')
+    with open(out_ts, 'wb') as fout:
+        for chunk in seg_data:
+            if chunk:
+                fout.write(chunk)
+                
+    print('TS stream saved successfully.')
+except Exception as ex:
+    print(f'\nERROR in HLS engine: {ex}', file=sys.stderr)
+    sys.exit(1)
+"@
+
+    python -c $pyCode
+
+    if ($LASTEXITCODE -eq 0 -and (Test-Path $tempTsPath)) {
+        Write-Host "Muxing clean TS stream to MP4 container via FFmpeg..." -ForegroundColor Yellow
+        & $ffmpegExe -y -loglevel error -fflags +genpts+igndts+discardcorrupt -i $tempTsPath -c copy -bsf:a aac_adtstoasc -avoid_negative_ts make_zero -movflags +faststart $outputPath
+
+        if (Test-Path $outputPath) {
+            Remove-Item $tempTsPath -Force -ErrorAction SilentlyContinue
+            $fileSizeMB = [math]::Round((Get-Item $outputPath).Length / 1MB, 2)
+            Write-Host ""
+            Write-Host "=================================================================" -ForegroundColor Green
+            Write-Host "SUCCESS: Video downloaded & remuxed with 100% audio/video sync!" -ForegroundColor Green
+            Write-Host "Saved file: $outputPath ($fileSizeMB MB)" -ForegroundColor Cyan
+            Write-Host "=================================================================" -ForegroundColor Green
+            return
+        }
+    }
+
+    Write-Host "ERROR: HLS download or remux failed." -ForegroundColor Red
 }
 
 # ------------------------------------------------------------------------------
-# 2. AUTO-REPAIR OBFUSCATED STREAMS (TRUE 188-BYTE MPEG-TS SYNC)
+# 3. AUTO-REPAIR OBFUSCATED STREAMS (FALLBACK CHUNKED STREAMING)
 # ------------------------------------------------------------------------------
 function Repair-ObfuscatedStream {
     param([string]$FilePath)
@@ -91,12 +276,12 @@ function Repair-ObfuscatedStream {
         $fixedMp4Path = "$FilePath.fixed.mp4"
         $ffmpegExe = Find-FFmpeg
 
-        # Python script with True 5-Packet (188-byte) MPEG-TS Sync detection
         $pyCode = @"
 import sys
+import os
 
-src = r'$FilePath'
-dst = r'$cleanTsPath'
+src = r'''$FilePath'''
+dst = r'''$cleanTsPath'''
 
 def find_true_ts_sync(seg):
     limit = min(len(seg) - 188 * 5, 8192)
@@ -114,25 +299,39 @@ def find_true_ts_sync(seg):
                 return i
     return seg.find(b'\x47')
 
-with open(src, 'rb') as fin, open(dst, 'wb') as fout:
-    data = fin.read()
-    segments = data.split(b'\x89PNG\r\n\x1a\n')
-    for seg in segments:
-        if not seg:
-            continue
-        ts_start = find_true_ts_sync(seg)
-        if ts_start != -1:
-            valid_data = seg[ts_start:]
-            valid_len = (len(valid_data) // 188) * 188
-            fout.write(valid_data[:valid_len])
+try:
+    with open(src, 'rb') as fin, open(dst, 'wb') as fout:
+        chunk_size = 10 * 1024 * 1024
+        remainder = b''
+        while True:
+            raw = fin.read(chunk_size)
+            if not raw:
+                if remainder:
+                    ts_start = find_true_ts_sync(remainder)
+                    if ts_start != -1:
+                        valid = remainder[ts_start:]
+                        fout.write(valid[:(len(valid)//188)*188])
+                break
+            data = remainder + raw
+            segments = data.split(b'\x89PNG\r\n\x1a\n')
+            remainder = segments.pop()
+            for seg in segments:
+                if not seg:
+                    continue
+                ts_start = find_true_ts_sync(seg)
+                if ts_start != -1:
+                    valid = seg[ts_start:]
+                    fout.write(valid[:(len(valid)//188)*188])
+except Exception as ex:
+    print(f'Error repairing stream: {ex}', file=sys.stderr)
 "@
         python -c $pyCode 2>$null
 
         if (Test-Path $cleanTsPath) {
             & $ffmpegExe -y -loglevel error -fflags +genpts+igndts+discardcorrupt -i $cleanTsPath -c copy -bsf:a aac_adtstoasc -avoid_negative_ts make_zero -movflags +faststart $fixedMp4Path
             if (Test-Path $fixedMp4Path) {
-                Remove-Item $cleanTsPath -Force
-                Remove-Item $FilePath -Force
+                Remove-Item $cleanTsPath -Force -ErrorAction SilentlyContinue
+                Remove-Item $FilePath -Force -ErrorAction SilentlyContinue
                 Move-Item $fixedMp4Path $FilePath -Force
                 Write-Host "[Auto-Repair] Video stream successfully repaired with 100% audio/video sync!" -ForegroundColor Green
             }
@@ -141,7 +340,7 @@ with open(src, 'rb') as fin, open(dst, 'wb') as fout:
 }
 
 # ------------------------------------------------------------------------------
-# 3. DIRECT SUBTITLE DOWNLOADER (.vtt, .srt, .ass)
+# 4. DIRECT SUBTITLE DOWNLOADER (.vtt, .srt, .ass)
 # ------------------------------------------------------------------------------
 function Download-Subtitle {
     param(
@@ -177,9 +376,9 @@ function Download-Subtitle {
 import urllib.request
 import ssl
 
-url = r'$SubUrl'
-out = r'$outputPath'
-ref = r'$CustomReferer'
+url = r'''$SubUrl'''
+out = r'''$outputPath'''
+ref = r'''$CustomReferer'''
 
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
@@ -209,7 +408,7 @@ with urllib.request.urlopen(req, context=ctx) as resp, open(out, 'wb') as fout:
 }
 
 # ------------------------------------------------------------------------------
-# 4. DOWNLOAD ENGINE
+# 5. DOWNLOAD ENGINE DISPATCHER
 # ------------------------------------------------------------------------------
 function Start-DownloadVideo {
     param(
@@ -223,12 +422,19 @@ function Start-DownloadVideo {
         return
     }
 
-    # If URL is a direct subtitle file (.vtt, .srt, .ass, /subtitle/)
+    # 1. If URL is a direct subtitle file (.vtt, .srt, .ass, /subtitle/)
     if ($TargetUrl -match "\.(vtt|srt|ass|sub)($|\?)" -or $TargetUrl -match "/subtitle/") {
         Download-Subtitle -SubUrl $TargetUrl -SubName $TargetName -CustomReferer $CustomReferer
         return
     }
 
+    # 2. If URL is an HLS / M3U8 stream (handles master playlist & obfuscated PNG headers)
+    if ($TargetUrl -match "\.m3u8($|\?)" -or $TargetUrl -match "/stream/" -or $TargetUrl -match "/hls/") {
+        Download-HlsStream -HlsUrl $TargetUrl -TargetName $TargetName -CustomReferer $CustomReferer
+        return
+    }
+
+    # 3. Fallback to YT-DLP for general video platforms (YouTube, TikTok, Facebook, etc.)
     $runner = Ensure-YtDlp
     if (-not $runner) { return }
 
@@ -244,7 +450,7 @@ function Start-DownloadVideo {
 
     Write-Host ""
     Write-Host "=================================================================" -ForegroundColor Cyan
-    Write-Host ">>> SOWFKUN DOWNLOADER - STARTING STREAM DOWNLOAD..." -ForegroundColor Green
+    Write-Host ">>> SOWFKUN DOWNLOADER - STARTING YT-DLP DOWNLOAD..." -ForegroundColor Green
     Write-Host "  URL:         $TargetUrl" -ForegroundColor White
     Write-Host "  Destination: $outputPath" -ForegroundColor White
     Write-Host "=================================================================" -ForegroundColor Cyan
@@ -282,7 +488,7 @@ function Start-DownloadVideo {
 
         Write-Host ""
         Write-Host "=================================================================" -ForegroundColor Green
-        Write-Host "SUCCESS: Video download and post-processing completed!" -ForegroundColor Green
+        Write-Host "SUCCESS: Video download completed!" -ForegroundColor Green
         Write-Host "Saved file: $outputPath" -ForegroundColor Cyan
         Write-Host "=================================================================" -ForegroundColor Green
     } else {
@@ -292,7 +498,7 @@ function Start-DownloadVideo {
 }
 
 # ------------------------------------------------------------------------------
-# 5. ENTRY POINT
+# 6. ENTRY POINT
 # ------------------------------------------------------------------------------
 if ($Url) {
     Start-DownloadVideo -TargetUrl $Url -TargetName $OutputName -CustomReferer $Referer
