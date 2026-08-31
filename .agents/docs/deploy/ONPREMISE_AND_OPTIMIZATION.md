@@ -17,12 +17,15 @@ Toàn bộ kiến trúc Backend và Frontend của Sowfkun-Verse được thiế
 | Thành phần Hạ tầng | Profile `mini` (VPS 1-2GB RAM) | Profile `standard` (Server 4-8GB RAM) | Profile `huge` (Server 16GB+ RAM) |
 |---|---|---|---|
 | **API Memory Limit** | `200M` | `400M` | `1024M` (1GB) |
+| **Egress Gateway Limit** | `100M` | `200M` | `512M` |
 | **MongoDB Pool** | `15 max / 2 min` | `50 max / 5 min` | `150 max / 15 min` |
 | **Redis Pool** | `15 max / 2 min` | `50 max / 5 min` | `150 max / 15 min` |
 | **OpenSearch Conns** | `20 idle / 5 per_host` | `50 idle / 10 per_host` | `200 idle / 50 per_host` |
 | **Asynq Workers** | `3 workers` | `10 workers` | `20 workers` |
 | **Kafka Batch Tuning** | `64KB / 200 msgs / 20ms` | `512KB / 500 msgs / 10ms` | `1MB / 1000 msgs / 5ms` |
 | **Kafka Retention** | `3 ngày` | `3 ngày` | `7 ngày` |
+| **Loki Log Retention** | `7 ngày` | `14 ngày` | `30 ngày` |
+| **Monitoring Stack** | `Agent Promtail (:9100)` | `Hub + Promtail` | `Hub High-Availability + Promtail` |
 
 ---
 

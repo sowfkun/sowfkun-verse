@@ -222,3 +222,24 @@ graph TD
     *   Khi ứng dụng tắt hoặc restart, Manager sẽ lặp qua Map Cache (các kết nối vật lý độc nhất) thay vì lặp qua Map Alias để đóng kết nối.
     *   Điều này đảm bảo mỗi socket pool chỉ được gọi Close/Disconnect đúng **1 lần duy nhất**, tránh lỗi đóng trùng lặp (double-close socket panic).
 
+---
+
+## 6. Egress Gateway & Zero-Trust Outbound Engine
+
+Cổng định tuyến và bảo vệ kết nối Internet tập trung (Server 3 - `10.30.0.2:8090`):
+*   **Zero-Trust Isolation**: Data Server (Server 1) và App Server (Server 2) bị khóa cứng toàn bộ kết nối ra Internet (`DENY Egress 0.0.0.0/0`).
+*   **SSRF Protection Engine (`pkg/egress/ssrf.go`)**: Kiểm tra nghiêm ngặt DNS resolution, chặn toàn bộ IP private (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.1`) và metadata endpoints (`169.254.169.254`).
+*   **Universal SDK Transport (`egress.NewHTTPClient()`)**: Bọc `http.RoundTripper` tự động chuyển tiếp request của third-party SDKs (Resend Email, Telegram, AWS, Stripe) sang Egress Gateway Server.
+
+---
+
+## 7. Centralized Observability & Monitoring Hub
+
+Hệ thống quản lý log và metrics tập trung đa máy chủ (Multi-Node):
+*   **Grafana (Port `3000`)**: Dashboard trực quan hóa đa máy chủ, nạp sẵn DataSources (Loki, Prometheus, OpenSearch) và bảng tra cứu MongoDB Slow Query $\ge 100\text{ms}$.
+*   **Loki (Port `3100`)**: Cụm lưu trữ log container tập trung, nén Snappy 5x-10x, compactor tự động dọn rác 7 ngày.
+*   **Prometheus (Port `9090`)**: Thu thập time-series metrics định kỳ 15s từ `Node Exporter` (:9100) của cả 3 Server qua VPC Peering.
+*   **Promtail & Node Exporter Agent**: Chạy ngầm trên từng node, tự động bóc tách log level, phân loại `layer` và bắt Slow Query.
+*   **Health Monitor & Danger Alert (`monitor.sh`)**: Quét nguy hiểm mỗi 1 phút (bắn Telegram `🚨 DANGER` khi CPU/RAM/Disk > 85%, kèm chống spam 30p & tự động báo `🟢 RECOVERY`) và bản tin định kỳ 3h `🔵 PERIODIC SUMMARY`.
+
+
