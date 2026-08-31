@@ -1,0 +1,47 @@
+name: sowfkun_promtail
+
+services:
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: agent_promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
+    environment:
+      - SERVER_NAME=${SERVER_NAME:-sowfkun-node}
+      - LOKI_HOST=${LOKI_HOST:-10.20.0.2}
+    volumes:
+      - ./promtail.yaml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  node_exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: agent_node_exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"
+    networks:
+      - app_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  app_net:
+    external: true

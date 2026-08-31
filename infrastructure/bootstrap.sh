@@ -68,10 +68,12 @@ interactive_menu() {
     echo "  4) OpenSearch (Port 9200)"
     echo "  5) Go API Backend (Port 8080)"
     echo "  6) Egress Gateway / Webhook Dispatcher (Port 8090)"
-    echo "  7) Tất cả (All-in-One: Cài & chạy toàn bộ dịch vụ)"
+    echo "  7) Central Monitoring Hub (Grafana 3000, Loki 3100, Prometheus 9090)"
+    echo "  8) Promtail & Node Exporter Agent (Gom log & metrics gửi về Hub)"
+    echo "  9) Tất cả (All-in-One: Cài & chạy toàn bộ dịch vụ)"
     echo "================================================================="
-    echo "💡 Gợi ý: Nhập các số phân cách bằng dấu phẩy hoặc khoảng trắng (Ví dụ: 1,5 hoặc 1 2 6)"
-    read -r -p "👉 Nhập lựa chọn của bạn [1-7]: " user_choices
+    echo "💡 Gợi ý: Nhập các số phân cách bằng dấu phẩy hoặc khoảng trắng (Ví dụ: 1,5 hoặc 1 2 8)"
+    read -r -p "👉 Nhập lựa chọn của bạn [1-9]: " user_choices
 
     if [[ -z "$user_choices" ]]; then
         echo "❌ Lỗi: Bạn chưa chọn dịch vụ nào!"
@@ -87,7 +89,9 @@ interactive_menu() {
             4) SELECTED_SERVICES+=("opensearch") ;;
             5) SELECTED_SERVICES+=("api") ;;
             6) SELECTED_SERVICES+=("gateway") ;;
-            7) SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api" "gateway"); break ;;
+            7) SELECTED_SERVICES+=("monitoring") ;;
+            8) SELECTED_SERVICES+=("promtail") ;;
+            9) SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api" "gateway" "monitoring" "promtail"); break ;;
             *) echo "⚠️ Bỏ qua lựa chọn không hợp lệ: $choice" ;;
         esac
     done
@@ -139,13 +143,13 @@ else
     for s in "${raw_services[@]}"; do
         trimmed_s=$(echo "$s" | tr -d '[:space:]')
         if [[ "$trimmed_s" == "all" ]]; then
-            SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api" "gateway")
+            SELECTED_SERVICES=("redis" "mongo" "kafka" "opensearch" "api" "gateway" "monitoring" "promtail")
             break
-        elif [[ "$trimmed_s" =~ ^(kafka|redis|mongo|opensearch|api|gateway)$ ]]; then
+        elif [[ "$trimmed_s" =~ ^(kafka|redis|mongo|opensearch|api|gateway|monitoring|promtail)$ ]]; then
             SELECTED_SERVICES+=("$trimmed_s")
         else
             echo "❌ Lỗi: Service '$trimmed_s' không hợp lệ!"
-            echo "Danh sách hợp lệ: redis, mongo, kafka, opensearch, api, gateway, all"
+            echo "Danh sách hợp lệ: redis, mongo, kafka, opensearch, api, gateway, monitoring, promtail, all"
             exit 1
         fi
     done
@@ -442,22 +446,22 @@ setup_monitoring_and_maintenance() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # Cài đặt script monitor vào /usr/local/bin
-    if [ -f "$SCRIPT_DIR/scripts/app/monitor.sh" ]; then
-        cp "$SCRIPT_DIR/scripts/app/monitor.sh" /usr/local/bin/app-monitor.sh
+    if [ -f "$SCRIPT_DIR/monitoring/alert/monitor.sh" ]; then
+        cp "$SCRIPT_DIR/monitoring/alert/monitor.sh" /usr/local/bin/app-monitor.sh
         chmod +x /usr/local/bin/app-monitor.sh
-    elif [ -f "$SCRIPT_DIR/scripts/monitor.sh" ]; then
-        cp "$SCRIPT_DIR/scripts/monitor.sh" /usr/local/bin/app-monitor.sh
+    elif [ -f "$SCRIPT_DIR/scripts/app/monitor.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/app/monitor.sh" /usr/local/bin/app-monitor.sh
         chmod +x /usr/local/bin/app-monitor.sh
     fi
 
     # Tạo thư mục config cảnh báo nếu chưa có
     mkdir -p /etc/infra
     if [ ! -f /etc/infra/alert.conf ]; then
-        if [ -f "$SCRIPT_DIR/scripts/app/alert.conf.example" ]; then
-            cp "$SCRIPT_DIR/scripts/app/alert.conf.example" /etc/infra/alert.conf
+        if [ -f "$SCRIPT_DIR/monitoring/alert/alert.conf.example" ]; then
+            cp "$SCRIPT_DIR/monitoring/alert/alert.conf.example" /etc/infra/alert.conf
             echo "ℹ️ Đã tạo file cấu hình cảnh báo tại /etc/infra/alert.conf (Điền Telegram Token vào đây)"
-        elif [ -f "$SCRIPT_DIR/scripts/alert.conf.example" ]; then
-            cp "$SCRIPT_DIR/scripts/alert.conf.example" /etc/infra/alert.conf
+        elif [ -f "$SCRIPT_DIR/scripts/app/alert.conf.example" ]; then
+            cp "$SCRIPT_DIR/scripts/app/alert.conf.example" /etc/infra/alert.conf
             echo "ℹ️ Đã tạo file cấu hình cảnh báo tại /etc/infra/alert.conf (Điền Telegram Token vào đây)"
         fi
     fi
@@ -495,6 +499,12 @@ start_services() {
     start_target() {
         local target=$1
         local target_dir="$BASE_DIR/$target"
+        
+        if [ "$target" == "monitoring" ]; then
+            target_dir="$BASE_DIR/monitoring/hub"
+        elif [ "$target" == "promtail" ]; then
+            target_dir="$BASE_DIR/monitoring/agent"
+        fi
         
         if [ ! -d "$target_dir" ]; then
             echo "❌ Không tìm thấy thư mục: $target_dir"
@@ -565,6 +575,15 @@ start_services() {
             docker compose up -d --build
             
             echo "🚀 Khởi chạy Egress Gateway container thành công!"
+        elif [ "$target" == "promtail" ]; then
+            if [ -f /etc/infra/alert.conf ]; then
+                # shellcheck source=/dev/null
+                source /etc/infra/alert.conf
+            fi
+            export SERVER_NAME="${SERVER_NAME:-$(hostname)}"
+            export LOKI_HOST="${LOKI_HOST:-10.20.0.2}"
+            echo "🚀 Đang khởi chạy Promtail & Node Exporter Agent (Node: $SERVER_NAME -> Loki: $LOKI_HOST)..."
+            docker compose up -d
         else
             echo "🚀 Đang kéo images và chạy $target container..."
             docker compose up -d

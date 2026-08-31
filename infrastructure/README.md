@@ -6,6 +6,9 @@ Bộ kịch bản và cấu hình khởi tạo hạ tầng tự động **"1 L�
 - **MongoDB 8 / Atlas Local**: Port `27017` (hỗ trợ full `$search` Lucene Engine).
 - **OpenSearch 2 / 3**: Port `9200`.
 - **Go Backend (API)**: Port `8080`.
+- **Egress Gateway / Webhook Dispatcher**: Port `8090` (SSRF Defense & Outbound proxy).
+- **Central Monitoring Hub**: Grafana `3000`, Loki `3100`, Prometheus `9090`.
+- **Promtail & Node Exporter Agent**: Port `9100` (Gom log container & metrics gửi về Hub).
 - **Docker Network**: `app_net` (tất cả containers cùng VPS tự động kết nối nội bộ).
 
 ---
@@ -28,9 +31,12 @@ Hệ thống sẽ hiển thị menu chọn các dịch vụ cần chạy:
   3) Redpanda / Kafka (Port 9092 / Console 8085)
   4) OpenSearch (Port 9200)
   5) Go API Backend (Port 8080)
-  6) Tất cả (All-in-One: Cài & chạy toàn bộ 5 dịch vụ)
+  6) Egress Gateway / Webhook Dispatcher (Port 8090)
+  7) Central Monitoring Hub (Grafana 3000, Loki 3100, Prometheus 9090)
+  8) Promtail & Node Exporter Agent (Gom log & metrics gửi về Hub)
+  9) Tất cả (All-in-One: Cài & chạy toàn bộ dịch vụ)
 =================================================================
-👉 Nhập lựa chọn của bạn [1-6]: 1,2,5
+👉 Nhập lựa chọn của bạn [1-9]: 1,2,5,8
 ```
 
 ---
@@ -99,21 +105,22 @@ sudo bash bootstrap.sh --service=redis,api --mode=rollback
 
 ---
 
-## 🚨 Hệ Thống Giám Sát & Cảnh Báo Telegram / Discord
+## 🚨 Hệ Thống Giám Sát & Cảnh Báo Telegram / Grafana
 
-Mỗi server sau khi chạy `bootstrap.sh` sẽ tự động kích hoạt **Monitor Cron Job** (chạy mỗi 5 phút, ăn 0MB RAM):
-- Tự động cảnh báo khi **RAM > 85%**, **Swap > 70%**, **Disk > 85%**.
-- Tự động cảnh báo khi có **Docker Container bị sập hoặc Unhealthy**.
-- Tự động thông báo khi hệ thống hồi phục về bình thường (**RECOVERED**).
+Mỗi server sau khi chạy `bootstrap.sh` sẽ tự động kích hoạt **Monitor Cron Job** và tích hợp vào hệ thống quan sát tập trung:
+- **Quét tức thời mỗi 1 phút**: Tự động cảnh báo `🚨 DANGER` khi **CPU > 85%**, **RAM > 85%**, **Swap > 70%**, **Disk > 85%** hoặc container bị sập (kèm chống spam cooldown 30p & tự động báo `🟢 PHỤC HỒI`).
+- **Báo cáo định kỳ mỗi 3 tiếng**: Gửi bản tin tổng quan `🔵 PERIODIC SUMMARY` với giờ Việt Nam (`+7 GMT`).
+- **Quản lý Log Container & Metrics**: Promtail tự động gom log về Loki, Prometheus scrape metrics, và Grafana hiển thị trực quan tại `http://localhost:3000`.
 
 ### Cấu hình nhận thông báo:
 Mở file cấu hình trên server:
 ```bash
 sudo nano /etc/infra/alert.conf
 ```
-Điền Token Telegram / Discord:
+Điền cấu hình:
 ```ini
-SERVER_NAME="App-Server-01"
+SERVER_NAME="SOWFKUN-NODE"
+ALERT_FORWARD_URL="http://10.20.0.2:8080/api/v1/system/alert/telegram"
 TELEGRAM_BOT_TOKEN="123456789:AAXXXXXXXXXXXXXX"
 TELEGRAM_CHAT_ID="123456789"
 ```

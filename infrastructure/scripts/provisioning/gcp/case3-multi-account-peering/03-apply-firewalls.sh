@@ -195,9 +195,9 @@ if [[ "$ROLE" == "data" ]]; then
     --direction=INGRESS \
     --action=ALLOW \
     --source-ranges="35.235.240.0/20" \
-    --rules="tcp:22,tcp:27017,tcp:6379,tcp:9200,tcp:3000" \
+    --rules="tcp:22,tcp:27017,tcp:6379,tcp:9200,tcp:9600,tcp:9100" \
     --priority=1000 \
-    --description="Allow Google IAP for SSH and all Local Infra Tunnels (Mongo, Redis, OpenSearch, Grafana)" \
+    --description="Allow Google IAP for SSH and all Local Infra Tunnels (Mongo, Redis, OpenSearch, NodeExporter)" \
     || echo "⚠️ Rule data-vpc-allow-ingress-iap đã tồn tại."
 
 elif [[ "$ROLE" == "app" ]]; then
@@ -208,9 +208,9 @@ elif [[ "$ROLE" == "app" ]]; then
     --direction=INGRESS \
     --action=ALLOW \
     --source-ranges="35.235.240.0/20" \
-    --rules="tcp:22,tcp:8080,tcp:8085,tcp:9092,tcp:9094" \
+    --rules="tcp:22,tcp:3000,tcp:3100,tcp:8080,tcp:8085,tcp:9090,tcp:9092,tcp:9094,tcp:9100" \
     --priority=1000 \
-    --description="Allow Google IAP for SSH and Local App Tunnels (API, Kafka, Console)" \
+    --description="Allow Google IAP for SSH and Local App Tunnels (API, Kafka, Console, Grafana, Loki, Prometheus)" \
     || echo "⚠️ Rule app-vpc-allow-ingress-iap đã tồn tại."
 
   # 2. Mở Egress sang Data Server & Egress Gateway qua Peering, Google IAP & NTP/DNS (Priority 900)

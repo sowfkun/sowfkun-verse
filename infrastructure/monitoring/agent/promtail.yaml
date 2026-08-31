@@ -1,0 +1,75 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://${LOKI_HOST:-10.20.0.2}:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 102400
+
+scrape_configs:
+  - job_name: docker_containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          server: ${SERVER_NAME:-sowfkun-node}
+          __path__: /var/lib/docker/containers/*/*-json.log
+
+    pipeline_stages:
+      # 1. Parse JSON format of Docker json-file log driver
+      - json:
+          expressions:
+            raw_log: log
+            stream: stream
+            log_time: time
+
+      # 2. Extract container name from log file path
+      - regex:
+          source: filename
+          expression: '^/var/lib/docker/containers/(?P<container_id>[a-f0-9]+)/.*'
+
+      # 3. Classify Layer and Service based on container name
+      - template:
+          source: layer
+          template: |
+            {{- if regexMatch "mongo|redis" .filename -}} database
+            {{- else if regexMatch "redpanda|kafka" .filename -}} broker
+            {{- else if regexMatch "gateway|egress" .filename -}} gateway
+            {{- else if regexMatch "api|backend|app" .filename -}} backend
+            {{- else -}} system {{- end -}}
+
+      # 4. Extract Log Level (ERROR, WARN, INFO, DEBUG)
+      - regex:
+          source: raw_log
+          expression: '(?i)(?P<level>ERROR|ERR|WARN|WARNING|INFO|DEBUG|FATAL|PANIC)'
+
+      # 5. MongoDB Slow Query Extractor (>= 100ms)
+      - regex:
+          source: raw_log
+          expression: '(?i)(?:durationMillis":\s*(?P<duration_ms>\d+)|(?P<duration_text>\d+)ms)'
+
+      - template:
+          source: is_slow_query
+          template: |
+            {{- if .duration_ms -}}
+              {{- if ge (atoi .duration_ms) 100 -}} true {{- else -}} false {{- end -}}
+            {{- else if .duration_text -}}
+              {{- if ge (atoi .duration_text) 100 -}} true {{- else -}} false {{- end -}}
+            {{- else -}} false {{- end -}}
+
+      # 6. Apply extracted labels for high-speed indexing in Loki
+      - labels:
+          stream:
+          level:
+          layer:
+          is_slow_query:
+
+      # 7. Output the clean raw log line
+      - output:
+          source: raw_log
