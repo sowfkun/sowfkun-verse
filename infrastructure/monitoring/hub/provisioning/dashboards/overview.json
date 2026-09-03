@@ -40,7 +40,7 @@
       },
       "targets": [
         {
-          "expr": "avg by (server) (rate(node_cpu_seconds_total{mode=~\"user|system|nice\"}[1m])) * 100",
+          "expr": "100 - (avg by (server) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
           "legendFormat": "{{server}}"
         }
       ]
@@ -133,7 +133,7 @@
       },
       "targets": [
         {
-          "expr": "avg by (server) (rate(node_cpu_seconds_total{mode=~\"user|system|nice\"}[1m])) * 100",
+          "expr": "100 - (avg by (server) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
           "legendFormat": "{{server}}"
         }
       ]
