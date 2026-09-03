@@ -4,7 +4,7 @@ server:
   log_level: warn
 
 positions:
-  filename: /tmp/positions.yaml
+  filename: /tmp/positions_v2.yaml
 
 clients:
   - url: http://${LOKI_HOST:-10.20.0.2}:3100/loki/api/v1/push
@@ -13,7 +13,7 @@ clients:
 
 scrape_configs:
   # ===========================================================================
-  # 1. DOCKER CONTAINERS (Chỉ đúng 3 nhãn: service, server, level)
+  # 1. DOCKER CONTAINERS (CHỈ ĐÚNG 3 NHÃN: server, service, level)
   # ===========================================================================
   - job_name: docker
     docker_sd_configs:
@@ -22,102 +22,98 @@ scrape_configs:
     relabel_configs:
       - source_labels: ['__meta_docker_container_log_path']
         target_label: '__path__'
+
+      # Mặc định lấy tên container bỏ prefix app_, mon_, agent_ gán vào service_name
       - source_labels: ['__meta_docker_container_name']
-        regex: '/(.*)'
-        target_label: 'service'
+        regex: '/(?:app_|mon_|agent_)?(.*)'
+        target_label: 'service_name'
+
+      # 1. Chuẩn hóa: api
+      - source_labels: ['__meta_docker_container_name']
+        regex: '.*/(?:app_)?api(?:_\d+)?$'
+        target_label: 'service_name'
+        replacement: 'api'
+
+      # 2. Chuẩn hóa: api_egress (hoặc gateway)
+      - source_labels: ['__meta_docker_container_name']
+        regex: '.*(?:gateway|egress).*'
+        target_label: 'service_name'
+        replacement: 'api_egress'
+
+      # 3. Chuẩn hóa: mongo
+      - source_labels: ['__meta_docker_container_name']
+        regex: '.*mongo.*'
+        target_label: 'service_name'
+        replacement: 'mongo'
+
+      # 4. Chuẩn hóa: kafka
+      - source_labels: ['__meta_docker_container_name']
+        regex: '.*(?:kafka|redpanda).*'
+        target_label: 'service_name'
+        replacement: 'kafka'
+
+      # 5. Chuẩn hóa: redis
+      - source_labels: ['__meta_docker_container_name']
+        regex: '.*redis.*'
+        target_label: 'service_name'
+        replacement: 'redis'
+
+      # Gán nhãn server từ biến môi trường SERVER_NAME
       - target_label: 'server'
-        replacement: '${SERVER_NAME:-APP-NODE-02}'
+        replacement: '${SERVER_NAME:-app-node}'
 
     pipeline_stages:
       - json:
           expressions:
             raw_log: log
 
-      # 1. Bắt câu lệnh chậm (Duration >= 100ms)
+      # 1. Bóc tách Mongo JSON severity ("s":"I", "s":"W", "s":"E", "s":"F", "s":"D")
       - regex:
           source: raw_log
-          expression: '(?i)(?:durationMillis":\s*(?P<duration_ms>\d+)|(?P<duration_text>\d+)ms)'
+          expression: '"s":\s*"(?P<mongo_severity>[IWEFD])"'
 
-      # 2. Bắt log level thông thường
+      # 2. Bóc tách duration (durationMillis hoặc ...ms)
       - regex:
           source: raw_log
-          expression: '(?i)(?P<level>ERROR|ERR|WARN|WARNING|INFO|DEBUG|FATAL|PANIC)'
+          expression: '(?i)(?:durationMillis":\s*(?P<duration_ms>\d+)|(?P<duration_num>\d+)ms)'
 
-      # 3. Hợp nhất slow_query vào level (>= 300ms)
+      # 3. Bóc tách text level (DEBUG, INFO, WARN, ERROR, FATAL, PANIC)
+      - regex:
+          source: raw_log
+          expression: '(?i)(?P<parsed_level>DEBUG|INFO|WARN(?:ING)?|ERR(?:OR)?|FATAL|PANIC)'
+
+      # 4. Phân loại level chính xác
       - template:
           source: level
           template: |
             {{- if .duration_ms -}}
-              {{- if ge (int .duration_ms) 300 -}} slow_query {{- else if .level -}} {{ ToLower .level }} {{- else -}} info {{- end -}}
-            {{- else if .duration_text -}}
-              {{- if ge (int .duration_text) 300 -}} slow_query {{- else if .level -}} {{ ToLower .level }} {{- else -}} info {{- end -}}
-            {{- else if .level -}}
-              {{ ToLower .level }}
+              {{- if ge (int .duration_ms) 300 -}}slow_query{{- else if .mongo_severity -}}{{- if eq .mongo_severity "W" -}}warn{{- else if or (eq .mongo_severity "E") (eq .mongo_severity "F") -}}error{{- else if eq .mongo_severity "D" -}}debug{{- else -}}info{{- end -}}{{- else if .parsed_level -}}{{ ToLower .parsed_level }}{{- else -}}info{{- end -}}
+            {{- else if .duration_num -}}
+              {{- if ge (int .duration_num) 300 -}}slow_query{{- else if .parsed_level -}}{{ ToLower .parsed_level }}{{- else -}}info{{- end -}}
+            {{- else if .mongo_severity -}}
+              {{- if eq .mongo_severity "W" -}}warn{{- else if or (eq .mongo_severity "E") (eq .mongo_severity "F") -}}error{{- else if eq .mongo_severity "D" -}}debug{{- else -}}info{{- end -}}
+            {{- else if .parsed_level -}}
+              {{- if hasPrefix "warn" (ToLower .parsed_level) -}}warn{{- else if hasPrefix "err" (ToLower .parsed_level) -}}error{{- else -}}{{ ToLower .parsed_level }}{{- end -}}
             {{- else -}}
               info
             {{- end -}}
 
-      # 4. CHỈ LƯU ĐÚNG 3 NHÃN DUY NHẤT VÀO LOKI INDEX
+      # 5. Gán nhãn level vào Loki Stream
       - labels:
-          service:
-          server:
           level:
 
+      # 6. Xóa triệt để các nhãn thừa khác (bao gồm service, filename, stream, job, container)
       - labeldrop:
+          - service
           - filename
           - stream
           - job
           - container
-          - service_name
           - is_slow_query
+          - parsed_level
+          - mongo_severity
+          - duration_ms
+          - duration_num
 
       - output:
           source: raw_log
-
-  # ===========================================================================
-  # 2. HOST OS AUDIT & SECURITY LOGS (/var/log/auth.log)
-  # ===========================================================================
-  - job_name: os_auth
-    static_configs:
-      - targets: [localhost]
-        labels:
-          service: os_auth
-          server: ${SERVER_NAME:-APP-NODE-02}
-          level: info
-          __path__: /var/log/auth.log
-    pipeline_stages:
-      - labeldrop:
-          - filename
-          - job
-
-  # ===========================================================================
-  # 3. HOST OS KERNEL & OOM KILLER LOGS (/var/log/kern.log)
-  # ===========================================================================
-  - job_name: os_kernel
-    static_configs:
-      - targets: [localhost]
-        labels:
-          service: os_kernel
-          server: ${SERVER_NAME:-APP-NODE-02}
-          level: warn
-          __path__: /var/log/kern.log
-    pipeline_stages:
-      - labeldrop:
-          - filename
-          - job
-
-  # ===========================================================================
-  # 4. HOST OS SYSTEM SERVICES LOGS (/var/log/syslog)
-  # ===========================================================================
-  - job_name: os_syslog
-    static_configs:
-      - targets: [localhost]
-        labels:
-          service: os_syslog
-          server: ${SERVER_NAME:-APP-NODE-02}
-          level: info
-          __path__: /var/log/syslog
-    pipeline_stages:
-      - labeldrop:
-          - filename
-          - job
