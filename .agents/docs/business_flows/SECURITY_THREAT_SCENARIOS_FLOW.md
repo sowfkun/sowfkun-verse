@@ -9,12 +9,11 @@ Tài liệu này đặc tả chi tiết **các kịch bản tấn công an ninh 
 
 | STT | Kịch Bản Tấn Công (Threat Scenario) | Mức Độ Rủi Ro | Trạng Thái | Giải Pháp Kỹ Thuật (Go Backend) | Vị Trí Triển Khai Dự Kiến |
 |:---:|:---|:---:|:---:|:---|:---|
-| **1** | **Instant Token Invalidation**<br/>(Dùng Token cũ sau khi đổi mật khẩu/bị đuổi việc) | 🔴 **High** | ⏳ **TODO** | Bổ sung `token_version: int` trong Entity User; `RequireAuth` so khớp claim `token_version` với cache | `internal/auth/`, `pkg/middleware/` |
-| **2** | **Distributed Credential Stuffing**<br/>(Dò mật khẩu bằng Botnet đa IP) | 🟡 **Medium** | ⏳ **TODO** | Đếm số lần đăng nhập sai theo Email (`auth:failed:{email}`) trong Redis; khóa tạm 15p sau 5 lần sai | `internal/auth/application/` |
+| **1** | **Instant Token Invalidation**<br/>(Dùng Token cũ sau khi đổi mật khẩu/bị đuổi việc) | 🔴 **High** | ⏳ **TODO**<br/>*(Xử lý khi làm Token)* | Bổ sung `token_version: int` trong Entity User; `RequireAuth` so khớp claim `token_version` với cache | `internal/auth/`, `pkg/middleware/` |
+| **2** | **Distributed Credential Stuffing**<br/>(Dò mật khẩu bằng Botnet đa IP) | 🟡 **Medium** | ✅ **DONE** | Đếm số lần đăng nhập sai theo Email (`auth:login_attempts:{email}`) trong Redis; khóa tạm 30p sau 5 lần sai | `internal/auth/application/commands/login.go` |
 | **3** | **Replay Attack on Encrypted Payload**<br/>(Phát lại gói tin mã hóa nhiều lần) | 🟡 **Medium** | ✅ **DONE** | Bọc Envelope `{ts, nonce, payload}` trong AES-256-GCM; Header `X-Trace-Context` + Decoy Headers; Redis Deduplication `replay_nonce:<session>:<ts>:<nonce>` 5 phút | `pkg/middleware/payload_crypto.go`, `src/lib/api/client.ts` |
-| **4** | **Malicious File Upload & Stored SVG XSS**<br/>(Tải lên virus đổi đuôi, script lồng trong SVG) | 🟡 **Medium** | ⏳ **TODO** | Kiểm tra Magic Bytes nhị phân qua `http.DetectContentType`, khử mã độc SVG, đổi tên file ngẫu nhiên UUID | `pkg/utils/file/`, `internal/media/` |
-| **5** | **Webhook Spoofing**<br/>(Giả mạo request webhook gửi sang đối tác) | 🟢 **Low-Med** | ⏳ **TODO** | Ký chữ ký `X-Sowfkun-Signature: sha256=hmac(payload, secret)` trên Egress Gateway | `cmd/gateway/`, `pkg/egress/` |
-| **6** | **Missing Browser Security Headers**<br/>(Tấn công Clickjacking, MIME sniffing, XSS) | 🟢 **Low** | ⏳ **TODO** | Middleware tự động chèn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `CSP` | `pkg/middleware/security_headers.go` |
+| **4** | **Malicious File Upload & Stored SVG XSS**<br/>(Tải lên virus đổi đuôi, script lồng trong SVG) | 🟡 **Medium** | ⏳ **TODO**<br/>*(Xử lý khi làm Media)* | Kiểm tra Magic Bytes nhị phân qua `http.DetectContentType`, khử mã độc SVG, đổi tên file ngẫu nhiên UUID | `pkg/utils/file/`, `internal/media/` |
+| **5** | **Missing Browser Security Headers**<br/>(Tấn công Clickjacking, MIME sniffing, XSS) | 🟢 **Low** | ✅ **DONE** | Middleware tự động chèn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `HSTS`, `Referrer-Policy` | `pkg/middleware/security_headers.go` |
 
 ---
 
@@ -65,17 +64,13 @@ sequenceDiagram
 ### 2️⃣ Kịch Bản 2: Dò Mật Khẩu Bằng Mạng Botnet Phân Tán (Distributed Credential Stuffing)
 
 #### 🚨 Rủi Ro & Kịch Bản Khai Thác:
-- Hiện tại hệ thống có Rate Limiter theo IP (Token Bucket).
-- Hacker dùng mạng lưới 1.000 proxy/VPN IPs khác nhau. Mỗi IP chỉ gửi 1 request thử mật khẩu vào tài khoản VIP `ceo@company.com`.
-- Rate Limiter theo IP không bị kích hoạt vì mỗi IP chỉ gọi 1 lần, nhưng tài khoản nạn nhân đang bị tấn công vét cạn từ điển (Dictionary Attack).
+- Rate Limiter theo IP không thể chặn botnet 1.000 IP (mỗi IP thử 1 lần vào 1 email cụ thể).
 
-#### 💡 Thiết Kế Giải Pháp Kỹ Thuật:
-- Tạo Redis Key tracking theo Email tài khoản: `auth:failed_attempts:{sha256(email)}` (TTL: 15 phút).
-- Mỗi lần đăng nhập thất bại: `INCR auth:failed_attempts:{email}`.
-- Nếu `failed_attempts >= 5`:
-  - Trả về mã lỗi: `ErrAccountTemporarilyLocked` (Khóa tài khoản 15 phút).
-  - Tự động bắn thông báo cảnh báo bảo mật về Email của người dùng: *"Phát hiện 5 lần đăng nhập sai liên tiếp vào tài khoản của bạn"*.
-- Khi đăng nhập thành công: `DEL auth:failed_attempts:{email}`.
+#### 💡 Thiết Kế Giải Pháp Kỹ Thuật (Đã Triển Khai):
+- Trong `commands/login.go`:
+  - Trước khi so khớp mật khẩu: Kiểm tra Redis key `auth:login_attempts:{email}`. Nếu `attempts >= 5` $\rightarrow$ chặn ngay lập tức với mã lỗi `coreDomain.ErrMaxLoginAttempts`.
+  - Nếu sai mật khẩu hoặc tài khoản không hợp lệ: Tự động gọi `recordFailedAttempt` tăng biến đếm `INCR` và đặt `Expire` 30 phút.
+  - Khi đăng nhập thành công: `DEL auth:login_attempts:{email}` để khôi phục trạng thái.
 
 ---
 
@@ -153,32 +148,14 @@ sequenceDiagram
 
 ---
 
-### 5️⃣ Kịch Bản 5: Giả Mạo Webhook Gửi Đi (Webhook Spoofing & HMAC Signature)
-
-#### 🚨 Rủi Ro & Kịch Bản Khai Thác:
-- Khi Egress Gateway của Sowfkun Verse gửi webhook thông báo sự kiện (ví dụ: `ORDER_COMPLETED`, `PAYMENT_PAID`) sang server đối tác của khách hàng.
-- Hacker có thể tự tạo một HTTP request tương tự bắn vào server đối tác. Đối tác không có cơ chế xác minh request đó có thực sự đến từ Sowfkun Verse hay không.
-
-#### 💡 Thiết Kế Giải Pháp Kỹ Thuật:
-- Hệ thống cấp cho mỗi Webhook Endpoint của Tenant một chuỗi bí mật `webhook_secret`.
-- Trước khi Egress Gateway bắn request đi:
-  ```go
-  signature := hmacSHA256(payloadBytes, webhookSecret)
-  req.Header.Set("X-Sowfkun-Signature", "sha256=" + signature)
-  req.Header.Set("X-Sowfkun-Timestamp", strconv.FormatInt(time.Now().Unix(), 10))
-  ```
-- Đối tác phía nhận chỉ cần băm lại payload với `webhook_secret` và so khớp chữ ký để đảm bảo tính toàn vẹn và nguồn gốc 100%.
-
----
-
-### 6️⃣ Kịch Bản 6: Thiếu Bộ Header Bảo Vệ Trình Duyệt (Browser Security Headers)
+### 5️⃣ Kịch Bản 5: Bộ Header Bảo Vệ Trình Duyệt (Browser Security Headers - Đã Triển Khai)
 
 #### 🚨 Rủi Ro & Kịch Bản Khai Thác:
 - Người dùng bị tấn công Clickjacking (giao diện website bị chèn lén vào một khung `<iframe>` trong suốt trên trang web lừa đảo để dụ người dùng click chuột).
 - Trình duyệt tự ý đoán kiểu dữ liệu (MIME Sniffing) dẫn đến việc thực thi nhầm mã độc text thành HTML/JS.
 
-#### 💡 Thiết Kế Giải Pháp Kỹ Thuật:
-Tạo `pkg/middleware/security_headers.go` tự động chèn các HTTP Header chuẩn vào 100% phản hồi của Backend API:
+#### 💡 Thiết Kế Giải Pháp Kỹ Thuật (Đã Triển Khai):
+Tạo `pkg/middleware/security_headers.go` và tích hợp vào chuỗi middleware toàn cục trong `cmd/api/setup_http.go`:
 ```go
 func SecurityHeadersMiddleware(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +164,7 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
         w.Header().Set("X-XSS-Protection", "1; mode=block")
         w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
         w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
         next.ServeHTTP(w, r)
     })
 }
@@ -198,7 +176,6 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 
 | Giai Đoạn | Hạng Mục Triển Khai | Thời Lượng Dự Kiến | Trạng Thái |
 |---|---|:---:|:---:|
-| **Giai đoạn 1 (Transport & Replay Hardening)** | 1. Anti-Replay Envelope & Redis Nonce Deduplication<br/>2. Header Camouflage (`X-Trace-Context`) & Decoy Headers | ~30 phút | ✅ **DONE** |
-| **Giai đoạn 2 (Quick-Wins & Headers)** | 3. `SecurityHeadersMiddleware`<br/>4. Webhook HMAC Signature trong `pkg/egress` | ~30 phút | ⏳ **TODO** |
-| **Giai đoạn 3 (Core Auth Hardening)** | 5. Token Version Invalidation (`token_version` check)<br/>6. Account Lockout sau 5 lần sai mật khẩu | ~45 phút | ⏳ **TODO** |
-| **Giai đoạn 4 (Media Safety)** | 7. File Upload Magic Bytes Validator & SVG Sanitizer | ~45 phút | ⏳ **TODO** |
+| **Giai đoạn 1 (Auth, Replay & Headers)** | 1. Anti-Replay Envelope & Redis Nonce Deduplication<br/>2. Header Camouflage (`X-Trace-Context`) & Decoy Headers<br/>3. Account Lockout sau 5 lần sai mật khẩu (`auth:login_attempts`)<br/>4. `SecurityHeadersMiddleware` (Clickjacking & MIME Protection) | ~30 phút | ✅ **DONE** |
+| **Giai đoạn 2 (Token Life Cycle)** | 5. Token Version Invalidation (`token_version` check) | ~30 phút | ⏳ **TODO** *(Khi làm Token)* |
+| **Giai đoạn 3 (Media Safety)** | 6. File Upload Magic Bytes Validator & SVG Sanitizer | ~45 phút | ⏳ **TODO** *(Khi làm Media)* |

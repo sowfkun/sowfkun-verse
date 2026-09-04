@@ -17,6 +17,7 @@ Tài liệu này chuẩn hóa toàn bộ các lớp phòng thủ an ninh thông 
 | **Bảo vệ SDK ngoại** | **Transparent Egress Interception** | `egress.NewHTTPClient()` định tuyến mọi thư viện HTTP/SDK nội bộ qua DMZ Proxy | `egress.NewHTTPClient()` định tuyến Resend, Telegram, AWS SDK qua Gateway Server 3 | ✅ **DONE** |
 | **Mã hóa lưu trữ** | **Application-Level Field Encryption & Blind Index** | AES-256-GCM cho trường dữ liệu nhạy cảm (SĐT/Email) + HMAC Blind Index Pepper tìm kiếm | AES-256-GCM + Blind Index HMAC-SHA256 Pepper trên Database MongoDB | ✅ **DONE** |
 | **Mã hóa đường truyền** | **Hybrid End-to-End Encryption (E2EE)** | Khóa lai RSA-2048 + AES-256-GCM bảo vệ payload JSON giữa Client & Server | Khóa lai RSA-2048 + AES-256-GCM bảo vệ payload Web/Mobile | ✅ **DONE** |
+| **Bảo vệ trình duyệt** | **Browser Security Headers & Clickjacking Defense** | `SecurityHeadersMiddleware`: `X-Frame-Options: DENY`, `nosniff`, `HSTS`, `Referrer-Policy` | `SecurityHeadersMiddleware` chèn headers chuẩn vào 100% response | ✅ **DONE** |
 | **Cô lập dữ liệu** | **Multi-Tenant Logical Isolation & Boundary Safety** | Kiểm tra quyền sở hữu Tenant ID tại UseCase & Projection Safety (`tid`, `is_del`) | Kiểm tra quyền sở hữu Tenant ID tại UseCase & Projection Safety (`tid`, `is_del`) | ✅ **DONE** |
 | **Quan sát & Cảnh báo** | **Centralized Telemetry & Log Integrity** | Promtail gom log, Loki lưu nén 7 ngày, Grafana bắt MongoDB Slow Query $\ge 100\text{ms}$ | Promtail gom log, Loki lưu nén 7 ngày, Grafana bắt MongoDB Slow Query $\ge 100\text{ms}$ | ✅ **DONE** |
 
@@ -96,6 +97,8 @@ graph TD
    - **Tầng Repository**: Luôn tự động gán `"tid": 1` và `"is_del": 1` vào Projection map để bảo vệ tính toàn vẹn dữ liệu xác thực quyền sở hữu.
 5. **Chống Tấn Công Tần Suất (Multi-Tier Rate Limiting via Redis Token Bucket)**:
    - Áp dụng thuật toán Token Bucket thực thi nguyên tử qua Lua Script trên Redis phân tầng độc lập cho Public, Auth và CUD APIs.
+6. **Bộ Header Bảo Vệ Trình Duyệt (Browser Security Headers)**:
+   - Middleware `SecurityHeadersMiddleware` tự động chèn `X-Frame-Options: DENY` (chống Clickjacking), `X-Content-Type-Options: nosniff` (chống MIME sniffing), `Strict-Transport-Security` (ép HTTPS 1 năm), `Referrer-Policy`, và `X-Permitted-Cross-Domain-Policies: none` vào 100% API responses.
 
 ---
 
