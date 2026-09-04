@@ -18,6 +18,8 @@ Tài liệu này chuẩn hóa toàn bộ các lớp phòng thủ an ninh thông 
 | **Mã hóa lưu trữ** | **Application-Level Field Encryption & Blind Index** | AES-256-GCM cho trường dữ liệu nhạy cảm (SĐT/Email) + HMAC Blind Index Pepper tìm kiếm | AES-256-GCM + Blind Index HMAC-SHA256 Pepper trên Database MongoDB | ✅ **DONE** |
 | **Mã hóa đường truyền** | **Hybrid End-to-End Encryption (E2EE)** | Khóa lai RSA-2048 + AES-256-GCM bảo vệ payload JSON giữa Client & Server | Khóa lai RSA-2048 + AES-256-GCM bảo vệ payload Web/Mobile | ✅ **DONE** |
 | **Bảo vệ trình duyệt** | **Browser Security Headers & Clickjacking Defense** | `SecurityHeadersMiddleware`: `X-Frame-Options: DENY`, `nosniff`, `HSTS`, `Referrer-Policy` | `SecurityHeadersMiddleware` chèn headers chuẩn vào 100% response | ✅ **DONE** |
+| **Chống DoS bộ nhớ** | **Payload Size Limiting (OOM Mitigation)** | `http.MaxBytesReader` giới hạn tối đa 2MB cho Request Body | `http.MaxBytesReader` giới hạn 2MB tại Payload & Danger Middleware | ✅ **DONE** |
+| **Che giấu dữ liệu Log**| **PII & Secret Sanitization in Logs** | `sanitizeRequestBody` tự động mask password, token, otp thành `***MASKED***` | Mask trường nhạy cảm trước khi lưu Kafka/OpenSearch | ✅ **DONE** |
 | **Cô lập dữ liệu** | **Multi-Tenant Logical Isolation & Boundary Safety** | Kiểm tra quyền sở hữu Tenant ID tại UseCase & Projection Safety (`tid`, `is_del`) | Kiểm tra quyền sở hữu Tenant ID tại UseCase & Projection Safety (`tid`, `is_del`) | ✅ **DONE** |
 | **Quan sát & Cảnh báo** | **Centralized Telemetry & Log Integrity** | Promtail gom log, Loki lưu nén 7 ngày, Grafana bắt MongoDB Slow Query $\ge 100\text{ms}$ | Promtail gom log, Loki lưu nén 7 ngày, Grafana bắt MongoDB Slow Query $\ge 100\text{ms}$ | ✅ **DONE** |
 
@@ -99,13 +101,18 @@ graph TD
    - Áp dụng thuật toán Token Bucket thực thi nguyên tử qua Lua Script trên Redis phân tầng độc lập cho Public, Auth và CUD APIs.
 6. **Bộ Header Bảo Vệ Trình Duyệt (Browser Security Headers)**:
    - Middleware `SecurityHeadersMiddleware` tự động chèn `X-Frame-Options: DENY` (chống Clickjacking), `X-Content-Type-Options: nosniff` (chống MIME sniffing), `Strict-Transport-Security` (ép HTTPS 1 năm), `Referrer-Policy`, và `X-Permitted-Cross-Domain-Policies: none` vào 100% API responses.
+7. **Chống Tấn Công DoS Bộ Nhớ (Payload Size Limit via `MaxBytesReader` 2MB)**:
+   - `PayloadCryptoMiddleware` và `RequestIDMiddleware` giới hạn cứng dung lượng Request Body tối đa 2MB qua `http.MaxBytesReader` nhằm triệt tiêu hoàn toàn nguy cơ tấn công cạn kiệt RAM (OOM DoS Crash).
+8. **Danh Sách Trắng CORS Động (Dynamic CORS Whitelist)**:
+   - `CorsMiddleware` tự động nạp danh sách tên miền được phép từ biến môi trường `CORS_ALLOWED_ORIGINS` (hoặc `APP_URL`), ngăn chặn các cuộc gọi trái phép và hỗ trợ triển khai On-Premise linh hoạt.
 
 ---
 
 ### 📈 LỚP 4: GIÁM SÁT AN NINH, TRUY VẾT & CẢNH BÁO (Telemetry, Audit & Alerting)
 
-1. **Quản Lý Log Tập Trung An Toàn (Centralized Log Management)**:
+1. **Quản Lý Log Tập Trung An Toàn & Che Giấu Dữ Liệu Nhạy Cảm (Log Integrity & PII Masking)**:
    - `Promtail` gom log toàn bộ container trên 3 máy chủ, mã hóa đường truyền nội bộ đẩy về cụm lưu trữ `Loki Hub` với chính sách tự động dọn rác 7 ngày.
+   - Hàm `sanitizeRequestBody` tự động quét và che giấu các trường nhạy cảm (`password`, `pwd`, `token`, `otp`, `secret`, `api_key`) thành `"***MASKED***"` trước khi ghi vào Danger Log OpenSearch.
 2. **Thanh Tra Truy Vấn Chậm (Database Slow Query Telemetry)**:
    - Tự động bóc tách và gắn cờ `is_slow_query="true"` cho mọi câu lệnh MongoDB chạy $\ge 100\text{ms}$ giúp tối ưu hiệu năng và phát hiện sớm các cuộc tấn công DoS/ReDoS qua cơ sở dữ liệu.
 3. **Giám Sát & Cảnh Báo Khẩn Cấp (Continuous Health & Danger Alerting)**:

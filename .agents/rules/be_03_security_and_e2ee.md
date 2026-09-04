@@ -50,3 +50,9 @@ trigger: always_on
 - **Cổng Định Tuyến Egress Hợp Nhất**: Mọi thao tác kết nối và truyền dữ liệu ra Internet bên ngoài (gửi Email Resend/SMTP, Webhook Dispatcher, SMS OTP, Telegram Bot Alerts, Third-party APIs) **BẮT BUỘC** phải đi qua Egress Gateway Server (Server 3) thông qua `pkg/egress.Client` hoặc `egress.NewHTTPClient()`.
 - **Sử Dụng Third-Party SDK**: Khi tích hợp các thư viện SDK bên ngoài (như `resend-go`, AWS SDK, Stripe, v.v.), **BẮT BUỘC** phải truyền `egress.NewHTTPClient()` hoặc cấu hình Custom HTTP Transport để SDK gửi request xuyên qua Egress Gateway. Tuyệt đối **NGHIÊM CẤM** sử dụng `http.DefaultClient` hoặc gọi HTTP trực tiếp từ App Server ra ngoài Internet.
 
+## 5. Phòng Vệ Tấn Công DoS Bộ Nhớ, Log Masking & CORS Whitelist
+- **Chống DoS Bộ Nhớ (Payload Size Limit):** Mọi middleware/handler đọc Request Body (`PayloadCryptoMiddleware`, `RequestIDMiddleware`) **BẮT BUỘC** phải bọc `http.MaxBytesReader(w, r.Body, 2<<20)` (tối đa 2MB) trước khi `io.ReadAll` để phòng chống triệt để nguy cơ tấn công tràn RAM (OOM Crash).
+- **Che Giấu Dữ Liệu Nhạy Cảm Trong Log (Log Sanitization & PII Masking):** Tuyệt đối KHÔNG ghi log nguyên văn các trường nhạy cảm (`password`, `pwd`, `token`, `otp`, `secret`, `api_key`). Các middleware ghi nhận Danger Log bắt buộc phải bọc qua hàm `sanitizeRequestBody` để thay thế giá trị thành `"***MASKED***"` trước khi đẩy vào Kafka/OpenSearch.
+- **CORS Whitelist Động (Không Hardcode):** `CorsMiddleware` bắt buộc nạp danh sách domain cho phép từ biến môi trường `CORS_ALLOWED_ORIGINS` (hoặc `APP_URL`), chỉ cấp phép cho các domain nằm trong danh sách trắng (Whitelist).
+
+

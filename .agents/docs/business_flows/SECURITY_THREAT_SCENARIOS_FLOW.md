@@ -1,19 +1,25 @@
-# 🛡️ Kịch Bản Tấn Công An Ninh Ứng Dụng & Kế Hoạch Phòng Thủ
-## (Application Security Threat Scenarios & Defense Roadmap)
+# 🛡️ Kịch Bản Tấn Công An Ninh Ứng Dụng & Nghiệp Vụ (Application Security Threat Models)
+## (Business Flows Security & OWASP Top 10 Defense)
 
-Tài liệu này đặc tả chi tiết **các kịch bản tấn công an ninh cấp ứng dụng (Application Threat Models & OWASP Top 10)** đối với mã nguồn Golang `sowfkun-verse-api`, phân tích rủi ro thực tế, cơ chế phòng thủ kỹ thuật và kế hoạch triển khai (Roadmap) cho các giai đoạn tiếp theo.
+Tài liệu này đặc tả chi tiết **các kịch bản tấn công an ninh cấp ứng dụng & luồng nghiệp vụ (Application Security & Business Threat Models)** đối với mã nguồn Golang `sowfkun-verse-api` và Frontend `sowfkun-verse-web`.
+
+> 💡 **Phân định phạm vi:**
+> * **Tài liệu này (`business_flows/`):** Chuyên sâu về **Security Nghiệp Vụ / Ứng Dụng** (Auth, Token, Chống Replay, Upload File, XSS, DoS Payload, Log Masking).
+> * **Tài liệu hạ tầng (`deploy/`):** Chuyên sâu về **Security Hạ Tầng / Mạng / Máy Chủ** (3 VLAN, Firewall Egress, ZTNA, DMZ Proxy, Loki Cluster).
 
 ---
 
-## 📊 Bảng Tổng Hợp Ma Trận Kịch Bản Tấn Công & Giải Pháp
+## 📊 Bảng Tổng Hợp Ma Trận Kịch Bản Tấn Công Ứng Dụng & Giải Pháp
 
-| STT | Kịch Bản Tấn Công (Threat Scenario) | Mức Độ Rủi Ro | Trạng Thái | Giải Pháp Kỹ Thuật (Go Backend) | Vị Trí Triển Khai Dự Kiến |
-|:---:|:---|:---:|:---:|:---|:---|
-| **1** | **Instant Token Invalidation**<br/>(Dùng Token cũ sau khi đổi mật khẩu/bị đuổi việc) | 🔴 **High** | ⏳ **TODO**<br/>*(Xử lý khi làm Token)* | Bổ sung `token_version: int` trong Entity User; `RequireAuth` so khớp claim `token_version` với cache | `internal/auth/`, `pkg/middleware/` |
-| **2** | **Distributed Credential Stuffing**<br/>(Dò mật khẩu bằng Botnet đa IP) | 🟡 **Medium** | ✅ **DONE** | Đếm số lần đăng nhập sai theo Email (`auth:login_attempts:{email}`) trong Redis; khóa tạm 30p sau 5 lần sai | `internal/auth/application/commands/login.go` |
-| **3** | **Replay Attack on Encrypted Payload**<br/>(Phát lại gói tin mã hóa nhiều lần) | 🟡 **Medium** | ✅ **DONE** | Bọc Envelope `{ts, nonce, payload}` trong AES-256-GCM; Header `X-Trace-Context` + Decoy Headers; Redis Deduplication `replay_nonce:<session>:<ts>:<nonce>` 5 phút | `pkg/middleware/payload_crypto.go`, `src/lib/api/client.ts` |
-| **4** | **Malicious File Upload & Stored SVG XSS**<br/>(Tải lên virus đổi đuôi, script lồng trong SVG) | 🟡 **Medium** | ⏳ **TODO**<br/>*(Xử lý khi làm Media)* | Kiểm tra Magic Bytes nhị phân qua `http.DetectContentType`, khử mã độc SVG, đổi tên file ngẫu nhiên UUID | `pkg/utils/file/`, `internal/media/` |
-| **5** | **Missing Browser Security Headers**<br/>(Tấn công Clickjacking, MIME sniffing, XSS) | 🟢 **Low** | ✅ **DONE** | Middleware tự động chèn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `HSTS`, `Referrer-Policy` | `pkg/middleware/security_headers.go` |
+| STT | Kịch Bản Tấn Công Ứng Dụng | Phân Hệ Nghiệp Vụ | Mức Độ Rủi Ro | Trạng Thái | Giải Pháp Kỹ Thuật (Go Backend & FE) |
+|:---:|:---|:---:|:---:|:---:|:---|
+| **1** | **Instant Token Invalidation**<br/>(Dùng Token cũ sau khi đổi mật khẩu) | Xác thực (Auth) | 🔴 **High** | ⏳ **TODO**<br/>*(Khi làm Token)* | Bổ sung `token_version: int` trong Entity User; `RequireAuth` so khớp claim `token_version` với cache |
+| **2** | **Distributed Credential Stuffing**<br/>(Dò mật khẩu bằng Botnet đa IP) | Xác thực (Auth) | 🟡 **Medium** | ✅ **DONE** | Đếm số lần đăng nhập sai theo Email (`auth:login_attempts:{email}`) trong Redis; khóa tạm 30p sau 5 lần sai |
+| **3** | **Replay Attack on Encrypted Payload**<br/>(Phát lại gói tin mã hóa nhiều lần) | Giao thức (E2EE) | 🟡 **Medium** | ✅ **DONE** | Bọc Envelope `{ts, nonce, payload}` trong AES-256-GCM; Header `X-Trace-Context` + Decoy Headers; Redis Deduplication `replay_nonce:<session>:<ts>:<nonce>` 5 phút |
+| **4** | **Malicious File Upload & Stored SVG XSS**<br/>(Tải lên webshell, script ẩn trong SVG) | Đa phương tiện (Media) | 🟡 **Medium** | ⏳ **TODO**<br/>*(Khi làm Media)* | Kiểm tra Magic Bytes nhị phân qua `http.DetectContentType`, khử mã độc SVG, đổi tên file ngẫu nhiên UUID |
+| **5** | **Missing Browser Security Headers**<br/>(Tấn công Clickjacking, MIME sniffing) | Trình duyệt (Browser) | 🟢 **Low** | ✅ **DONE** | Middleware tự động chèn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `HSTS`, `Referrer-Policy` |
+| **6** | **Large Payload Memory Exhaustion (DoS)**<br/>(Bơm request body dung lượng khủng làm tràn RAM) | Middleware Giao vận | 🟡 **Medium** | ✅ **DONE** | Bọc `http.MaxBytesReader` giới hạn cứng dung lượng request theo `MAX_REQUEST_BODY_SIZE_MB` (mặc định 2MB) |
+| **7** | **Sensitive Data Leak in Logs (PII)**<br/>(Rò rỉ mật khẩu/token trong audit logs) | Giám sát & Audit | 🟢 **Low** | ✅ **DONE** | Hàm `sanitizeRequestBody` tự động quét và che giấu các trường nhạy cảm (`password`, `token`, `otp`) thành `"***MASKED***"` |
 
 ---
 
@@ -164,7 +170,6 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
         w.Header().Set("X-XSS-Protection", "1; mode=block")
         w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
         w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
         next.ServeHTTP(w, r)
     })
 }
@@ -172,10 +177,33 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 
 ---
 
+### 6️⃣ Kịch Bản 6: Tấn Công Tràn Bộ Nhớ Bằng Payload Dung Lượng Lớn (OOM DoS via Request Body)
+
+#### 🚨 Rủi Ro & Kịch Bản Khai Thác:
+- Hacker gửi liên tục các request POST có Request Body rác dung lượng hàng trăm Megabytes (ví dụ: 200MB - 500MB).
+- Nếu Backend nạp toàn bộ vào RAM qua `io.ReadAll`, máy chủ sẽ bị tràn bộ nhớ (Out-Of-Memory Crash) làm sập hệ thống.
+
+#### 💡 Thiết Kế Giải Pháp Kỹ Thuật (Đã Triển Khai):
+- Bọc `http.MaxBytesReader(w, r.Body, maxBytes)` tại `PayloadCryptoMiddleware` và `RequestIDMiddleware`.
+- Nạp cấu hình từ biến môi trường `MAX_REQUEST_BODY_SIZE_MB` (mặc định 2MB).
+- Nếu request vượt quá hạn mức, Server ngắt kết nối ngay lập tức và trả về HTTP `413 Request Entity Too Large`.
+
+---
+
+### 7️⃣ Kịch Bản 7: Rò Rỉ Thông Tin Nhạy Cảm Trong Hệ Thống Log (Sensitive PII Data Leakage)
+
+#### 🚨 Rủi Ro & Kịch Bản Khai Thác:
+- Khi ghi nhận Danger Logs hoặc Audit Logs, nếu lưu nguyên văn Request Body thì các trường nhạy cảm như `password`, `token`, `otp`, `secret` sẽ bị lưu trần vào cơ sở dữ liệu OpenSearch.
+
+#### 💡 Thiết Kế Giải Pháp Kỹ Thuật (Đã Triển Khai):
+- Viết hàm `sanitizeRequestBody` trong `pkg/middleware/request_id.go` tự động quét JSON và thay thế các key nhạy cảm (`password`, `pwd`, `token`, `otp`, `secret`, `api_key`) thành `"***MASKED***"` trước khi đẩy vào Kafka Event Bus / OpenSearch.
+
+---
+
 ## 🗺️ Lộ Trình Triển Khai Kỹ Thuật (Implementation Roadmap)
 
 | Giai Đoạn | Hạng Mục Triển Khai | Thời Lượng Dự Kiến | Trạng Thái |
 |---|---|:---:|:---:|
-| **Giai đoạn 1 (Auth, Replay & Headers)** | 1. Anti-Replay Envelope & Redis Nonce Deduplication<br/>2. Header Camouflage (`X-Trace-Context`) & Decoy Headers<br/>3. Account Lockout sau 5 lần sai mật khẩu (`auth:login_attempts`)<br/>4. `SecurityHeadersMiddleware` (Clickjacking & MIME Protection) | ~30 phút | ✅ **DONE** |
-| **Giai đoạn 2 (Token Life Cycle)** | 5. Token Version Invalidation (`token_version` check) | ~30 phút | ⏳ **TODO** *(Khi làm Token)* |
-| **Giai đoạn 3 (Media Safety)** | 6. File Upload Magic Bytes Validator & SVG Sanitizer | ~45 phút | ⏳ **TODO** *(Khi làm Media)* |
+| **Giai đoạn 1 (Auth, Replay, DoS & Headers)** | 1. Anti-Replay Envelope & Redis Nonce Deduplication<br/>2. Header Camouflage (`X-Trace-Context`) & Decoy Headers<br/>3. Account Lockout sau 5 lần sai mật khẩu (`auth:login_attempts`)<br/>4. `SecurityHeadersMiddleware` (Clickjacking & MIME Protection)<br/>5. DoS Memory Protection (`MAX_REQUEST_BODY_SIZE_MB`)<br/>6. Log Sanitizer & PII Masking (`sanitizeRequestBody`) | ~30 phút | ✅ **DONE** |
+| **Giai đoạn 2 (Token Life Cycle)** | 7. Token Version Invalidation (`token_version` check) | ~30 phút | ⏳ **TODO** *(Khi làm Token)* |
+| **Giai đoạn 3 (Media Safety)** | 8. File Upload Magic Bytes Validator & SVG Sanitizer | ~45 phút | ⏳ **TODO** *(Khi làm Media)* |
