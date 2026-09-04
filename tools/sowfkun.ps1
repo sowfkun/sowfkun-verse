@@ -45,44 +45,135 @@ function Show-Help {
     Write-Host ""
 }
 
+function Select-InteractiveMenu {
+    param(
+        [string]$Title,
+        [string[]]$Options,
+        [int]$DefaultIndex = 0
+    )
+
+    $selectedIndex = $DefaultIndex
+    $optionsCount = $Options.Count
+
+    if (-not [Environment]::UserInteractive -or $host.Name -match "ServerRemoteHost") {
+        Write-Host $Title -ForegroundColor Yellow
+        for ($i = 0; $i -lt $optionsCount; $i++) {
+            Write-Host "  [$($i+1)] $($Options[$i])"
+        }
+        $raw = Read-Host "Select option [1-$optionsCount] (Default: $($DefaultIndex+1))"
+        $val = 0
+        if ([int]::TryParse($raw, [ref]$val) -and $val -ge 1 -and $val -le $optionsCount) {
+            return ($val - 1)
+        }
+        return $DefaultIndex
+    }
+
+    Write-Host ""
+    Write-Host $Title -ForegroundColor Yellow
+    Write-Host "  (Use UP / DOWN arrow keys to move, Enter to confirm)" -ForegroundColor DarkGray
+
+    try { [Console]::CursorVisible = $false } catch {}
+
+    $firstRender = $true
+    $e = [char]27
+
+    while ($true) {
+        if (-not $firstRender) {
+            # Reposition cursor up by optionsCount lines to overwrite in place
+            $repositioned = $false
+            try {
+                $pos = $host.UI.RawUI.CursorPosition
+                $pos.X = 0
+                $pos.Y = [Math]::Max(0, $pos.Y - $optionsCount)
+                $host.UI.RawUI.CursorPosition = $pos
+                $repositioned = $true
+            } catch {}
+
+            if (-not $repositioned) {
+                try {
+                    [Console]::SetCursorPosition(0, [Math]::Max(0, [Console]::CursorTop - $optionsCount))
+                    $repositioned = $true
+                } catch {}
+            }
+
+            if (-not $repositioned) {
+                [Console]::Write("$e[$($optionsCount)A$e[0G")
+            }
+        }
+        $firstRender = $false
+
+        for ($i = 0; $i -lt $optionsCount; $i++) {
+            $optText = $Options[$i]
+            if ($i -eq $selectedIndex) {
+                Write-Host ("  > [*] " + $optText) -ForegroundColor Green
+            } else {
+                Write-Host ("    [ ] " + $optText) -ForegroundColor DarkGray
+            }
+        }
+
+        $keyInfo = [Console]::ReadKey($true)
+        $keyName = $keyInfo.Key.ToString()
+        $char = $keyInfo.KeyChar
+
+        if ($keyName -in @("UpArrow", "W", "LeftArrow")) {
+            $selectedIndex = ($selectedIndex - 1 + $optionsCount) % $optionsCount
+        }
+        elseif ($keyName -in @("DownArrow", "S", "RightArrow")) {
+            $selectedIndex = ($selectedIndex + 1) % $optionsCount
+        }
+        elseif ($keyName -in @("Enter", "Spacebar")) {
+            break
+        }
+        elseif ($char -ge '1' -and $char -le ('0' + [Math]::Min(9, $optionsCount))) {
+            $selectedIndex = [int]::Parse($char.ToString()) - 1
+            break
+        }
+    }
+
+    try { [Console]::CursorVisible = $true } catch {}
+    Write-Host ""
+    return $selectedIndex
+}
+
 # ------------------------------------------------------------------------------
 # ROUTING
 # ------------------------------------------------------------------------------
 if (-not $Command) {
     Show-Banner
-    Write-Host "Select a tool to use:" -ForegroundColor Yellow
-    Write-Host "  [1] Video / M3U8 Stream Downloader (download)" -ForegroundColor Cyan
-    Write-Host "  [2] Subtitle Downloader (download-subtitle)" -ForegroundColor Cyan
-    Write-Host "  [3] Audio / Video Synchronizer (sync-audio)" -ForegroundColor Cyan
-    Write-Host "  [4] Deploy Go API to Server 2 (verse-deploy)" -ForegroundColor Cyan
-    Write-Host "  [5] Deploy Egress Gateway to Server 3 (verse-deploy-gateway)" -ForegroundColor Cyan
-    Write-Host "  [6] Open Google IAP Tunnels across 3 Servers (verse-tunnel)" -ForegroundColor Cyan
-    Write-Host "  [7] Exit" -ForegroundColor Gray
-    Write-Host ""
-    $choice = Read-Host "Enter option [1-7]"
+    $menuOptions = @(
+        "Sowfkun Download Center (download)",
+        "Subtitle Downloader (download-subtitle)",
+        "Audio / Video Synchronizer (sync-audio)",
+        "Deploy Go API to Server 2 (verse-deploy)",
+        "Deploy Egress Gateway to Server 3 (verse-deploy-gateway)",
+        "Open Google IAP Tunnels across 3 Servers (verse-tunnel)",
+        "Exit"
+    )
 
-    switch ($choice) {
-        "1" {
+    $chosen = Select-InteractiveMenu -Title "Select a tool to use:" -Options $menuOptions -DefaultIndex 0
+
+    switch ($chosen) {
+        0 {
             $script = Join-Path $modulesDir "download-video.ps1"
             & $script
         }
-        "2" {
+        1 {
             $script = Join-Path $modulesDir "download-video.ps1"
             & $script
         }
-        "3" {
+        2 {
             $script = Join-Path $modulesDir "sync-audio.ps1"
             & $script
         }
-        "4" {
+        3 {
             $script = Join-Path $serverTestDir "deploy-api.ps1"
             & $script
         }
-        "5" {
+        4 {
             $script = Join-Path $serverTestDir "deploy-gateway.ps1"
             & $script
         }
-        "6" {
+        5 {
             $script = Join-Path $serverTestDir "iap-tunnel.ps1"
             & $script
         }
@@ -110,7 +201,9 @@ if ($cmdLower -eq "download") {
     $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
     $ref = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
-    & $script -Url $url -OutputName $outName -Referer $ref
+    $fmt = if ($ArgsList.Count -ge 4) { $ArgsList[3] } else { "mkv" }
+    $th = if ($ArgsList.Count -ge 5) { [int]$ArgsList[4] } else { 32 }
+    & $script -Url $url -OutputName $outName -Referer $ref -Format $fmt -Threads $th
 }
 elseif ($cmdLower -in @("download-subtitle", "download-sub")) {
     $script = Join-Path $modulesDir "download-video.ps1"
