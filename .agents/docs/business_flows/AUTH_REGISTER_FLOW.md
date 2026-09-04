@@ -6,16 +6,25 @@ Tài liệu này đặc tả quy trình từng bước (Step-by-Step) và cấu 
 
 ## 1. Tổng quan & Luồng Bảo mật E2EE (E2EE Middleware Integration)
 
-Tất cả các API phương thức `POST` thuộc phân hệ Auth đều được bảo vệ bởi lớp bảo mật mã hóa đầu cuối lai **Hybrid Encryption (RSA + AES-256-GCM)** khi biến cấu hình `ENABLE_PAYLOAD_ENCRYPTION=true`.
+Tất cả các API phương thức `POST` / CUD thuộc phân hệ Auth đều được bảo vệ bởi lớp bảo mật mã hóa đầu cuối lai **Hybrid Encryption (RSA + AES-256-GCM)**, ngụy trang Header và chống Replay Attack khi biến cấu hình `ENABLE_PAYLOAD_ENCRYPTION=true`.
 
 ### Quy trình gửi Request của Client:
 1. Gửi request lên `/api/v1/security/public-key` lấy khóa công khai RSA của Server.
 2. Sinh khóa đối xứng AES-256 (32 bytes) ngẫu nhiên, mã hóa khóa này bằng khóa RSA nhận được.
-3. Thực hiện handshake qua `/api/v1/security/handshake` để nhận `Session-ID`.
+3. Thực hiện handshake qua `/api/v1/security/handshake` (đính kèm các header chim mồi `X-Edge-Routing`, `X-Client-Fingerprint`, `X-Device-Entropy`) để nhận `Session-ID`.
 4. Với mọi API Auth (`/register`, `/login`, v.v.):
-   - Mã hóa toàn bộ Request Body thành chuỗi Base64 bằng thuật toán **AES-256-GCM** (sử dụng AES Key đã tạo).
-   - Bọc payload vào trường `"data"`: `{"data": "<chuỗi_mã_hóa_base64>"}`.
-   - Đính kèm Header: `X-Session-ID: <Session-ID>`.
+   - Bọc dữ liệu thực tế vào Envelope chống tấn công phát lại (Anti-Replay Envelope):
+     ```json
+     {
+       "ts": 1756968000000,
+       "nonce": "1756968000000_a1b2c3d4e5f6",
+       "payload": { ...thông tin đăng ký / đăng nhập... }
+     }
+     ```
+   - Mã hóa toàn bộ Envelope thành chuỗi Base64 bằng thuật toán **AES-256-GCM** (sử dụng Session Key đã lưu).
+   - Đóng gói request body: `{"data": "<chuỗi_mã_hóa_base64>"}`.
+   - Đính kèm Header ngụy trang: `X-Trace-Context: <Session-ID>` (Session ID thật, không fallback).
+   - Đính kèm các Header chim mồi bắt buộc: `X-Session-ID: <mock_id>`, `X-Edge-Routing`, `X-Client-Fingerprint`, `X-Device-Entropy`.
 
 ---
 

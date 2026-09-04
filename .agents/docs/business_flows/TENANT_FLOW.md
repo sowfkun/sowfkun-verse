@@ -16,8 +16,9 @@ API cập nhật thông tin doanh nghiệp (`/api/v1/tenant/update-info`) áp d�
 - **Phía Backend**: DTO nhận dữ liệu sử dụng con trỏ (`*string`) để phân biệt giữa việc "không gửi trường lên" (`nil`) và "gửi lên giá trị rỗng/mới". UseCase chỉ thực hiện cập nhật trường có giá trị khác `nil` và khác với giá trị hiện tại lưu trong DB MongoDB.
 - **Tránh ghi khống DB**: Nếu payload rỗng hoặc không có thay đổi nào thực sự khác biệt so với DB hiện tại, UseCase sẽ bỏ qua và không ghi xuống MongoDB (Skip DB Write) để tiết kiệm tài nguyên I/O.
 
-### 1.3 Bảo mật E2EE Hybrid Encryption
-- API áp dụng mã hóa E2EE khi cờ `ENABLE_PAYLOAD_ENCRYPTION=true` được bật. Yêu cầu Header chứa `X-Session-ID` hợp lệ và body được mã hóa AES-256-GCM.
+### 1.3 Bảo mật E2EE Hybrid Encryption & Chống Replay
+- API áp dụng mã hóa E2EE khi cờ `ENABLE_PAYLOAD_ENCRYPTION=true` được bật. Yêu cầu Header chứa `X-Trace-Context` (hoặc `X-Session-ID`) hợp lệ cùng các decoy headers (`X-Client-Fingerprint`, `X-Device-Entropy`).
+- Request CUD được bọc trong Envelope `{ts, nonce, payload}` mã hóa AES-256-GCM để phòng chống Replay Attack và can thiệp tham số.
 
 ### 1.4 Đồng bộ hóa thời gian thực (Real-time WebSocket Synchronization)
 - **Tự động cập nhật không tải lại trang**: Khi thông tin Tenant được lưu xuống MongoDB thành công, trigger `onChange()` ở backend và Mongo ChangeStreamWatcher sẽ đồng bộ sự kiện qua Kafka Event Bus. Backend MQ Handler bắn sự kiện `ENTITY_CHANGED` (với payload `entity_type = TENANT`, `op_type = UPDATE`, và chứa `data` mới) qua WebSocket.
@@ -71,7 +72,7 @@ sequenceDiagram
 * **Endpoint:** `POST /api/v1/tenant/update-info`
 * **Xác thực:** Có (Yêu cầu JWT Bearer Token trong header `Authorization`)
 * **Quyền hạn:** `IsOwner = true`
-* **Yêu cầu mã hóa:** Có (`X-Session-ID`)
+* **Yêu cầu mã hóa:** Có (`X-Trace-Context` / `X-Session-ID`, Encrypted Envelope `{ts, nonce, payload}`)
 * **Tham số Request (Sau giải mã):**
 
 | Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |

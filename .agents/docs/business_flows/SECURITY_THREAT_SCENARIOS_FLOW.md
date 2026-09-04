@@ -11,7 +11,7 @@ Tài liệu này đặc tả chi tiết **các kịch bản tấn công an ninh 
 |:---:|:---|:---:|:---:|:---|:---|
 | **1** | **Instant Token Invalidation**<br/>(Dùng Token cũ sau khi đổi mật khẩu/bị đuổi việc) | 🔴 **High** | ⏳ **TODO** | Bổ sung `token_version: int` trong Entity User; `RequireAuth` so khớp claim `token_version` với cache | `internal/auth/`, `pkg/middleware/` |
 | **2** | **Distributed Credential Stuffing**<br/>(Dò mật khẩu bằng Botnet đa IP) | 🟡 **Medium** | ⏳ **TODO** | Đếm số lần đăng nhập sai theo Email (`auth:failed:{email}`) trong Redis; khóa tạm 15p sau 5 lần sai | `internal/auth/application/` |
-| **3** | **Replay Attack on Encrypted Payload**<br/>(Phát lại gói tin mã hóa nhiều lần) | 🟡 **Medium** | ⏳ **TODO** | Header `X-Request-Timestamp` ($\le 30\text{s}$) + `X-Idempotency-Key` lưu Redis 60s | `pkg/middleware/idempotency.go` |
+| **3** | **Replay Attack on Encrypted Payload**<br/>(Phát lại gói tin mã hóa nhiều lần) | 🟡 **Medium** | ✅ **DONE** | Bọc Envelope `{ts, nonce, payload}` trong AES-256-GCM; Header `X-Trace-Context` + Decoy Headers; Redis Deduplication `replay_nonce:<session>:<ts>:<nonce>` 5 phút | `pkg/middleware/payload_crypto.go`, `src/lib/api/client.ts` |
 | **4** | **Malicious File Upload & Stored SVG XSS**<br/>(Tải lên virus đổi đuôi, script lồng trong SVG) | 🟡 **Medium** | ⏳ **TODO** | Kiểm tra Magic Bytes nhị phân qua `http.DetectContentType`, khử mã độc SVG, đổi tên file ngẫu nhiên UUID | `pkg/utils/file/`, `internal/media/` |
 | **5** | **Webhook Spoofing**<br/>(Giả mạo request webhook gửi sang đối tác) | 🟢 **Low-Med** | ⏳ **TODO** | Ký chữ ký `X-Sowfkun-Signature: sha256=hmac(payload, secret)` trên Egress Gateway | `cmd/gateway/`, `pkg/egress/` |
 | **6** | **Missing Browser Security Headers**<br/>(Tấn công Clickjacking, MIME sniffing, XSS) | 🟢 **Low** | ⏳ **TODO** | Middleware tự động chèn `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `CSP` | `pkg/middleware/security_headers.go` |
@@ -79,31 +79,51 @@ sequenceDiagram
 
 ---
 
-### 3️⃣ Kịch Bản 3: Tấn Công Phát Lại Gói Tin Mã Hóa (Replay Attack & Idempotency Nonce)
+### 3️⃣ Kịch Bản 3: Tấn Công Phát Lại Gói Tin Mã Hóa & Ngụy Trang Header (Replay Attack, Camouflage & Noise Headers)
 
 #### 🚨 Rủi Ro & Kịch Bản Khai Thác:
 - Toàn bộ Body JSON được mã hóa AES-256-GCM (E2EE). Hacker không thể đọc được nội dung bên trong.
-- Tuy nhiên, hacker trên cùng mạng LAN/Wifi có thể **bắt trộm toàn bộ chuỗi Ciphertext** của một giao dịch quan trọng (ví dụ: tạo đơn hàng, thanh toán, cấp quyền) và **bấm gửi lại gói tin đó 50 lần**.
-- Server giải mã thành công 50 lần và thực thi 50 giao dịch trùng lặp!
+- Tuy nhiên, hacker trên cùng mạng LAN/Wifi có thể **bắt trộm toàn bộ chuỗi Ciphertext** của một giao dịch CUD (POST/PUT/DELETE/PATCH) và **bấm gửi lại gói tin đó 50 lần**.
+- Ngoài ra, nếu header `X-Session-ID` quá lộ liễu, kẻ tấn công dễ dàng nhận diện cơ chế E2EE để khoanh vùng mục tiêu.
 
-#### 💡 Thiết Kế Giải Pháp Kỹ Thuật:
+#### 💡 Thiết Kế Giải Pháp Kỹ Thuật Toàn Diện (Đã Triển Khai):
+1. **Ngụy Trang Header (Header Camouflage & Decoy Noise Injection)**:
+   - Header Session ID thật được ngụy trang thành `X-Trace-Context` (trông giống OpenTelemetry trace ID, không fallback).
+   - Client gửi kèm các header chim mồi bắt buộc: `X-Session-ID` (giả lập), `X-Edge-Routing`, `X-Client-Fingerprint`, `X-Device-Entropy`.
+   - Backend `PayloadCryptoMiddleware` xác thực sự hiện diện của `X-Session-ID`, `X-Client-Fingerprint` và `X-Device-Entropy` (thiếu sẽ trả HTTP 401 chặn bot/crawler).
+2. **Đóng Gói Chống Can Thiệp (Encrypted Anti-Tamper Envelope)**:
+   - Client bọc request CUD thành envelope:
+     ```json
+     {
+       "ts": 1756968000000,
+       "nonce": "1756968000000_a1b2c3d4e5f6",
+       "payload": { ...dữ liệu thực tế... }
+     }
+     ```
+   - Envelope được mã hóa nguyên khối bằng AES-256-GCM. Hacker không thể sửa `ts` hay `nonce` mà không phá vỡ Authentication Tag của GCM.
+3. **Kiểm Tra 2 Lớp Trên Backend (`PayloadCryptoMiddleware`)**:
+   - **Lớp 1 (Freshness Check):** Kiểm tra `|server_now_ms - ts| <= 5 phút` (lệch quá 5 phút từ chối với `ERR_REQUEST_EXPIRED`).
+   - **Lớp 2 (Nonce Deduplication):** Thực hiện nguyên tử `SetNX` trên Redis với key `replay_nonce:<session_id>:<ts>:<nonce>` TTL 5 phút. Nếu key đã tồn tại $\rightarrow$ lập tức từ chối với `ERR_REPLAY_ATTACK_DETECTED`.
+   - **Bóc tách Payload:** Giải mã thành công và trích xuất `payload` nguyên bản đưa vào `r.Body` cho tầng UseCase.
+   - *(Lưu ý: Các request GET / Read giữ nguyên nhẹ nhàng, không bọc nonce, được bảo vệ bằng Token Bucket Rate Limiting).*
+
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Client as 👤 Client
-    participant MW as 🛡️ Idempotency & Replay Middleware
-    participant Redis as ⚡ Redis Store (TTL 60s)
+    participant Client as 👤 Client (Web/Mobile)
+    participant MW as 🛡️ PayloadCryptoMiddleware
+    participant Redis as ⚡ Redis general1 (TTL 5m)
     participant API as 🚀 Core Business UseCase
 
-    Client->>MW: Request đính kèm:<br/>• X-Request-Timestamp: 2026-08-31T13:40:00Z<br/>• X-Idempotency-Key: uuid-v4-random
+    Client->>MW: Request CUD đính kèm:<br/>• X-Trace-Context: <session_id><br/>• X-Client-Fingerprint, X-Device-Entropy<br/>• Body: AES-GCM Encrypted Envelope {ts, nonce, payload}
     
-    Note over MW: 1. Kiểm tra độ lệch thời gian: |ServerTime - ClientTime| <= 30s<br/>2. Kiểm tra SETNX idempotency:uuid-v4-random trong Redis
+    Note over MW: 1. Kiểm tra Decoy Headers (401 nếu thiếu)<br/>2. Giải mã AES-256-GCM lấy ts, nonce, payload<br/>3. Kiểm tra Freshness: |Now - ts| <= 5m (400 nếu lệch)<br/>4. Kiểm tra SETNX replay_nonce:<session_id>:<ts>:<nonce>
     
-    alt Đã tồn tại Key trong 60s (Phát hiện Replay Attack)
-        MW-->>Client: 409 Conflict ("duplicate request / replay attack detected")
-    else Key mới hợp lệ
-        MW->>API: Chuyển tiếp thực thi nghiệp vụ
-        API-->>Client: 200 OK (Thực thi đúng 1 lần duy nhất)
+    alt Nonce đã tồn tại trong 5 phút (Replay Attack)
+        MW-->>Client: 403 Forbidden (ERR_REPLAY_ATTACK_DETECTED)
+    else Request mới hợp lệ
+        MW->>API: Chuyển tiếp payload sạch vào r.Body
+        API-->>Client: 200 OK (Thực thi an toàn 1 lần duy nhất)
     end
 ```
 
@@ -176,8 +196,9 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 
 ## 🗺️ Lộ Trình Triển Khai Kỹ Thuật (Implementation Roadmap)
 
-| Giai Đoạn | Hạng Mục Triển Khai | Thời Lượng Dự Kiến | Độ Phức Tạp |
+| Giai Đoạn | Hạng Mục Triển Khai | Thời Lượng Dự Kiến | Trạng Thái |
 |---|---|:---:|:---:|
-| **Giai đoạn 1 (Quick-Wins)** | 1. `SecurityHeadersMiddleware`<br/>2. Webhook HMAC Signature trong `pkg/egress` | ~30 phút | Thấp |
-| **Giai đoạn 2 (Core Auth Hardening)** | 3. Token Version Invalidation (`token_version` check)<br/>4. Account Lockout sau 5 lần sai mật khẩu | ~45 phút | Trung bình |
-| **Giai đoạn 3 (Transaction & Media Safety)**| 5. Idempotency & Replay Attack Middleware<br/>6. File Upload Magic Bytes Validator & SVG Sanitizer | ~45 phút | Trung bình |
+| **Giai đoạn 1 (Transport & Replay Hardening)** | 1. Anti-Replay Envelope & Redis Nonce Deduplication<br/>2. Header Camouflage (`X-Trace-Context`) & Decoy Headers | ~30 phút | ✅ **DONE** |
+| **Giai đoạn 2 (Quick-Wins & Headers)** | 3. `SecurityHeadersMiddleware`<br/>4. Webhook HMAC Signature trong `pkg/egress` | ~30 phút | ⏳ **TODO** |
+| **Giai đoạn 3 (Core Auth Hardening)** | 5. Token Version Invalidation (`token_version` check)<br/>6. Account Lockout sau 5 lần sai mật khẩu | ~45 phút | ⏳ **TODO** |
+| **Giai đoạn 4 (Media Safety)** | 7. File Upload Magic Bytes Validator & SVG Sanitizer | ~45 phút | ⏳ **TODO** |

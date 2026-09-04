@@ -83,8 +83,10 @@ graph TD
 
 ### 🔐 LỚP 3: MÃ HÓA ỨNG DỤNG & CÔ LẬP DỮ LIỆU (Data Cryptography & Multi-Tenancy)
 
-1. **Mã Hóa Đầu Cuối Dữ Liệu Truyền Tải (End-to-End Encryption - E2EE)**:
-   - Cơ chế bắt tay kết hợp RSA-2048 và AES-256-GCM mã hóa toàn bộ dữ liệu JSON Request giữa Client và Server.
+1. **Mã Hóa Đầu Cuối, Chống Replay & Ngụy Trang Header (E2EE, Anti-Replay & Camouflage)**:
+   - Cơ chế bắt tay lai RSA-2048 và AES-256-GCM bảo vệ toàn bộ dữ liệu JSON giữa Client và Server.
+   - **Ngụy trang Header & Chim mồi (Noise Injection):** Session ID ngụy trang thành `X-Trace-Context` (không fallback), đi kèm các header chim mồi bắt buộc `X-Session-ID` (giả lập), `X-Edge-Routing`, `X-Client-Fingerprint`, `X-Device-Entropy` để chống botnet/crawler.
+   - **Chống Tấn Công Phát Lại (Anti-Replay trên CUD):** Request body bọc thành envelope `{ts, nonce, payload}` mã hóa AES-256-GCM. Backend kiểm tra Freshness 5 phút và chống trùng nonce qua Redis `SetNX` (`replay_nonce:<session_id>:<ts>:<nonce>`).
 2. **Mã Hóa Cấp Trường Khi Lưu Trữ (Field-Level Encryption at Rest)**:
    - Các trường dữ liệu nhạy cảm (Số điện thoại, Email cá nhân) được mã hóa bằng AES-256-GCM với khóa luân phiên `DATABASE_ENCRYPTION_KEY_v1` trước khi lưu vào MongoDB.
 3. **Tìm Kiếm Trên Dữ Liệu Mã Hóa (Searchable Encryption via Blind Index)**:

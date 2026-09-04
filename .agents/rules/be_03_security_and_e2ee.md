@@ -26,11 +26,21 @@ trigger: always_on
   - **Đặc quyền Owner:** Nếu `isOwner = true`, tài khoản luôn được mặc định gán toàn quyền cao nhất với phạm vi `ALL` (Scope `ALL`) đối với mọi tính năng.
   - **Context Injection:** Danh sách scopes giải mã được lưu vào context dưới key `PermissionScopesKey`, truy xuất qua `middleware.GetPermissionScopesFromContext(r.Context())`.
 
-## 3. Mã hoá đầu cuối (E2EE) - Cơ chế rút gọn
+## 3. Mã hoá đầu cuối (E2EE), Ngụy trang Header & Chống Replay Attack
 - **Vị trí Module:** Các API handshake/security bắt buộc đặt riêng tại `internal/security/`. Không gộp chung vào module khác.
 - **Luồng Hybrid Encryption (RSA + AES):**
   - **Handshake:** Client dùng RSA Public Key của Server để mã hoá Session Key AES-256-GCM ngẫu nhiên gửi lên `/handshake`. Server giải mã bằng RSA Private Key và lưu Session Key vào Redis.
-  - **Mã hoá payload:** Client gửi request đính kèm `X-Session-ID` trong Header. Request Body (JSON) được mã hoá hoàn toàn bằng AES.
+  - **Ngụy trang Header (Header Camouflage & Noise Injection):**
+    - E2EE Session ID thật **BẮT BUỘC** được ngụy trang thành `X-Trace-Context` (nhìn giống OpenTelemetry trace ID). Tuyệt đối **KHÔNG fallback** vào `X-Session-ID`.
+    - Client bắt buộc gửi kèm các header chim mồi (Decoy Headers): `X-Session-ID` (giả lập), `X-Edge-Routing`, `X-Client-Fingerprint`, `X-Device-Entropy`.
+    - Backend `PayloadCryptoMiddleware` bắt buộc kiểm tra sự tồn tại của `X-Session-ID`, `X-Client-Fingerprint` và `X-Device-Entropy` (thiếu sẽ chặn ngay với HTTP 401 để chống bot/crawler).
+  - **Chống Replay Attack trên CUD (POST / PUT / DELETE / PATCH):**
+    - Client bọc request body vào envelope `{ "ts": <unix_ms>, "nonce": "<unique_string>", "payload": <data> }` và mã hóa bằng AES-256-GCM.
+    - Backend giải mã và kiểm tra 2 lớp:
+      1. *Freshness Check:* `|server_now - ts| <= 5 phút` (lệch quá 5 phút từ chối với `ERR_REQUEST_EXPIRED`).
+      2. *Nonce Deduplication:* Dùng Redis nguyên tử `SetNX` trên key `replay_nonce:<session_id>:<ts>:<nonce>` TTL 5 phút (nếu trùng từ chối với `ERR_REPLAY_ATTACK_DETECTED`).
+      3. Trích xuất `payload` nghiệp vụ sạch đưa vào Request Body cho UseCase xử lý.
+    - *GET Requests (Read):* Giữ nguyên nhẹ nhàng, không bọc nonce, được bảo vệ bằng Token Bucket Rate Limiting.
   - **Mã hoá cục bộ Response:** Server chỉ mã hoá trường `data` trong JSON response, giữ nguyên `error_code` và `error_detail` ở dạng Plain Text để Client hiển thị lỗi nhanh.
 - **Quản lý Key an toàn:** Không dùng file `.pem` tĩnh. Private/Public key nạp từ Env (`RSA_PRIVATE_KEY_BASE64`, v.v.), nếu thiếu sẽ tự động sinh cặp key ngẫu nhiên lưu trên RAM để test (RAM Fallback).
 - **Cờ Bypass:** Debug/Test có thể tắt mã hóa bằng cách cấu hình `ENABLE_PAYLOAD_ENCRYPTION=false` trong `.env`.
