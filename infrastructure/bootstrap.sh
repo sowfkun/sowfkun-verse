@@ -479,6 +479,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # 3. Dọn dẹp images/cache Docker thừa lúc 3h sáng Chủ Nhật hàng tuần
 0 3 * * 0 root /usr/bin/docker system prune -af --volumes=false > /dev/null 2>&1
+
 EOF
     chmod 644 /etc/cron.d/app-maintenance
     systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true

@@ -27,3 +27,9 @@ DISK_THRESHOLD=85
 
 # Anti-Spam Cooldown (Seconds)
 COOLDOWN_SECONDS=1800
+
+# Periodic Report Sequencing
+# Delay seconds before sending report (e.g. Server 1 = 0, Server 2 = 5, Server 3 = 10)
+PERIODIC_DELAY_SECONDS=0
+# Send a visual separator line after report (true for the last node, e.g. Server 3)
+SEND_DIVIDER=false

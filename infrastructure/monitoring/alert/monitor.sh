@@ -32,6 +32,8 @@ ALERT_FORWARD_URL="${ALERT_FORWARD_URL:-}"
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
 DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
+PERIODIC_DELAY_SECONDS="${PERIODIC_DELAY_SECONDS:-0}"
+SEND_DIVIDER="${SEND_DIVIDER:-false}"
 
 STATE_DIR="/var/run/app-monitor"
 mkdir -p "$STATE_DIR"
@@ -154,6 +156,10 @@ CURRENT_TIME_TZ=$(TZ='Asia/Ho_Chi_Minh' date "+%d/%m/%Y %H:%M:%S (GMT+7)")
 # CHẾ ĐỘ 1: BÁO CÁO ĐỊNH KỲ (PERIODIC SUMMARY - 3 TIẾNG/LẦN)
 # ==============================================================================
 if [[ "$MODE" == "periodic" ]]; then
+    if [[ "$PERIODIC_DELAY_SECONDS" -gt 0 ]]; then
+        sleep "$PERIODIC_DELAY_SECONDS"
+    fi
+
     CPU_ICON=$(get_status_icon "$CPU_VAL" "$CPU_THRESHOLD")
     RAM_ICON=$(get_status_icon "$RAM_VAL" "$RAM_THRESHOLD")
     SWAP_ICON=$(get_status_icon "$SWAP_VAL" "$SWAP_THRESHOLD")
@@ -183,6 +189,13 @@ ${CONTAINER_STATUS_TEXT}
 
     dispatch_alert "PERIODIC" "Báo Cáo Định Kỳ 3H" "$REPORT_HTML"
     echo "🔵 Đã gửi Báo cáo hạ tầng định kỳ 3H."
+
+    if [[ "$SEND_DIVIDER" == "true" ]]; then
+        sleep 2
+        dispatch_alert "DIVIDER" "Divider" "----------------------------------------"
+        echo "➖ Đã gửi tin nhắn ngăn cách divider."
+    fi
+
     exit 0
 fi
 
