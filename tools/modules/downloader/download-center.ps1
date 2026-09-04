@@ -9,11 +9,11 @@ param(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$modulesDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-if (-not $modulesDir) { $modulesDir = "F:\Coding\Project\sowfkun.verse.v2\tools\modules" }
+$currentDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $currentDir) { $currentDir = "F:\Coding\Project\sowfkun.verse.v2\tools\modules\downloader" }
 
-$videoScript = Join-Path $modulesDir "download-video.ps1"
-$subScript = Join-Path $modulesDir "download-subtitle.ps1"
+$videoScript = Join-Path $currentDir "download-video.ps1"
+$subScript = Join-Path $currentDir "download-subtitle.ps1"
 
 # ------------------------------------------------------------------------------
 # INTERACTIVE SELECTION COMPONENT (ARROW KEYS NAVIGATION)

@@ -151,11 +151,11 @@ if (-not $Command) {
 
     switch ($chosen) {
         0 {
-            $script = Join-Path $modulesDir "download-center.ps1"
+            $script = Join-Path $modulesDir "downloader\download-center.ps1"
             & $script
         }
         1 {
-            $script = Join-Path $modulesDir "sync-audio.ps1"
+            $script = Join-Path $modulesDir "audio\sync-audio.ps1"
             & $script
         }
         2 {
@@ -190,7 +190,7 @@ if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() 
 }
 
 if ($cmdLower -in @("download", "download-subtitle", "download-sub", "dl")) {
-    $script = Join-Path $modulesDir "download-center.ps1"
+    $script = Join-Path $modulesDir "downloader\download-center.ps1"
     $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
     $ref = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
@@ -199,7 +199,7 @@ if ($cmdLower -in @("download", "download-subtitle", "download-sub", "dl")) {
     & $script -Url $url -OutputName $outName -Referer $ref -Format $fmt -Threads $th
 }
 elseif ($cmdLower -eq "sync-audio") {
-    $script = Join-Path $modulesDir "sync-audio.ps1"
+    $script = Join-Path $modulesDir "audio\sync-audio.ps1"
     $src = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $offset = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
     $dst = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
