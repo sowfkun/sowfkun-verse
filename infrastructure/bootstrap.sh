@@ -22,6 +22,7 @@ PROFILE="standard"
 SWAP_SIZE_GB=2
 APP_NETWORK="app_net"
 INTERNAL_SUBNET_INPUT=""
+ENABLE_TAILSCALE=false
 SELECTED_SERVICES=()
 
 # Parse arguments
@@ -32,6 +33,7 @@ while [[ "$#" -gt 0 ]]; do
         --api-mode=*|--api-type=*) API_MODE_INPUT="${1#*=}" ;;
         --mode=*) MODE="${1#*=}" ;;
         --internal-subnet=*|--subnet=*) INTERNAL_SUBNET_INPUT="${1#*=}" ;;
+        --tailscale|--enable-tailscale|-t) ENABLE_TAILSCALE=true ;;
         -s|--service|--services) SERVICE_INPUT="$2"; shift ;;
         -p|--profile|--prof) PROFILE_INPUT="$2"; shift ;;
         --api-mode|--api-type) API_MODE_INPUT="$2"; shift ;;
@@ -281,8 +283,10 @@ net.ipv4.tcp_keepalive_probes = 5
 net.ipv4.tcp_syn_retries = 3
 net.ipv4.tcp_synack_retries = 3
 net.ipv4.tcp_max_syn_backlog = 8192
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.all.disable_ipv6 = 0
+net.ipv6.conf.default.disable_ipv6 = 0
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
 
 # Tối ưu OpenSearch / MongoDB / Redis / Kafka
 vm.max_map_count = 262144
@@ -301,11 +305,11 @@ EOF
 * hard nproc 32768
 EOF
 
-    # Tối ưu DNS Resolver (GCP Metadata DNS + Cloudflare + Google)
+    # Tối ưu DNS Resolver (Hỗ trợ Dual-Stack, DNS64 & Cloudflare/Google)
     mkdir -p /etc/systemd/resolved.conf.d
     cat << 'EOF' > /etc/systemd/resolved.conf.d/dns.conf
 [Resolve]
-DNS=169.254.169.254 1.1.1.1 8.8.8.8
+DNS=2a00:1098:2b::1 2a01:4f8:c2c:123f::1 2606:4700:4700::1111 2001:4860:4860::8888 1.1.1.1 8.8.8.8
 FallbackDNS=8.8.4.4 1.0.0.1
 DNSSEC=no
 DNSOverTLS=no
@@ -415,8 +419,8 @@ setup_security() {
         fi
     else
         echo "🏢 Môi trường On-Premise / Bare-metal: Kích hoạt bảo vệ bằng UFW..."
-        # Danh sách các dải mạng nội bộ an toàn (RFC 1918 Private Networks)
-        local allowed_subnets=("10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16")
+        # Danh sách các dải mạng nội bộ an toàn (RFC 1918 + Tailscale CGNAT 100.64.0.0/10)
+        local allowed_subnets=("10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "100.64.0.0/10")
         if [[ -n "$INTERNAL_SUBNET_INPUT" ]]; then
             allowed_subnets+=("$INTERNAL_SUBNET_INPUT")
         fi
@@ -424,29 +428,31 @@ setup_security() {
         if command -v ufw >/dev/null 2>&1; then
             local after_rules="/etc/ufw/after.rules"
             if [ -f "$after_rules" ] && ! grep -q "DOCKER-USER" "$after_rules" 2>/dev/null; then
-                echo "🛡️ Đang cấu hình chuỗi DOCKER-USER an toàn cho On-Premise..."
+                echo "🛡️ Đang cấu hình chuỗi DOCKER-USER an toàn cho On-Premise / Tailscale..."
                 cat << 'EOF' >> "$after_rules"
 
 # ==============================================================================
-# DOCKER-USER ISOLATION (On-Premise)
+# DOCKER-USER ISOLATION (On-Premise and Tailscale Mesh)
 # ==============================================================================
 *filter
 :DOCKER-USER - [0:0]
 
-# Cho phép các kết nối đã thiết lập từ trước (Outbound replies)
+# Allow established connections
 -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
 
-# Cho phép toàn bộ traffic từ mạng nội bộ RFC 1918 & Docker Bridge
+# Allow internal traffic from RFC 1918, Tailscale and Docker Bridge
 -A DOCKER-USER -s 10.0.0.0/8 -j RETURN
 -A DOCKER-USER -s 172.16.0.0/12 -j RETURN
 -A DOCKER-USER -s 192.168.0.0/16 -j RETURN
+-A DOCKER-USER -s 100.64.0.0/10 -j RETURN
+-A DOCKER-USER -i tailscale0 -j RETURN
 
-# Chỉ mở Public duy nhất cho API (Port 8080) và Web (80/443)
+# Allow public web and API ports
 -A DOCKER-USER -p tcp -m tcp --dport 8080 -j RETURN
 -A DOCKER-USER -p tcp -m tcp --dport 80 -j RETURN
 -A DOCKER-USER -p tcp -m tcp --dport 443 -j RETURN
 
-# Chặn các kết nối lạ khác vào container từ ngoài Internet
+# Drop all other direct container access from public internet
 -A DOCKER-USER -j DROP
 
 COMMIT
@@ -455,7 +461,13 @@ EOF
 
             ufw default deny incoming
             ufw default allow outgoing
-            ufw allow 22/tcp comment 'SSH Port'
+
+            if [ -d /sys/class/net/tailscale0 ] || [ "$ENABLE_TAILSCALE" = true ]; then
+                echo "🛡️ Zero-Trust Mode: Chi cho phep SSH & Traffic qua Tailscale Mesh (tailscale0)..."
+                ufw allow in on tailscale0 comment 'Tailscale Mesh All Ingress'
+            else
+                ufw allow 22/tcp comment 'SSH Port'
+            fi
 
             for s in "${SELECTED_SERVICES[@]}"; do
                 case "$s" in
