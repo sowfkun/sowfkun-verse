@@ -78,7 +78,7 @@ Write-Host "=================================================================" -
 
 # 2. Cross-Compile Linux AMD64 Binary Locally
 Write-Host ""
-Write-Host '[1/4] Compiling Core API binary (Linux AMD64 Static)...' -ForegroundColor Yellow
+Write-Host '[1/5] Compiling Core API binary (Linux AMD64 Static)...' -ForegroundColor Yellow
 if (-not (Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir -Force | Out-Null }
 
 Push-Location $apiDir
@@ -99,7 +99,7 @@ Write-Host "  -> Compilation successful! Binary size: $([math]::Round($fileSize,
 
 # 3. Upload Binary to Target Node
 Write-Host ""
-Write-Host "[2/4] Uploading binary to $nodeHost..." -ForegroundColor Yellow
+Write-Host "[2/5] Uploading binary to $nodeHost..." -ForegroundColor Yellow
 
 $remoteNewPath = "/tmp/app-api-new"
 $scpSuccess = $false
@@ -132,12 +132,12 @@ Write-Host "  -> Upload completed successfully!" -ForegroundColor Green
 
 # 4. Hot-swap Binary and Restart API Container
 Write-Host ""
-Write-Host "[3/4] Hot-swapping binary and recreating API container..." -ForegroundColor Yellow
+Write-Host "[3/5] Hot-swapping binary and recreating API container..." -ForegroundColor Yellow
 
-$remoteCmd = "chmod +x /tmp/app-api-new && " +
-             "(sudo mv -f /tmp/app-api-new /root/sowfkun-verse-infrastructure/api/app-api 2>/dev/null || sudo mv -f /tmp/app-api-new ~/sowfkun-verse-infrastructure/api/app-api 2>/dev/null || sudo mv -f /tmp/app-api-new ~/infrastructure/api/app-api 2>/dev/null || sudo mv -f /tmp/app-api-new /root/infrastructure/api/app-api) && " +
-             "(cd /root/sowfkun-verse-infrastructure/api 2>/dev/null || cd ~/sowfkun-verse-infrastructure/api 2>/dev/null || cd ~/infrastructure/api 2>/dev/null || cd /root/infrastructure/api) && " +
-             "sudo docker compose up -d --force-recreate api"
+$remoteCmd = 'TARGET_DIR="$HOME/sowfkun-verse-infrastructure/api"; ' +
+             '[ -d "/root/sowfkun-verse-infrastructure/api" ] && TARGET_DIR="/root/sowfkun-verse-infrastructure/api"; ' +
+             'chmod +x /tmp/app-api-new && sudo mv -f /tmp/app-api-new "$TARGET_DIR/app-api" && ' +
+             'cd "$TARGET_DIR" && sudo docker compose up -d --force-recreate api'
 
 if ($nodeType -eq "tailscale" -or ($keyPath -and (Test-Path $keyPath))) {
     $sshArgs = @("-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10")
@@ -154,7 +154,7 @@ if ($nodeType -eq "tailscale" -or ($keyPath -and (Test-Path $keyPath))) {
 
 # 5. Automated Health Check Verification
 Write-Host ""
-Write-Host '[4/4] Verifying API Health check...' -ForegroundColor Yellow
+Write-Host '[4/5] Verifying API Health check...' -ForegroundColor Yellow
 $healthCmd = "for i in 1 2 3 4 5 6 7 8 9 10; do if curl -s -f http://localhost:8080/api/v1/security/public-key > /dev/null 2>&1 || curl -s -f http://localhost:8080/healthz > /dev/null 2>&1; then echo 'SUCCESS_HEALTHY'; exit 0; fi; sleep 2; done; echo 'FAILED'"
 
 $healthRes = ""
@@ -171,13 +171,41 @@ if ($nodeType -eq "tailscale" -or ($keyPath -and (Test-Path $keyPath))) {
     $healthRes = & gcloud compute ssh $vmName --zone=$gcpZone --project=$gcpProject --account=$gcpAccount --tunnel-through-iap --command=$healthCmd --quiet
 }
 
+# 6. Fetch Container Startup Logs
+Write-Host ""
+Write-Host '[5/5] Fetching API Container Startup Logs...' -ForegroundColor Yellow
+$logCmd = 'TARGET_DIR="$HOME/sowfkun-verse-infrastructure/api"; ' +
+          '[ -d "/root/sowfkun-verse-infrastructure/api" ] && TARGET_DIR="/root/sowfkun-verse-infrastructure/api"; ' +
+          'cd "$TARGET_DIR" && sudo docker compose logs --tail=30 api'
+
+if ($nodeType -eq "tailscale" -or ($keyPath -and (Test-Path $keyPath))) {
+    $sshArgs = @("-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10")
+    if ($keyPath -and (Test-Path $keyPath)) { $sshArgs += @("-i", $keyPath) }
+    $sshArgs += @("${nodeUser}@${nodeHost}", $logCmd)
+    $logs = & ssh @sshArgs
+    Write-Host "-----------------------------------------------------------------" -ForegroundColor DarkGray
+    $logs | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+    Write-Host "-----------------------------------------------------------------" -ForegroundColor DarkGray
+} else {
+    $vmName = if ($appNode.gcp.vm_name) { $appNode.gcp.vm_name } else { $nodeHost }
+    $gcpProject = $appNode.gcp.project
+    $gcpAccount = $appNode.gcp.account
+    $gcpZone = if ($appNode.gcp.zone) { $appNode.gcp.zone } else { "us-central1-a" }
+    $logs = & gcloud compute ssh $vmName --zone=$gcpZone --project=$gcpProject --account=$gcpAccount --tunnel-through-iap --command=$logCmd --quiet
+    Write-Host "-----------------------------------------------------------------" -ForegroundColor DarkGray
+    $logs | ForEach-Object { Write-Host $_ -ForegroundColor Cyan }
+    Write-Host "-----------------------------------------------------------------" -ForegroundColor DarkGray
+}
+
 if ($healthRes -match "SUCCESS_HEALTHY") {
     Write-Host ""
     Write-Host "=================================================================" -ForegroundColor Green
     Write-Host "SUCCESS: CORE API DEPLOYED TO $nodeName ($nodeHost) IN 15 SECONDS!" -ForegroundColor Green
     Write-Host "  Profile:   $profKey" -ForegroundColor Cyan
-    Write-Host "  Endpoint:  http://$nodeHost:8080/api/v1" -ForegroundColor Cyan
+    Write-Host "  Endpoint:  http://${nodeHost}:8080/api/v1" -ForegroundColor Cyan
     Write-Host "=================================================================" -ForegroundColor Green
 } else {
     Write-Host "Warning: Container restarted but health check response timed out." -ForegroundColor Yellow
 }
+
+
