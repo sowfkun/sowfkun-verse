@@ -85,7 +85,7 @@ switch ($choice) {
         gcloud compute start-iap-tunnel $tunnelVM $tunnelPort --local-host-port="localhost:$tunnelPort" --zone=$tunnelZone
     }
     "3" {
-        Write-Host "Vui long chay qua Git Bash: bash infrastructure/scripts/provisioning/gcp/case3-multi-account-peering/master-gcp.sh" -ForegroundColor Yellow
+        Write-Host "Vui long chay qua Git Bash: bash sowfkun-verse-infrastructure/scripts/provisioning/gcp/case3-multi-account-peering/master-gcp.sh" -ForegroundColor Yellow
     }
     "0" {
         Write-Host "Tam biet!" -ForegroundColor Green

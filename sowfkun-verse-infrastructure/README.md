@@ -136,13 +136,13 @@ Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển k
 1. **Bước 1 — Đóng gói file binary tĩnh trên máy dev**:
    - Trên Windows: Chạy PowerShell `.\scripts\app\build_onpremise.ps1`
    - Trên Linux/macOS: Chạy `bash scripts/app/build_onpremise.sh`
-   - File binary `app-api` sẽ tự động được sinh ra trong thư mục `infrastructure/api/app-api`.
+   - File binary `app-api` sẽ tự động được sinh ra trong thư mục `sowfkun-verse-infrastructure/api/app-api`.
 
 2. **Bước 2 — Bàn giao & Triển khai On-Premise**:
-   - Bạn chỉ cần copy duy nhất thư mục `infrastructure/` (đã có `app-api` và các template `.env.<profile>`) sang máy chủ khách hàng.
+   - Bạn chỉ cần copy duy nhất thư mục `sowfkun-verse-infrastructure/` (đã có `app-api` và các template `.env.<profile>`) sang máy chủ khách hàng.
    - Chạy lệnh:
    ```bash
-   cd infrastructure
+   cd sowfkun-verse-infrastructure
    sudo bash bootstrap.sh --service=all --profile=mini --mode=fresh
    ```
    👉 `bootstrap.sh` sẽ tự động nhận diện file binary `app-api`, dùng [Dockerfile.binary](api/Dockerfile.binary) siêu nhẹ (~10MB Alpine) và khởi chạy ngay trong 2 giây mà **không cần cài Go, không build lâu, không lộ 1 dòng source code nào**!
@@ -153,7 +153,7 @@ Dành cho trường hợp **bàn giao khách hàng On-Premise** hoặc triển k
 
 Toàn bộ script được phân tách rõ ràng theo mục đích:
 ```text
-infrastructure/scripts/
+sowfkun-verse-infrastructure/scripts/
 ├── app/                        # Quản lý vòng đời ứng dụng
 │   ├── deploy-staging.sh       # Deploy / Cập nhật API thủ công trên Staging
 │   ├── build_onpremise.sh      # Build Linux Static Binary (AMD64)

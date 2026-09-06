@@ -16,7 +16,7 @@ Thư mục này hướng dẫn cấu hình hạ tầng cho môi trường **On-P
 ## 2. Hardening Với UFW & IPTables Nội Bộ
 
 Trên máy chủ vật lý, sử dụng:
-1. `infrastructure/scripts/provisioning/common/os-hardening.sh`: Khóa SSH Password, tắt Root login, tune sysctl.
+1. `sowfkun-verse-infrastructure/scripts/provisioning/common/os-hardening.sh`: Khóa SSH Password, tắt Root login, tune sysctl.
 2. Cấu hình UFW Firewall nội bộ:
    ```bash
    sudo ufw default deny incoming

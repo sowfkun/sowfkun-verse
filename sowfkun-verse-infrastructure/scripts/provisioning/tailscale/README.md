@@ -36,41 +36,41 @@ Tài liệu này hướng dẫn cách kết nối các máy chủ phân tán (Ne
 ### A. Node 1: Server Netcup (Dedicated MongoDB - IPv6-Only)
 1. Cài Tailscale và Hardening UFW:
    ```bash
-   sudo bash infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s-netcup-mongo
+   sudo bash sowfkun-verse-infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s-netcup-mongo
    ```
 2. Khởi tạo MongoDB Container:
    ```bash
-   sudo bash infrastructure/bootstrap.sh --service=mongo --profile=standard --tailscale --mode=fresh
+   sudo bash sowfkun-verse-infrastructure/bootstrap.sh --service=mongo --profile=standard --tailscale --mode=fresh
    ```
 
 ### B. Node 2: Server 1 GCP (Redis Cache & Kafka Broker Node)
 1. Cài Tailscale:
    ```bash
-   sudo bash infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s1-gcp-cache-mq
+   sudo bash sowfkun-verse-infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s1-gcp-cache-mq
    ```
 2. Khởi tạo Redis & Kafka:
    ```bash
-   sudo bash infrastructure/bootstrap.sh --services=redis,kafka --profile=standard --tailscale --mode=fresh
+   sudo bash sowfkun-verse-infrastructure/bootstrap.sh --services=redis,kafka --profile=standard --tailscale --mode=fresh
    ```
 
 ### C. Node 3: Server 2 GCP (Dedicated Go API Backend)
 1. Cài Tailscale:
    ```bash
-   sudo bash infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s2-gcp-app-api
+   sudo bash sowfkun-verse-infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s2-gcp-app-api
    ```
 2. Khởi tạo Go API:
    ```bash
-   sudo bash infrastructure/bootstrap.sh --service=api --api-mode=binary --profile=standard --tailscale --mode=fresh
+   sudo bash sowfkun-verse-infrastructure/bootstrap.sh --service=api --api-mode=binary --profile=standard --tailscale --mode=fresh
    ```
 
 ### D. Node 4: Server 3 GCP (Egress Gateway Node)
 1. Cài Tailscale:
    ```bash
-   sudo bash infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s3-gcp-egress-gw
+   sudo bash sowfkun-verse-infrastructure/scripts/provisioning/tailscale/01-setup-tailscale.sh --hostname=s3-gcp-egress-gw
    ```
 2. Khởi tạo Egress Gateway:
    ```bash
-   sudo bash infrastructure/bootstrap.sh --service=gateway --profile=mini --tailscale --mode=fresh
+   sudo bash sowfkun-verse-infrastructure/bootstrap.sh --service=gateway --profile=mini --tailscale --mode=fresh
    ```
 
 ---
@@ -79,8 +79,9 @@ Tài liệu này hướng dẫn cách kết nối các máy chủ phân tán (Ne
 
 Chỉ cần chạy lệnh sau từ máy Windows phát triển:
 ```powershell
-sowfkun infra open tailscale
+sowfkun infra open tailscale-dev
 # hoặc:
-.\server-test\infra-tunnel.ps1 -Action open -Profile tailscale
+.\sowfkun-verse-infrastructure\tools\infra-tunnel.ps1 -Action open -Profile tailscale-dev
 ```
 Toàn bộ cổng MongoDB (`27017`), Redis (`6379`), Kafka (`9092`), Console (`8085`), Egress Gateway (`8090`) sẽ được forward an toàn về `localhost` qua đường truyền WireGuard cực nhanh mà không cần mở bất kỳ cổng public nào!
+

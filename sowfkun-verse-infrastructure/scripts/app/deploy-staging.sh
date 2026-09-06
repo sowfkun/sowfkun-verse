@@ -31,7 +31,7 @@ fi
 
 # 3. Rebuild và khởi động container
 echo "🔨 3. Rebuild và chạy container API..."
-cd "${ROOT_DIR}/infrastructure/api"
+cd "${ROOT_DIR}/sowfkun-verse-infrastructure/api"
 docker compose down || true
 docker compose up -d --build --remove-orphans
 

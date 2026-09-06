@@ -7,11 +7,12 @@ param(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$toolsDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$toolsDir      = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $toolsDir) { $toolsDir = "F:\Coding\Project\sowfkun.verse.v2\tools" }
-$rootDir = Split-Path -Parent $toolsDir
-$serverTestDir = Join-Path $rootDir "server-test"
-$modulesDir = Join-Path $toolsDir "modules"
+$rootDir       = Split-Path -Parent $toolsDir
+$serversDir    = if (Test-Path (Join-Path $rootDir ".servers")) { Join-Path $rootDir ".servers" } else { Join-Path $rootDir "server-test" }
+$infraToolsDir = Join-Path $rootDir "sowfkun-verse-infrastructure\tools"
+$modulesDir    = Join-Path $toolsDir "modules"
 
 function Show-Banner {
     Write-Host "=================================================================" -ForegroundColor Cyan
@@ -29,13 +30,13 @@ function Show-Help {
     Write-Host "    2. sync-audio <file_path> <offset_ms> [output_file]" -ForegroundColor White
     Write-Host "       -> Lossless Audio/Video Synchronizer (Shift sound forward/backward by ms)." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  [Project: Sowfkun Verse]" -ForegroundColor Cyan
-    Write-Host "    3. verse-deploy [dev|prod]" -ForegroundColor White
-    Write-Host "       -> Build and deploy Go API to Server 2 via Google IAP in 15 seconds." -ForegroundColor DarkGray
-    Write-Host "    4. verse-deploy-gateway [dev|prod]" -ForegroundColor White
-    Write-Host "       -> Build and deploy Egress Gateway to Server 3 via Google IAP in 15 seconds." -ForegroundColor DarkGray
-    Write-Host "    5. infra [open|close|switch|status] [service/profile]" -ForegroundColor White
-    Write-Host "       -> Infrastructure Tunnel: Mo/Dong ket noi toc do cao (Tailscale Mesh / GCP JIT) toi Database, Redis, Kafka, Gateway." -ForegroundColor DarkGray
+    Write-Host "  [Project: Sowfkun Verse - Infrastructure & Deployment]" -ForegroundColor Cyan
+    Write-Host "    3. deploy [cluster] [dev|prod]" -ForegroundColor White
+    Write-Host "       -> Build and deploy Go Core API to cluster (Tailscale / GCP IAP) in 15s." -ForegroundColor DarkGray
+    Write-Host "    4. deploy-gateway [cluster] [dev|prod]" -ForegroundColor White
+    Write-Host "       -> Build and deploy Egress Gateway to cluster (Tailscale / GCP IAP) in 15s." -ForegroundColor DarkGray
+    Write-Host "    5. infra [open|close|switch|status] [cluster/service]" -ForegroundColor White
+    Write-Host "       -> Infrastructure Tunnel: Mo/Dong ket noi toc do cao toi Database, Redis, Kafka, Gateway theo tung cum." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
     Write-Host "    6. help" -ForegroundColor White
@@ -205,18 +206,16 @@ elseif ($cmdLower -eq "sync-audio") {
     $dst = if ($ArgsList.Count -ge 3) { $ArgsList[2] } else { "" }
     & $script -FilePath $src -OffsetMs $offset -OutputPath $dst
 }
-elseif ($cmdLower -eq "verse-deploy") {
-    $script = Join-Path $serverTestDir "deploy-api.ps1"
-    $targetEnv = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "dev" }
-    & $script -TargetEnv $targetEnv
+elseif ($cmdLower -in @("verse-deploy", "deploy-api", "deploy")) {
+    $script = if (Test-Path (Join-Path $infraToolsDir "deploy-api.ps1")) { Join-Path $infraToolsDir "deploy-api.ps1" } else { Join-Path $serversDir "deploy-api.ps1" }
+    & $script @ArgsList
 }
-elseif ($cmdLower -in @("verse-deploy-gateway", "verse-deploy-gw")) {
-    $script = Join-Path $serverTestDir "deploy-gateway.ps1"
-    $targetEnv = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "dev" }
-    & $script -TargetEnv $targetEnv
+elseif ($cmdLower -in @("verse-deploy-gateway", "verse-deploy-gw", "deploy-gw", "deploy-gateway")) {
+    $script = if (Test-Path (Join-Path $infraToolsDir "deploy-gateway.ps1")) { Join-Path $infraToolsDir "deploy-gateway.ps1" } else { Join-Path $serversDir "deploy-gateway.ps1" }
+    & $script @ArgsList
 }
-elseif ($cmdLower -in @("infra", "infra-tunnel")) {
-    $script = Join-Path $serverTestDir "infra-tunnel.ps1"
+elseif ($cmdLower -in @("infra", "infra-tunnel", "tunnel")) {
+    $script = if (Test-Path (Join-Path $infraToolsDir "infra-tunnel.ps1")) { Join-Path $infraToolsDir "infra-tunnel.ps1" } else { Join-Path $serversDir "infra-tunnel.ps1" }
     & $script @ArgsList
 }
 elseif ($cmdLower -in @("help", "-h", "--help", "/?")) {

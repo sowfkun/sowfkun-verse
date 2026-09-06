@@ -20,29 +20,33 @@ LOCAL_TS_IP=$(tailscale ip -4 2>/dev/null || true)
 echo "  • Local Tailscale IPv4: ${LOCAL_TS_IP:-'Chưa có IP'}"
 tailscale status --peers=false || true
 
-# 2. Kiểm tra kết nối tới Netcup Mongo Node (100.70.62.111)
+# 2. Kiểm tra kết nối tới Mongo Node
 echo ""
-echo "📌 [2/4] KIỂM TRA KẾT NỐI TỚI SERVER NETCUP MONGO (100.70.62.111):"
-NETCUP_IP="100.70.62.111"
+MONGO_NODE_IP="${1:-$(tailscale status 2>/dev/null | grep -i 'mongo' | awk '{print $1}' | head -n 1)}"
+if [[ -z "$MONGO_NODE_IP" ]]; then
+  MONGO_NODE_IP="100.64.0.1"
+fi
 
-if ping -c 3 -W 3 "$NETCUP_IP" &>/dev/null; then
-  echo "  ✅ Ping tới Netcup Mongo (${NETCUP_IP}): THÀNH CÔNG!"
-  tailscale ping -c 2 "$NETCUP_IP" 2>/dev/null || true
+echo "📌 [2/4] KIỂM TRA KẾT NỐI TỚI MONGO NODE (${MONGO_NODE_IP}):"
+
+if ping -c 3 -W 3 "$MONGO_NODE_IP" &>/dev/null; then
+  echo "  ✅ Ping tới Mongo Node (${MONGO_NODE_IP}): THÀNH CÔNG!"
+  tailscale ping -c 2 "$MONGO_NODE_IP" 2>/dev/null || true
 else
-  echo "  ⚠️ Chưa thể ping tới Netcup Mongo (${NETCUP_IP}). Vui lòng kiểm tra Netcup Node đã online chưa."
+  echo "  ⚠️ Chưa thể ping tới Mongo Node (${MONGO_NODE_IP}). Vui lòng kiểm tra Mongo Node đã online chưa."
 fi
 
 # 3. Kiểm tra cổng dịch vụ MongoDB (27017) qua Mesh
 echo ""
 echo "📌 [3/4] KIỂM TRA TRUY CẬP CỔNG DỊCH VỤ MONGODB NỘI BỘ (27017):"
 if command -v nc &>/dev/null; then
-  if nc -z -v -w 3 "$NETCUP_IP" 27017 2>/dev/null; then
+  if nc -z -v -w 3 "$MONGO_NODE_IP" 27017 2>/dev/null; then
     echo "  ✅ Cổng MongoDB 27017 qua Tailscale Mesh: KẾT NỐI THÔNG SUỐT!"
   else
     echo "  ⚠️ Cổng 27017 chưa phản hồi qua nc."
   fi
 elif command -v timeout &>/dev/null; then
-  if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${NETCUP_IP}/27017" 2>/dev/null; then
+  if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${MONGO_NODE_IP}/27017" 2>/dev/null; then
     echo "  ✅ Cổng MongoDB 27017 qua Tailscale Mesh: KẾT NỐI THÔNG SUỐT!"
   else
     echo "  ⚠️ Cổng 27017 chưa phản hồi."

@@ -1,0 +1,220 @@
+{
+  "$schema": "./servers.schema.json",
+  "active_profile": "tailscale-dev",
+  "profiles": {
+    "tailscale-dev": {
+      "name": "Tailscale Mesh Dev Cluster (Netcup Mongo + 3 GCP Nodes)",
+      "description": "Mô hình cụm Development kết nối mã hóa qua mạng riêng ảo Tailscale Mesh",
+      "nodes": {
+        "mongo": {
+          "name": "Server Netcup - Mongo Node (IPv6-Only)",
+          "type": "tailscale",
+          "host": "<TAILSCALE_IP_MONGO>",
+          "user": "root",
+          "key_path": "vm_key",
+          "tunnels": [
+            { "local_port": 27017, "remote_port": 27017, "desc": "MongoDB (Netcup via Tailscale)" }
+          ]
+        },
+        "cache_mq": {
+          "name": "Server 1 - Cache & MQ Node (GCP)",
+          "type": "tailscale",
+          "host": "<TAILSCALE_IP_SERVER_1>",
+          "user": "sowfkun",
+          "key_path": "vm_key",
+          "tunnels": [
+            { "local_port": 6379, "remote_port": 6379, "desc": "Redis Cache (via Tailscale)" },
+            { "local_port": 9092, "remote_port": 9092, "desc": "Kafka Broker (via Tailscale)" },
+            { "local_port": 8085, "remote_port": 8085, "desc": "Redpanda Web Console (via Tailscale)" }
+          ]
+        },
+        "app": {
+          "name": "Server 2 - App Node (GCP)",
+          "type": "tailscale",
+          "host": "<TAILSCALE_IP_SERVER_2>",
+          "user": "truong",
+          "key_path": "$env:USERPROFILE\\.ssh\\google_compute_engine",
+          "tunnels": [
+            { "local_port": 8080, "remote_port": 8080, "desc": "Go API Backend (via Tailscale)" }
+          ]
+        },
+        "gateway": {
+          "name": "Server 3 - Egress Gateway Node (GCP)",
+          "type": "tailscale",
+          "host": "<TAILSCALE_IP_SERVER_3>",
+          "user": "truong",
+          "key_path": "$env:USERPROFILE\\.ssh\\google_compute_engine",
+          "tunnels": [
+            { "local_port": 8090, "remote_port": 8090, "desc": "Egress Gateway (via Tailscale)" }
+          ]
+        }
+      }
+    },
+    "hybrid-dev": {
+      "name": "Hybrid Dev Cluster (Netcup Mongo via Tailscale + 3 GCP Nodes via JIT)",
+      "description": "MongoDB qua Tailscale WireGuard và các Node GCP qua JIT SSH",
+      "nodes": {
+        "mongo": {
+          "name": "Server Netcup - Mongo Node (IPv6-Only)",
+          "type": "tailscale",
+          "host": "<TAILSCALE_IP_MONGO>",
+          "user": "root",
+          "key_path": "vm_key",
+          "tunnels": [
+            { "local_port": 27017, "remote_port": 27017, "desc": "MongoDB (Netcup via Tailscale)" }
+          ]
+        },
+        "cache_mq": {
+          "name": "Server 1 - Cache & MQ Node (GCP)",
+          "type": "tailscale",
+          "host": "<TAILSCALE_IP_SERVER_1>",
+          "user": "sowfkun",
+          "key_path": "vm_key",
+          "tunnels": [
+            { "local_port": 6379, "remote_port": 6379, "desc": "Redis Cache Cluster (via Tailscale)" },
+            { "local_port": 9092, "remote_port": 9092, "desc": "Kafka Broker (via Tailscale)" },
+            { "local_port": 8085, "remote_port": 8085, "desc": "Redpanda Web Console (via Tailscale)" }
+          ]
+        },
+        "app": {
+          "name": "Server 2 - App Node (GCP)",
+          "type": "gcp_jit",
+          "host": "<PUBLIC_IP_OR_VM_NAME>",
+          "user": "truong",
+          "key_path": "$env:USERPROFILE\\.ssh\\google_compute_engine",
+          "gcp": {
+            "project": "<GCP_PROJECT_APP>",
+            "account": "<GCP_ACCOUNT_APP>",
+            "network": "app-server-vpc",
+            "ingress_rule": "app-vpc-allow-ssh-temp",
+            "egress_rule": "app-vpc-allow-ssh-egress-temp"
+          },
+          "tunnels": [
+            { "local_port": 8080, "remote_port": 8080, "desc": "Go API Backend" }
+          ]
+        },
+        "gateway": {
+          "name": "Server 3 - Egress Gateway Node (GCP)",
+          "type": "gcp_jit",
+          "host": "<PUBLIC_IP_OR_VM_NAME>",
+          "user": "truong",
+          "key_path": "$env:USERPROFILE\\.ssh\\google_compute_engine",
+          "gcp": {
+            "project": "<GCP_PROJECT_GATEWAY>",
+            "account": "<GCP_ACCOUNT_GATEWAY>",
+            "network": "egress-gateway-vpc",
+            "ingress_rule": "egress-vpc-allow-ssh-temp"
+          },
+          "tunnels": [
+            { "local_port": 8090, "remote_port": 8090, "desc": "Egress Gateway" }
+          ]
+        }
+      }
+    },
+    "gcp-direct-dev": {
+      "name": "GCP Direct Dev Cluster (3 GCP Nodes via JIT SSH)",
+      "description": "Cụm 3 Server GCP với cơ chế mở tường lửa JIT SSH tạm thời",
+      "nodes": {
+        "cache_mq": {
+          "name": "Server 1 - Cache & MQ Node (GCP)",
+          "type": "gcp_jit",
+          "host": "<PUBLIC_IP_OR_VM_NAME>",
+          "user": "sowfkun",
+          "key_path": "vm_key",
+          "gcp": {
+            "project": "<GCP_PROJECT_DATA>",
+            "account": "<GCP_ACCOUNT_DATA>",
+            "network": "data-server-vpc",
+            "ingress_rule": "data-vpc-allow-ssh-temp",
+            "egress_rule": "data-vpc-allow-ssh-egress-temp"
+          },
+          "tunnels": [
+            { "local_port": 6379, "remote_port": 6379, "desc": "Redis Cache Cluster" },
+            { "local_port": 9092, "remote_port": 9092, "desc": "Kafka Broker" },
+            { "local_port": 8085, "remote_port": 8085, "desc": "Redpanda Web Console" }
+          ]
+        },
+        "app": {
+          "name": "Server 2 - App Node (GCP)",
+          "type": "gcp_jit",
+          "host": "<PUBLIC_IP_OR_VM_NAME>",
+          "user": "truong",
+          "key_path": "$env:USERPROFILE\\.ssh\\google_compute_engine",
+          "gcp": {
+            "project": "<GCP_PROJECT_APP>",
+            "account": "<GCP_ACCOUNT_APP>",
+            "network": "app-server-vpc",
+            "ingress_rule": "app-vpc-allow-ssh-temp",
+            "egress_rule": "app-vpc-allow-ssh-egress-temp"
+          },
+          "tunnels": [
+            { "local_port": 8080, "remote_port": 8080, "desc": "Go API Backend" }
+          ]
+        },
+        "gateway": {
+          "name": "Server 3 - Egress Gateway Node (GCP)",
+          "type": "gcp_jit",
+          "host": "<PUBLIC_IP_OR_VM_NAME>",
+          "user": "truong",
+          "key_path": "$env:USERPROFILE\\.ssh\\google_compute_engine",
+          "gcp": {
+            "project": "<GCP_PROJECT_GATEWAY>",
+            "account": "<GCP_ACCOUNT_GATEWAY>",
+            "network": "egress-gateway-vpc",
+            "ingress_rule": "egress-vpc-allow-ssh-temp"
+          },
+          "tunnels": [
+            { "local_port": 8090, "remote_port": 8090, "desc": "Egress Gateway" }
+          ]
+        }
+      }
+    },
+    "tailscale-prod": {
+      "name": "Tailscale Mesh Production Cluster",
+      "description": "Mẫu cấu hình cụm Production chính thức qua Tailscale Mesh",
+      "nodes": {
+        "mongo": {
+          "name": "Production MongoDB Node",
+          "type": "tailscale",
+          "host": "<TAILSCALE_PROD_IP_MONGO>",
+          "user": "root",
+          "key_path": "prod_key",
+          "tunnels": [
+            { "local_port": 27017, "remote_port": 27017, "desc": "MongoDB Production" }
+          ]
+        },
+        "cache_mq": {
+          "name": "Production Cache & MQ Node",
+          "type": "tailscale",
+          "host": "<TAILSCALE_PROD_IP_CACHE_MQ>",
+          "user": "ubuntu",
+          "key_path": "prod_key",
+          "tunnels": [
+            { "local_port": 6379, "remote_port": 6379, "desc": "Redis Cache Prod" },
+            { "local_port": 9092, "remote_port": 9092, "desc": "Kafka Broker Prod" }
+          ]
+        },
+        "app": {
+          "name": "Production App Node",
+          "type": "tailscale",
+          "host": "<TAILSCALE_PROD_IP_APP>",
+          "user": "ubuntu",
+          "key_path": "prod_key",
+          "tunnels": [
+            { "local_port": 8080, "remote_port": 8080, "desc": "Go API Backend Prod" }
+          ]
+        },
+        "gateway": {
+          "name": "Production Egress Gateway Node",
+          "type": "tailscale",
+          "host": "<TAILSCALE_PROD_IP_GW>",
+          "user": "ubuntu",
+          "key_path": "prod_key",
+          "tunnels": [
+            { "local_port": 8090, "remote_port": 8090, "desc": "Egress Gateway Prod" }
+          ]
+        }
+      }
+    }
+  }
+}

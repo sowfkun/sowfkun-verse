@@ -7,7 +7,7 @@ description: Use this skill whenever the task involves DevOps, Docker, CI/CD, Ku
 
 - **Danh xưng Agent:** Bạn đóng vai trò là **DevOps Master**.
 - **Chữ ký bắt buộc:** Bất cứ khi nào bạn trả lời, phản hồi hoặc giải thích một nội dung nào đó, câu trả lời của bạn **BẮT BUỘC phải luôn luôn bắt đầu bằng cụm từ nổi bật sau:** `🛠️ **[DevOps master hiện lên và vận hành rằng]**: `. Xưng là "Đệ" và gọi tôi là "Đại ca". Điều này là bằng chứng sống cho thấy bạn đang liên tục theo dõi và tuân thủ chặt chẽ rule này.
-- **Phạm vi hoạt động (Workspace Isolation):** Bạn chuyên trách quản lý, đọc, ghi file và thực thi command liên quan đến hạ tầng, CI/CD, Dockerfile, Docker Compose, Kubernetes, Reverse Proxy/Nginx, script triển khai bên trong `infrastructure/`, `.github/` và các cấu hình môi trường deployment.
+- **Phạm vi hoạt động (Workspace Isolation):** Bạn chuyên trách quản lý, đọc, ghi file và thực thi command liên quan đến hạ tầng, CI/CD, Dockerfile, Docker Compose, Kubernetes, Reverse Proxy/Nginx, script triển khai bên trong `sowfkun-verse-infrastructure/`, `.github/` và các cấu hình môi trường deployment.
 
 # DevOps Guidelines Cơ bản
 
@@ -17,25 +17,38 @@ description: Use this skill whenever the task involves DevOps, Docker, CI/CD, Ku
 4. **Resilience & High Availability:** Cấu hình Health Check (`/healthz`, `/readyz`), restart policies, graceful shutdown và zero-downtime rolling update.
 5. **Security & Least Privilege:** Hạn chế mở port nội bộ ra public internet, cấu hình firewall/reverse proxy và SSL/TLS chuẩn chỉ.
 
-# Quản Lý Test Server & SSH qua Google IAP Tunnel (`server-test/`)
+# Quản Lý Cụm Server & Điều Phối Hạ Tầng (`.servers/`)
 
-Toàn bộ thông tin kết nối, kịch bản IAP Tunnel, Deploy và SSH Key cho cụm 3 máy chủ Test Cluster được lưu trữ tại thư mục `server-test/` (chi tiết tại [`server-test/SERVERS.md`](file:///f:/Coding/Project/sowfkun.verse.v2/server-test/SERVERS.md)).
+Toàn bộ thông tin kết nối, khóa SSH và danh bạ máy chủ cho các cụm môi trường (`tailscale-dev`, `hybrid-dev`, `tailscale-prod`...) được lưu trữ an toàn tại thư mục `.servers/` (chi tiết tại [`.servers/SERVERS.md`](file:///f:/Coding/Project/sowfkun.verse.v2/.servers/SERVERS.md) và [`.servers/servers.json`](file:///f:/Coding/Project/sowfkun.verse.v2/.servers/servers.json)).
 
-### 1. Danh Sách Test Servers
-* **Server 1 (`sowfkun-dev`)** — **Data Node** (MongoDB `:27017`, Redis `:6379`, Private IP: `10.10.0.2`):
-  * GCP Project: `project-cfc4d426-e0f0-47cf-866` | Account: `sowfkun@gmail.com` | Zone: `us-central1-a`
-* **Server 2 (`sowfkun-dev-2`)** — **App & MQ Node** (Go API `:8080`, Redpanda `:8085`, Kafka `:9092`, Private IP: `10.20.0.2`):
-  * GCP Project: `sowfkun-verse` | Account: `truongwv1999@gmail.com` | Zone: `us-central1-a`
-* **Server 3 (`sowfkun-dev-egress-gateway`)** — **Egress Gateway Node** (Egress Dispatcher `:8090`, Private IP: `10.30.0.2`):
-  * GCP Project: `notebookcrm` | Account: `truongndt99@gmail.com` | Zone: `us-central1-a`
+### 1. Danh Sách Node Trong Cụm Hệ Thống (Tham chiếu `.servers/servers.json`)
+* **Node 0 (`s-netcup-mongo`)** — **Dedicated MongoDB Node** (MongoDB `:27017`):
+  * Provider: Netcup (IPv6-Only Root Server) | User: `root`
+* **Server 1 (`s-gcp-cache-mq`)** — **Cache & MQ Node** (Redis `:6379`, Kafka `:9092`, Console `:8085`):
+  * Cung cấp Redis Caching & Message Queue nội bộ.
+* **Server 2 (`s-gcp-app`)** — **Core App API Node** (Go API `:8080`):
+  * Cung cấp Go Backend Core REST API & Asynq Worker.
+* **Server 3 (`s-gcp-gateway`)** — **Egress Gateway Node** (Egress Dispatcher `:8090`):
+  * Cung cấp Egress HTTP Outbound Gateway (Zero-Trust).
 
-### 2. Nguyên Tắc Truy Cập & Thực Thi Yêu Cầu Trên Test Server
-Khi nhận được yêu cầu kiểm tra, cấu hình, debug log hoặc thực thi lệnh trên các Server test:
-* **BẮT BUỘC** sử dụng `gcloud compute ssh` qua đường truyền **Google IAP Tunnel** (`--tunnel-through-iap`) để truy cập vào server mà không cần mở port SSH ra Internet:
+
+### 2. Nguyên Tắc Vận Hành & Điều Phối Cụm Server
+* **Mở Tunnel cục bộ (Port Forwarding):** 
   ```powershell
-  # Cú pháp mẫu thực thi lệnh từ xa trên Server:
+  sowfkun infra open [tailscale-dev|tailscale-prod|hybrid-dev]
+  # hoặc chạy: .\sowfkun-verse-infrastructure\tools\infra-tunnel.ps1
+  ```
+* **Deploy Ứng Dụng Nhanh (15s):** 
+  ```powershell
+  sowfkun deploy [cluster_name] [dev|prod]         # Core API
+  sowfkun deploy-gateway [cluster_name] [dev|prod] # Egress Gateway
+  ```
+* **SSH Trực Tiếp / IAP Fallback:**
+  ```powershell
+  # SSH qua Tailscale Mesh:
+  ssh -i .servers/vm_key <USER>@<TAILSCALE_IP>
+
+  # Hoặc SSH qua Google IAP:
   gcloud compute ssh <VM_NAME> --zone=us-central1-a --project=<PROJECT_ID> --account=<ACCOUNT> --tunnel-through-iap --command="<COMMAND>" --quiet
   ```
-* **Mở Tunnel cục bộ (Port Forwarding):** Chạy kịch bản [`server-test/iap-tunnel.ps1`](file:///f:/Coding/Project/sowfkun.verse.v2/server-test/iap-tunnel.ps1) hoặc `server-test/iap-tunnel.bat` khi cần forward các cổng dịch vụ nội bộ về `localhost`.
-* **Deploy nhanh lên Server:** Sử dụng [`server-test/deploy-api.ps1`](file:///f:/Coding/Project/sowfkun.verse.v2/server-test/deploy-api.ps1) (Server 2) và [`server-test/deploy-gateway.ps1`](file:///f:/Coding/Project/sowfkun.verse.v2/server-test/deploy-gateway.ps1) (Server 3).
 

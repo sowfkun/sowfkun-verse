@@ -16,22 +16,22 @@ cd "$ROOT_DIR/sowfkun-verse-api"
 # 1. Build Core API
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w -extldflags '-static'" \
-    -o "$ROOT_DIR/infrastructure/api/app-api" \
+    -o "$ROOT_DIR/sowfkun-verse-infrastructure/api/app-api" \
     ./cmd/api
 
-chmod +x "$ROOT_DIR/infrastructure/api/app-api"
+chmod +x "$ROOT_DIR/sowfkun-verse-infrastructure/api/app-api"
 
 # 2. Build Egress Gateway
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w -extldflags '-static'" \
-    -o "$ROOT_DIR/infrastructure/gateway/app-gateway" \
+    -o "$ROOT_DIR/sowfkun-verse-infrastructure/gateway/app-gateway" \
     ./cmd/gateway
 
-chmod +x "$ROOT_DIR/infrastructure/gateway/app-gateway"
+chmod +x "$ROOT_DIR/sowfkun-verse-infrastructure/gateway/app-gateway"
 
 echo "================================================================="
 echo "🎉 ĐÓNG GÓI ON-PREMISE BINARY THÀNH CÔNG!"
-echo "👉 File binary API:     infrastructure/api/app-api"
-echo "👉 File binary Gateway: infrastructure/gateway/app-gateway"
-echo "👉 Bạn chỉ cần copy toàn bộ thư mục [infrastructure/] và file [.env] đi bàn giao On-Premise."
+echo "👉 File binary API:     sowfkun-verse-infrastructure/api/app-api"
+echo "👉 File binary Gateway: sowfkun-verse-infrastructure/gateway/app-gateway"
+echo "👉 Bạn chỉ cần copy toàn bộ thư mục [sowfkun-verse-infrastructure/] và file [.env] đi bàn giao On-Premise."
 echo "================================================================="
