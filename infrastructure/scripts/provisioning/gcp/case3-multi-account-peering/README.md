@@ -16,9 +16,9 @@ Hướng dẫn triển khai mô hình hạ tầng chuẩn **Universal Custom VPC
 │                                              │        │                                              │
 │  • MongoDB Replica Set (:27017)              │        │  • Go API Backend (:8080)                    │
 │  • Redis Cluster (:6379)                     │        │  • Redpanda Kafka Internal (:9092)           │
-│  • OpenSearch (:9200)                        │        │  • Redpanda Web Console (:8085)              │
-│  • Egress Deny All (0.0.0.0/0)               │        │  • Public Ingress (80/443/8080/8085)         │
-│  • IAP SSH / Monitoring (:22, :3000)         │        │  • Google IAP SSH (:22)                      │
+│  • OpenSearch (:9200)                        │        │  • Redpanda Web Console (:8085 via IAP)      │
+│  • Egress Deny All (0.0.0.0/0)               │        │  • Public Ingress (:8080 API)                │
+│  • IAP SSH / Monitoring (:22, :3000)         │        │  • Google IAP SSH & Console (:22, :8085)     │
 └──────────────────────────────────────────────┘        └──────────────────────────────────────────────┘
 ```
 

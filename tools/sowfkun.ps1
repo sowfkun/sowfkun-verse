@@ -34,8 +34,8 @@ function Show-Help {
     Write-Host "       -> Build and deploy Go API to Server 2 via Google IAP in 15 seconds." -ForegroundColor DarkGray
     Write-Host "    4. verse-deploy-gateway [dev|prod]" -ForegroundColor White
     Write-Host "       -> Build and deploy Egress Gateway to Server 3 via Google IAP in 15 seconds." -ForegroundColor DarkGray
-    Write-Host "    5. verse-tunnel [server1|server2|server3|all]" -ForegroundColor White
-    Write-Host "       -> Open secure IAP tunnels to internal services (Mongo, Redis, API, Kafka, Gateway, SSH)." -ForegroundColor DarkGray
+    Write-Host "    5. infra [open|close] (hoặc: verse-tunnel, infra-open, infra-close)" -ForegroundColor White
+    Write-Host "       -> Direct JIT SSH Tunnel: Mở/Đóng kết nối tốc độ cao tới toàn bộ Database, Redis, Kafka, Gateway & tự động khóa firewall." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
     Write-Host "    6. help" -ForegroundColor White
@@ -143,7 +143,7 @@ if (-not $Command) {
         "Audio / Video Synchronizer (sync-audio)",
         "Deploy Go API to Server 2 (verse-deploy)",
         "Deploy Egress Gateway to Server 3 (verse-deploy-gateway)",
-        "Open Google IAP Tunnels across 3 Servers (verse-tunnel)",
+        "JIT Direct SSH Infrastructure Tunnel (infra open/close)",
         "Exit"
     )
 
@@ -167,7 +167,7 @@ if (-not $Command) {
             & $script
         }
         4 {
-            $script = Join-Path $serverTestDir "iap-tunnel.ps1"
+            $script = Join-Path $serverTestDir "infra-tunnel.ps1"
             & $script
         }
         Default {
@@ -215,10 +215,18 @@ elseif ($cmdLower -in @("verse-deploy-gateway", "verse-deploy-gw")) {
     $targetEnv = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "dev" }
     & $script -TargetEnv $targetEnv
 }
-elseif ($cmdLower -eq "verse-tunnel") {
-    $script = Join-Path $serverTestDir "iap-tunnel.ps1"
-    $target = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
-    & $script -Target $target
+elseif ($cmdLower -in @("infra", "infra-tunnel", "verse-tunnel", "tunnel")) {
+    $script = Join-Path $serverTestDir "infra-tunnel.ps1"
+    $action = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
+    & $script -Action $action
+}
+elseif ($cmdLower -in @("infra-open", "open-infra")) {
+    $script = Join-Path $serverTestDir "infra-tunnel.ps1"
+    & $script -Action "open"
+}
+elseif ($cmdLower -in @("infra-close", "close-infra")) {
+    $script = Join-Path $serverTestDir "infra-tunnel.ps1"
+    & $script -Action "close"
 }
 elseif ($cmdLower -in @("help", "-h", "--help", "/?")) {
     Show-Help

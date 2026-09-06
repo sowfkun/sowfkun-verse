@@ -21,6 +21,7 @@ MODE="fresh"
 PROFILE="standard"
 SWAP_SIZE_GB=2
 APP_NETWORK="app_net"
+INTERNAL_SUBNET_INPUT=""
 SELECTED_SERVICES=()
 
 # Parse arguments
@@ -30,9 +31,11 @@ while [[ "$#" -gt 0 ]]; do
         --profile=*|--prof=*) PROFILE_INPUT="${1#*=}" ;;
         --api-mode=*|--api-type=*) API_MODE_INPUT="${1#*=}" ;;
         --mode=*) MODE="${1#*=}" ;;
+        --internal-subnet=*|--subnet=*) INTERNAL_SUBNET_INPUT="${1#*=}" ;;
         -s|--service|--services) SERVICE_INPUT="$2"; shift ;;
         -p|--profile|--prof) PROFILE_INPUT="$2"; shift ;;
         --api-mode|--api-type) API_MODE_INPUT="$2"; shift ;;
+        --internal-subnet|--subnet|-net) INTERNAL_SUBNET_INPUT="$2"; shift ;;
         -m|--mode) MODE="$2"; shift ;;
         -i|--interactive) SERVICE_INPUT="interactive" ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -298,18 +301,29 @@ EOF
 * hard nproc 32768
 EOF
 
-    # Tối ưu DNS Resolver (Alibaba Internal DNS + Cloudflare + Google)
+    # Tối ưu DNS Resolver (GCP Metadata DNS + Cloudflare + Google)
     mkdir -p /etc/systemd/resolved.conf.d
     cat << 'EOF' > /etc/systemd/resolved.conf.d/dns.conf
 [Resolve]
-DNS=100.100.2.136 100.100.2.138 1.1.1.1 8.8.8.8
+DNS=169.254.169.254 1.1.1.1 8.8.8.8
 FallbackDNS=8.8.4.4 1.0.0.1
 DNSSEC=no
 DNSOverTLS=no
 EOF
     systemctl restart systemd-resolved 2>/dev/null || true
 
-    echo "✅ Đã tune Kernel, Limits & DNS Resolver thành công!"
+    # Giới hạn Systemd Journald để chống tràn RAM & CPU khi có log flood trên VPS nhỏ
+    mkdir -p /etc/systemd/journald.conf.d
+    cat << 'EOF' > /etc/systemd/journald.conf.d/99-journal-limit.conf
+[Journal]
+SystemMaxUse=100M
+RuntimeMaxUse=50M
+RateLimitIntervalSec=30s
+RateLimitBurst=1000
+EOF
+    systemctl restart systemd-journald 2>/dev/null || true
+
+    echo "✅ Đã tune Kernel, Limits, DNS & Giới hạn Journald thành công!"
 }
 
 # 5. INSTALL DOCKER ENGINE & DOCKER COMPOSE
@@ -368,9 +382,9 @@ EOF
     fi
 }
 
-# 6. CONFIGURE FIREWALL (UFW), FAIL2BAN & CLOUD METADATA PROTECTION
+# 6. CONFIGURE FIREWALL, FAIL2BAN & CLOUD METADATA PROTECTION
 setup_security() {
-    echo "🛡️ [6/9] Đang thiết lập Tường lửa, Fail2ban & Chặn Cloud Metadata (GCP, Alibaba, AWS)..."
+    echo "🛡️ [6/9] Đang thiết lập Tường lửa, Fail2ban & Chặn Cloud Metadata..."
     systemctl enable fail2ban 2>/dev/null || true
     systemctl start fail2ban 2>/dev/null || true
 
@@ -380,45 +394,125 @@ setup_security() {
         iptables -C OUTPUT -d 100.100.100.200 -j DROP 2>/dev/null || iptables -A OUTPUT -d 100.100.100.200 -j DROP
     fi
 
-    if command -v ufw >/dev/null 2>&1; then
-        ufw default deny incoming
-        ufw default allow outgoing
-        
-        # Cho phép SSH nội bộ hoặc quản lý qua Cloud Workbench
-        ufw allow 22/tcp comment 'SSH Port'
-        
-        # Quét danh sách service để mở port tường lửa tương ứng
-        for s in "${SELECTED_SERVICES[@]}"; do
-            case "$s" in
-                "api")
-                    ufw allow 8080/tcp comment 'Go API Port'
-                    ;;
-                "mongo")
-                    ufw allow 27017/tcp comment 'MongoDB Atlas Local Port'
-                    ;;
-                "redis")
-                    ufw allow 6379/tcp comment 'Redis Port'
-                    ;;
-                "kafka")
-                    ufw allow 9092/tcp comment 'Kafka Internal Broker'
-                    ufw allow 9094/tcp comment 'Kafka External Broker'
-                    ufw allow 8085/tcp comment 'Redpanda Web Console'
-                    ;;
-                "opensearch")
-                    ufw allow 9200/tcp comment 'OpenSearch HTTP API'
-                    ;;
-            esac
-        done
+    # Tự động nhận diện môi trường Cloud (GCP, AWS, Alibaba, Azure)
+    local is_cloud=false
+    if [ -f /sys/class/dmi/id/product_name ] && grep -qiE "Google|Amazon|Alibaba|Microsoft" /sys/class/dmi/id/product_name; then
+        is_cloud=true
+    elif [ -f /sys/class/dmi/id/sys_vendor ] && grep -qiE "Google|Amazon|Alibaba|Microsoft" /sys/class/dmi/id/sys_vendor; then
+        is_cloud=true
+    elif curl -s -m 1 http://169.254.169.254/computeMetadata/v1/ -H "Metadata-Flavor: Google" >/dev/null 2>&1; then
+        is_cloud=true
+    fi
 
-        # Kích hoạt UFW
-        ufw --force enable 2>/dev/null || true
+    if [ "$is_cloud" = true ]; then
+        echo "☁️ Phát hiện môi trường Cloud VM (GCP/AWS/Alibaba/Azure)."
+        echo "🛡️ Nhường quyền kiểm soát an ninh cho Cloud VPC Firewall (ở tầng Hypervisor SDN)."
+        echo "💡 Vô hiệu hóa UFW để tránh xung đột với Docker Bridge (172.16.0.0/12) và VPC Peering."
+        if command -v ufw >/dev/null 2>&1; then
+            ufw --force disable 2>/dev/null || true
+            systemctl stop ufw 2>/dev/null || true
+            systemctl disable ufw 2>/dev/null || true
+        fi
+    else
+        echo "🏢 Môi trường On-Premise / Bare-metal: Kích hoạt bảo vệ bằng UFW..."
+        # Danh sách các dải mạng nội bộ an toàn (RFC 1918 Private Networks)
+        local allowed_subnets=("10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16")
+        if [[ -n "$INTERNAL_SUBNET_INPUT" ]]; then
+            allowed_subnets+=("$INTERNAL_SUBNET_INPUT")
+        fi
+
+        if command -v ufw >/dev/null 2>&1; then
+            local after_rules="/etc/ufw/after.rules"
+            if [ -f "$after_rules" ] && ! grep -q "DOCKER-USER" "$after_rules" 2>/dev/null; then
+                echo "🛡️ Đang cấu hình chuỗi DOCKER-USER an toàn cho On-Premise..."
+                cat << 'EOF' >> "$after_rules"
+
+# ==============================================================================
+# DOCKER-USER ISOLATION (On-Premise)
+# ==============================================================================
+*filter
+:DOCKER-USER - [0:0]
+
+# Cho phép các kết nối đã thiết lập từ trước (Outbound replies)
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+
+# Cho phép toàn bộ traffic từ mạng nội bộ RFC 1918 & Docker Bridge
+-A DOCKER-USER -s 10.0.0.0/8 -j RETURN
+-A DOCKER-USER -s 172.16.0.0/12 -j RETURN
+-A DOCKER-USER -s 192.168.0.0/16 -j RETURN
+
+# Chỉ mở Public duy nhất cho API (Port 8080) và Web (80/443)
+-A DOCKER-USER -p tcp -m tcp --dport 8080 -j RETURN
+-A DOCKER-USER -p tcp -m tcp --dport 80 -j RETURN
+-A DOCKER-USER -p tcp -m tcp --dport 443 -j RETURN
+
+# Chặn các kết nối lạ khác vào container từ ngoài Internet
+-A DOCKER-USER -j DROP
+
+COMMIT
+EOF
+            fi
+
+            ufw default deny incoming
+            ufw default allow outgoing
+            ufw allow 22/tcp comment 'SSH Port'
+
+            for s in "${SELECTED_SERVICES[@]}"; do
+                case "$s" in
+                    "api")
+                        ufw allow 8080/tcp comment 'Go API Public Port'
+                        ;;
+                    "mongo")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 27017 proto tcp comment 'MongoDB Internal Only'
+                        done
+                        ;;
+                    "redis")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 6379 proto tcp comment 'Redis Internal Only'
+                        done
+                        ;;
+                    "kafka")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 9092 proto tcp comment 'Kafka Internal Broker'
+                            ufw allow from "$net" to any port 9094 proto tcp comment 'Kafka External Broker'
+                            ufw allow from "$net" to any port 8085 proto tcp comment 'Redpanda Console Internal Only'
+                        done
+                        ;;
+                    "opensearch")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 9200 proto tcp comment 'OpenSearch Internal Only'
+                        done
+                        ;;
+                    "gateway")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 8090 proto tcp comment 'Egress Gateway Internal Only'
+                        done
+                        ;;
+                    "monitoring")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 3000 proto tcp comment 'Grafana Internal Only'
+                            ufw allow from "$net" to any port 3100 proto tcp comment 'Loki Internal Only'
+                            ufw allow from "$net" to any port 9090 proto tcp comment 'Prometheus Internal Only'
+                        done
+                        ;;
+                    "promtail")
+                        for net in "${allowed_subnets[@]}"; do
+                            ufw allow from "$net" to any port 9100 proto tcp comment 'Node Exporter Internal Only'
+                        done
+                        ;;
+                esac
+            done
+
+            ufw --force enable 2>/dev/null || true
+        fi
     fi
     
     # Kích hoạt tự động vá lỗi bảo mật định kỳ
     systemctl enable unattended-upgrades 2>/dev/null || true
     systemctl start unattended-upgrades 2>/dev/null || true
 
-    echo "✅ Đã kích hoạt Firewall & Chặn Cloud Metadata SSRF an toàn!"
+    echo "✅ Đã thiết lập Tường lửa & Chặn Cloud Metadata SSRF an toàn!"
 }
 
 # 7. SECURE SSH CONFIGURATION

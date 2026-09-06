@@ -43,7 +43,7 @@ echo "✅ Đang thao tác với tài khoản: [ ${ACTIVE_ACCOUNT} ]"
 echo ""
 echo "📌 [BƯỚC 1/3] CHỌN MÁY CHỦ / PROJECT CẦN AUDIT BẢO MẬT:"
 echo "  [1] Data Server (Kiểm tra Data VPC: Chống rò rỉ DB, cấm Egress, mở IAP)"
-echo "  [2] App Server  (Kiểm tra App VPC: Chỉ mở 80/443/8080/8085, mở SSH qua IAP)"
+echo "  [2] App Server  (Kiểm tra App VPC: Chỉ mở Public 8080 API, mở SSH & Console qua IAP)"
 read -rp "👉 Chọn vai trò [1-2, Mặc định: 1]: " role_choice
 role_choice="${role_choice:-1}"
 
@@ -110,10 +110,10 @@ if [[ "$ROLE" == "data" ]]; then
   echo "🔎 [2/4] Kiểm tra cổng SSH Port 22..."
   ssh_public=$(echo "$rules_json" | grep -B 5 -A 10 '"0.0.0.0/0"' | grep -E 'tcp.*22|"22"' || true)
   if [[ -n "$ssh_public" ]]; then
-    echo "🚨 [CẢNH BÁO]: Cổng SSH (22) đang mở Public cho toàn bộ Internet (0.0.0.0/0) thay vì Google IAP!"
+    echo "🚨 [CẢNH BÁO]: Cổng SSH (22) đang mở thường trực cho toàn bộ Internet (0.0.0.0/0)! Nên đóng và chỉ mở JIT khi cần ('sowfkun infra open')."
     ISSUES_FOUND=$((ISSUES_FOUND + 1))
   else
-    echo "✅ [AN TOÀN]: Cổng SSH được bảo vệ nghiêm ngặt qua Google IAP (35.235.240.0/20)."
+    echo "✅ [AN TOÀN]: Cổng SSH được khóa an toàn (Zero-Trust) hoặc quản lý qua JIT Tunnel."
   fi
 
   echo ""
@@ -150,23 +150,31 @@ if [[ "$ROLE" == "data" ]]; then
 # ------------------------------------------------------------------------------
 elif [[ "$ROLE" == "app" ]]; then
   echo ""
-  echo "🔎 [1/6] Kiểm tra các cổng Web & API Public (80, 443, 8080, 8085)..."
-  public_web=$(echo "$rules_json" | grep -E '80|443|8080|8085' || true)
-  if [[ -n "$public_web" ]]; then
-    echo "✅ [CHUẨN]: Các cổng Web & API cần thiết đã được mở đúng quy chuẩn."
+  echo "🔎 [1/6] Kiểm tra cổng Go API Public (8080) và bảo vệ Console (8085)..."
+  public_api=$(echo "$rules_json" | grep -B 5 -A 10 '"0.0.0.0/0"' | grep -E '8080' || true)
+  public_console=$(echo "$rules_json" | grep -B 5 -A 10 '"0.0.0.0/0"' | grep -E '8085' || true)
+  
+  if [[ -n "$public_api" ]]; then
+    echo "ℹ️ [THÔNG TIN]: Cổng Go API (8080) đang mở Public cho Internet (Production Mode)."
   else
-    echo "⚠️ [CẢNH BÁO]: Chưa tìm thấy rule mở cổng Web 80/443/8080/8085."
+    echo "✅ [CHUẨN ZERO-TRUST]: Cổng Go API (8080) được bảo vệ nội bộ, truy cập an toàn qua JIT Tunnel."
+  fi
+
+  if [[ -n "$public_console" ]]; then
+    echo "🚨 [CẢNH BÁO NGUY HIỂM]: Cổng Redpanda Console (8085) đang bị mở Public (0.0.0.0/0)! Phải khóa lại và chỉ cho phép qua JIT SSH Tunnel!"
     ISSUES_FOUND=$((ISSUES_FOUND + 1))
+  else
+    echo "✅ [AN TOÀN]: Cổng Redpanda Console (8085) không bị lộ ra ngoài Internet."
   fi
 
   echo ""
   echo "🔎 [2/6] Kiểm tra cổng SSH Port 22..."
   ssh_public=$(echo "$rules_json" | grep -B 5 -A 10 '"0.0.0.0/0"' | grep -E 'tcp.*22|"22"' || true)
   if [[ -n "$ssh_public" ]]; then
-    echo "🚨 [CẢNH BÁO]: Cổng SSH (22) đang mở Public cho toàn bộ Internet (0.0.0.0/0) thay vì Google IAP!"
+    echo "🚨 [CẢNH BÁO]: Cổng SSH (22) đang mở thường trực cho toàn bộ Internet (0.0.0.0/0)! Nên đóng và chỉ mở JIT khi cần ('sowfkun infra open')."
     ISSUES_FOUND=$((ISSUES_FOUND + 1))
   else
-    echo "✅ [AN TOÀN]: Cổng SSH được bảo vệ nghiêm ngặt qua Google IAP (35.235.240.0/20)."
+    echo "✅ [AN TOÀN]: Cổng SSH được khóa an toàn (Zero-Trust) hoặc quản lý qua JIT Tunnel."
   fi
 
   echo ""

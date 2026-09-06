@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     ports:
       - "${MONGO_PORT:-27017}:27017"
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms128m -Xmx256m
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -16,7 +18,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${MONGO_CONTAINER_MEMORY_LIMIT:-850M}
+          memory: ${MONGO_CONTAINER_MEMORY_LIMIT:-1200M}
 
 volumes:
   mongo_data:

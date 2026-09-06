@@ -42,7 +42,7 @@ echo "✅ Đang thao tác với tài khoản: [ ${ACTIVE_ACCOUNT} ]"
 echo ""
 echo "📌 [BƯỚC 1/4] CHỌN LOẠI MÁY CHỦ CẦN THIẾT LẬP TƯỜNG LỬA:"
 echo "  [1] Data Server     (Khóa Egress 0.0.0.0/0, mở IAP, mở DB cho App Subnet)"
-echo "  [2] App Server      (Mở Public 80/443/8080/8085, Khóa Egress, mở IAP)"
+echo "  [2] App Server      (Mở Public API 8080, Khóa Egress, mở IAP Console 8085)"
 echo "  [3] Egress Gateway  (Mở Egress Webhook/Email 80/443, Mở Ingress từ App Subnet, mở IAP)"
 read -rp "👉 Chọn vai trò [1-3, Mặc định: 1]: " role_choice
 role_choice="${role_choice:-1}"
@@ -103,18 +103,17 @@ echo "  • Role:           ${ROLE^^} SERVER"
 if [[ "$ROLE" == "data" ]]; then
   echo "  • Ingress DB:     ${ALLOWED_CIDR} (Mongo:27017, Redis:6379, Kafka:9092, OpenSearch:9200)"
   echo "  • Egress Deny:    0.0.0.0/0 (Khóa 100% Internet)"
-  echo "  • Egress Allow:   ${ALLOWED_CIDR}, Google IAP, DNS/NTP"
-  echo "  • Ingress IAP:    Google IAP (SSH:22, Grafana:3000)"
+  echo "  • Egress Allow:   ${ALLOWED_CIDR}, DNS/NTP"
+  echo "  • Remote Access:  JIT SSH Tunnel (Qua công cụ 'sowfkun infra open/close')"
 elif [[ "$ROLE" == "app" ]]; then
-  echo "  • Ingress Web:    0.0.0.0/0 (Port 80, 443, 8080, 8085)"
-  echo "  • Ingress SSH:    Google IAP (35.235.240.0/20 - An toàn tuyệt đối)"
-  echo "  • Ingress ICMP:   0.0.0.0/0 (Ping)"
+  echo "  • Ingress API:    Khóa mặc định (Zero-Trust) hoặc Mở Public qua JIT Tunnel"
+  echo "  • Remote Access:  JIT SSH Tunnel (Qua công cụ 'sowfkun infra open/close')"
   echo "  • Egress Deny:    0.0.0.0/0 (Khóa Internet)"
-  echo "  • Egress Allow:   Data Subnet (10.10.0.0/24), Google IAP, DNS/NTP"
+  echo "  • Egress Allow:   Data Subnet (10.10.0.0/24), Gateway Subnet (10.30.0.0/24), DNS/NTP"
 elif [[ "$ROLE" == "egress" ]]; then
   echo "  • Ingress App:    ${ALLOWED_CIDR} (Port 8090 Dispatcher, Kafka:9092, 9094)"
-  echo "  • Ingress SSH:    Google IAP (35.235.240.0/20)"
   echo "  • Ingress Public: KHÓA 100% (Không mở bất kỳ cổng nào vào từ Internet)"
+  echo "  • Remote Access:  JIT SSH Tunnel (Qua công cụ 'sowfkun infra open/close')"
   echo "  • Egress Allow:   0.0.0.0/0 (Port 80/443 Webhook & Email, DNS:53, NTP:123) & App Subnet"
 fi
 echo "================================================================="
@@ -154,16 +153,17 @@ if [[ "$ROLE" == "data" ]]; then
     --description="Allow outbound reply traffic to App Subnet" \
     || echo "⚠️ Rule data-vpc-allow-egress-peer-app đã tồn tại."
 
-  gcloud compute firewall-rules create data-vpc-allow-egress-iap \
+  # 2. Mở Egress phản hồi cho App Subnet & NTP/DNS (Priority 900 - cao hơn Deny All)
+  gcloud compute firewall-rules create data-vpc-allow-egress-peer-app \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=EGRESS \
     --action=ALLOW \
-    --destination-ranges="35.235.240.0/20" \
+    --destination-ranges="${ALLOWED_CIDR}" \
     --rules="all" \
     --priority=900 \
-    --description="Allow outbound reply traffic to Google IAP" \
-    || echo "⚠️ Rule data-vpc-allow-egress-iap đã tồn tại."
+    --description="Allow outbound reply traffic to App Subnet" \
+    || echo "⚠️ Rule data-vpc-allow-egress-peer-app đã tồn tại."
 
   gcloud compute firewall-rules create data-vpc-allow-egress-ntp-dns \
     --project="${PROJECT_ID}" \
@@ -188,32 +188,8 @@ if [[ "$ROLE" == "data" ]]; then
     --description="Block all outbound internet traffic from Data Server" \
     || echo "⚠️ Rule data-vpc-deny-egress-internet đã tồn tại."
 
-  # 4. Mở Google IAP Ingress cho SSH & Toàn Bộ Cổng Infra Tunnel (Mongo, Redis, OpenSearch, Grafana)
-  gcloud compute firewall-rules create data-vpc-allow-ingress-iap \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --source-ranges="35.235.240.0/20" \
-    --rules="tcp:22,tcp:27017,tcp:6379,tcp:9200,tcp:9600,tcp:9100" \
-    --priority=1000 \
-    --description="Allow Google IAP for SSH and all Local Infra Tunnels (Mongo, Redis, OpenSearch, NodeExporter)" \
-    || echo "⚠️ Rule data-vpc-allow-ingress-iap đã tồn tại."
-
 elif [[ "$ROLE" == "app" ]]; then
-  # 1. Mở Google IAP Ingress cho SSH & Toàn Bộ Cổng App Tunnel (API, Kafka, Redpanda Console)
-  gcloud compute firewall-rules create app-vpc-allow-ingress-iap \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --source-ranges="35.235.240.0/20" \
-    --rules="tcp:22,tcp:3000,tcp:3100,tcp:8080,tcp:8085,tcp:9090,tcp:9092,tcp:9094,tcp:9100" \
-    --priority=1000 \
-    --description="Allow Google IAP for SSH and Local App Tunnels (API, Kafka, Console, Grafana, Loki, Prometheus)" \
-    || echo "⚠️ Rule app-vpc-allow-ingress-iap đã tồn tại."
-
-  # 2. Mở Egress sang Data Server & Egress Gateway qua Peering, Google IAP & NTP/DNS (Priority 900)
+  # 1. Mở Egress sang Data Server & Egress Gateway qua Peering & NTP/DNS (Priority 900)
   gcloud compute firewall-rules create app-vpc-allow-egress-peer-data \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -224,17 +200,6 @@ elif [[ "$ROLE" == "app" ]]; then
     --priority=900 \
     --description="Allow outbound to Data Server and Egress Gateway over Peering" \
     || echo "⚠️ Rule app-vpc-allow-egress-peer-data đã tồn tại."
-
-  gcloud compute firewall-rules create app-vpc-allow-egress-iap \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=EGRESS \
-    --action=ALLOW \
-    --destination-ranges="35.235.240.0/20" \
-    --rules="all" \
-    --priority=900 \
-    --description="Allow egress to Google IAP" \
-    || echo "⚠️ Rule app-vpc-allow-egress-iap đã tồn tại."
 
   gcloud compute firewall-rules create app-vpc-allow-egress-ntp-dns \
     --project="${PROJECT_ID}" \
@@ -247,7 +212,7 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Allow egress to Google Internal DNS and NTP Time Servers for UTC sync" \
     || echo "⚠️ Rule app-vpc-allow-egress-ntp-dns đã tồn tại."
 
-  # 3. Khóa Egress Internet chống Reverse Shell / Data Leak (Priority 1000)
+  # 2. Khóa Egress Internet chống Reverse Shell / Data Leak (Priority 1000)
   gcloud compute firewall-rules create app-vpc-deny-egress-internet \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -259,31 +224,7 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Block all outbound internet from App Server" \
     || echo "⚠️ Rule app-vpc-deny-egress-internet đã tồn tại."
 
-  # 4. Mở cổng Public Ingress
-  gcloud compute firewall-rules create app-vpc-allow-ingress-public \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --source-ranges="0.0.0.0/0" \
-    --rules="tcp:80,tcp:443,tcp:8080,tcp:8085" \
-    --priority=1000 \
-    --description="Allow public traffic to API and Redpanda Console" \
-    || echo "⚠️ Rule app-vpc-allow-ingress-public đã tồn tại."
-
-  # 5. Mở Ping nội bộ
-  gcloud compute firewall-rules create app-vpc-allow-ingress-icmp \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --source-ranges="0.0.0.0/0" \
-    --rules="icmp" \
-    --priority=1000 \
-    --description="Allow ICMP ping" \
-    || echo "⚠️ Rule app-vpc-allow-ingress-icmp đã tồn tại."
-
-  # 6. Khóa 100% Ingress từ Gateway Subnet (Chặn Gateway gọi ngược về Core - Zero-Trust 1 chiều)
+  # 3. Khóa 100% Ingress từ Gateway Subnet (Chặn Gateway gọi ngược về Core - Zero-Trust 1 chiều)
   gcloud compute firewall-rules create app-vpc-deny-ingress-gateway \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -295,7 +236,7 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Deny all inbound connections initiated from Gateway VPC (Zero-Trust one-way)" \
     || echo "⚠️ Rule app-vpc-deny-ingress-gateway đã tồn tại."
 
-  # 7. Ngoại lệ Monitoring Hub: Cho phép Gateway & Data Node đẩy log Loki (3100) & kéo metrics (9100)
+  # 4. Ngoại lệ Monitoring Hub: Cho phép Gateway & Data Node đẩy log Loki (3100) & kéo metrics (9100)
   gcloud compute firewall-rules create app-vpc-allow-gateway-monitoring \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -319,19 +260,7 @@ elif [[ "$ROLE" == "app" ]]; then
     || echo "⚠️ Rule app-vpc-allow-data-monitoring đã tồn tại."
 
 elif [[ "$ROLE" == "egress" ]]; then
-  # 1. Mở Google IAP Ingress cho SSH
-  gcloud compute firewall-rules create egress-vpc-allow-ingress-iap \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=INGRESS \
-    --action=ALLOW \
-    --source-ranges="35.235.240.0/20" \
-    --rules="tcp:22" \
-    --priority=1000 \
-    --description="Allow Google IAP for SSH to Egress Gateway" \
-    || echo "⚠️ Rule egress-vpc-allow-ingress-iap đã tồn tại."
-
-  # 2. Mở Ingress nhận dispatch từ App Subnet
+  # 1. Mở Ingress nhận dispatch từ App Subnet
   gcloud compute firewall-rules create egress-vpc-allow-ingress-peer-app \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -343,19 +272,7 @@ elif [[ "$ROLE" == "egress" ]]; then
     --description="Allow App Server (${ALLOWED_CIDR}) to call internal Egress Dispatcher on port 8090" \
     || echo "⚠️ Rule egress-vpc-allow-ingress-peer-app đã tồn tại."
 
-  # 3. Mở Egress phản hồi cho IAP (Priority 900)
-  gcloud compute firewall-rules create egress-vpc-allow-egress-iap \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=EGRESS \
-    --action=ALLOW \
-    --destination-ranges="35.235.240.0/20" \
-    --rules="all" \
-    --priority=900 \
-    --description="Allow outbound reply traffic to Google IAP" \
-    || echo "⚠️ Rule egress-vpc-allow-egress-iap đã tồn tại."
-
-  # 4. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 900)
+  # 2. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 900)
   gcloud compute firewall-rules create egress-vpc-allow-egress-internet \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
