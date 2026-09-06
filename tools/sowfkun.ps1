@@ -37,9 +37,11 @@ function Show-Help {
     Write-Host "       -> Build and deploy Egress Gateway to cluster (Tailscale / GCP IAP) in 15s." -ForegroundColor DarkGray
     Write-Host "    5. infra [open|close|switch|status] [cluster/service]" -ForegroundColor White
     Write-Host "       -> Infrastructure Tunnel: Mo/Dong ket noi toc do cao toi Database, Redis, Kafka, Gateway theo tung cum." -ForegroundColor DarkGray
+    Write-Host "    6. sync-infra [cluster] [node/all]" -ForegroundColor White
+    Write-Host "       -> Sync & Clean Infrastructure: Dong bo ha tang va don dep script rac tren toan bo cum server." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    6. help" -ForegroundColor White
+    Write-Host "    7. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -216,6 +218,10 @@ elseif ($cmdLower -in @("verse-deploy-gateway", "verse-deploy-gw", "deploy-gw", 
 }
 elseif ($cmdLower -in @("infra", "infra-tunnel", "tunnel")) {
     $script = if (Test-Path (Join-Path $infraToolsDir "infra-tunnel.ps1")) { Join-Path $infraToolsDir "infra-tunnel.ps1" } else { Join-Path $serversDir "infra-tunnel.ps1" }
+    & $script @ArgsList
+}
+elseif ($cmdLower -in @("sync-infra", "sync-infrastructure", "infra-sync")) {
+    $script = if (Test-Path (Join-Path $infraToolsDir "sync-infrastructure.ps1")) { Join-Path $infraToolsDir "sync-infrastructure.ps1" } else { Join-Path $serversDir "sync-infrastructure.ps1" }
     & $script @ArgsList
 }
 elseif ($cmdLower -in @("help", "-h", "--help", "/?")) {
