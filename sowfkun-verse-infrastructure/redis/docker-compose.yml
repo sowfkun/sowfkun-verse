@@ -1,6 +1,6 @@
 services:
   redis:
-    image: ${REDIS_IMAGE:-redis:alpine}
+    image: ${REDIS_IMAGE:-redis:7-alpine}
     container_name: ${REDIS_CONTAINER_NAME:-app_redis}
     restart: unless-stopped
     command: >
