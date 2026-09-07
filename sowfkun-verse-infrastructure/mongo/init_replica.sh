@@ -51,9 +51,17 @@ try {
     } else {
         print('ℹ️ Replica Set member host is already: $TARGET_HOST');
     }
-    // Thiết lập Profiling Level 1 (>=300ms) cho MongoDB
-    db.runCommand({ profile: 1, slowms: 300 });
-    print('✅ Global Slow Query Profiling (profile: 1, slowms: 300ms) configured successfully!');
+    // Thiết lập Profiling Level 1 (slowms >= 300ms) cho TẤT CẢ database nghiệp vụ
+    var targetDbs = ['tenant', 'app_system', 'app_config', 'admin', 'test'];
+    var existingDbs = db.adminCommand({ listDatabases: 1 }).databases.map(function(d) { return d.name; });
+    var allDbs = Array.from(new Set(targetDbs.concat(existingDbs)));
+
+    allDbs.forEach(function(dbName) {
+        if (dbName === 'local' || dbName === 'config') return;
+        var targetDb = db.getSiblingDB(dbName);
+        targetDb.runCommand({ profile: 1, slowms: 300 });
+        print('✅ Slow Query Profiling (profile: 1, slowms: 300ms) configured for: ' + dbName);
+    });
 } catch (e) {
     print('⚠️ Reconfig warning/error: ' + e);
 }

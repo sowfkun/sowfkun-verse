@@ -501,18 +501,6 @@ EOF
                             ufw allow from "$net" to any port 8090 proto tcp comment 'Egress Gateway Internal Only'
                         done
                         ;;
-                    "monitoring")
-                        for net in "${allowed_subnets[@]}"; do
-                            ufw allow from "$net" to any port 3000 proto tcp comment 'Grafana Internal Only'
-                            ufw allow from "$net" to any port 3100 proto tcp comment 'Loki Internal Only'
-                            ufw allow from "$net" to any port 9090 proto tcp comment 'Prometheus Internal Only'
-                        done
-                        ;;
-                    "promtail")
-                        for net in "${allowed_subnets[@]}"; do
-                            ufw allow from "$net" to any port 9100 proto tcp comment 'Node Exporter Internal Only'
-                        done
-                        ;;
                 esac
             done
 
@@ -520,6 +508,26 @@ EOF
         fi
     fi
     
+    # Tự động kích hoạt One-Way Air-Gapped DMZ IPTables Isolation
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local airgap_script="$SCRIPT_DIR/scripts/security/apply_airgap_matrix.sh"
+    if [ -f "$airgap_script" ]; then
+        local auto_role=""
+        for s in "${SELECTED_SERVICES[@]}"; do
+            case "$s" in
+                "mongo") auto_role="mongo" ;;
+                "redis"|"kafka") auto_role="cache_mq" ;;
+                "api") auto_role="app" ;;
+                "gateway") auto_role="gateway" ;;
+            esac
+        done
+        if [ -n "$auto_role" ]; then
+            echo "🛡️ Tự động kích hoạt One-Way Air-Gapped DMZ Firewall cho Node role: [$auto_role]..."
+            chmod +x "$airgap_script"
+            bash "$airgap_script" "$auto_role" || true
+        fi
+    fi
+
     # Kích hoạt tự động vá lỗi bảo mật định kỳ
     systemctl enable unattended-upgrades 2>/dev/null || true
     systemctl start unattended-upgrades 2>/dev/null || true
@@ -682,15 +690,6 @@ start_services() {
             docker compose up -d --build
             
             echo "🚀 Khởi chạy Egress Gateway container thành công!"
-        elif [ "$target" == "promtail" ]; then
-            if [ -f /etc/infra/alert.conf ]; then
-                # shellcheck source=/dev/null
-                source /etc/infra/alert.conf
-            fi
-            export SERVER_NAME="${SERVER_NAME:-$(hostname)}"
-            export LOKI_HOST="${LOKI_HOST:-10.20.0.2}"
-            echo "🚀 Đang khởi chạy Promtail & Node Exporter Agent (Node: $SERVER_NAME -> Loki: $LOKI_HOST)..."
-            docker compose up -d
         else
             echo "🚀 Đang kéo images và chạy $target container..."
             docker compose up -d

@@ -224,7 +224,7 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Block all outbound internet from App Server" \
     || echo "⚠️ Rule app-vpc-deny-egress-internet đã tồn tại."
 
-  # 3. Khóa 100% Ingress từ Gateway Subnet (Chặn Gateway gọi ngược về Core - Zero-Trust 1 chiều)
+  # 3. Khóa 100% Ingress từ Gateway Subnet & Data Subnet (Chặn gọi ngược về Core - Zero-Trust 1 chiều)
   gcloud compute firewall-rules create app-vpc-deny-ingress-gateway \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -236,43 +236,43 @@ elif [[ "$ROLE" == "app" ]]; then
     --description="Deny all inbound connections initiated from Gateway VPC (Zero-Trust one-way)" \
     || echo "⚠️ Rule app-vpc-deny-ingress-gateway đã tồn tại."
 
-  # 4. Ngoại lệ Monitoring Hub: Cho phép Gateway & Data Node đẩy log Loki (3100) & kéo metrics (9100)
-  gcloud compute firewall-rules create app-vpc-allow-gateway-monitoring \
+  gcloud compute firewall-rules create app-vpc-deny-ingress-data \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=INGRESS \
-    --action=ALLOW \
-    --source-ranges="10.30.0.0/24" \
-    --rules="tcp:3100,tcp:9100" \
-    --priority=600 \
-    --description="Allow Gateway Promtail to push logs to Loki (3100) and Prometheus to scrape Node Exporter (9100)" \
-    || echo "⚠️ Rule app-vpc-allow-gateway-monitoring đã tồn tại."
-
-  gcloud compute firewall-rules create app-vpc-allow-data-monitoring \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=INGRESS \
-    --action=ALLOW \
+    --action=DENY \
     --source-ranges="10.10.0.0/24" \
-    --rules="tcp:3100,tcp:9100" \
-    --priority=600 \
-    --description="Allow Data Server Promtail to push logs to Loki (3100) and Prometheus to scrape Node Exporter (9100)" \
-    || echo "⚠️ Rule app-vpc-allow-data-monitoring đã tồn tại."
+    --rules="all" \
+    --priority=700 \
+    --description="Deny all inbound connections initiated from Data VPC (Zero-Trust one-way)" \
+    || echo "⚠️ Rule app-vpc-deny-ingress-data đã tồn tại."
 
 elif [[ "$ROLE" == "egress" ]]; then
-  # 1. Mở Ingress nhận dispatch từ App Subnet
-  gcloud compute firewall-rules create egress-vpc-allow-ingress-peer-app \
+  # 1. Mở Ingress nhận dispatch từ App & Data Subnets
+  gcloud compute firewall-rules create egress-vpc-allow-ingress-peers \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=INGRESS \
     --action=ALLOW \
-    --source-ranges="${ALLOWED_CIDR}" \
-    --rules="tcp:8090,tcp:9092,tcp:9094,icmp" \
+    --source-ranges="10.10.0.0/24,10.20.0.0/24" \
+    --rules="tcp:8090,icmp" \
     --priority=1000 \
-    --description="Allow App Server (${ALLOWED_CIDR}) to call internal Egress Dispatcher on port 8090" \
-    || echo "⚠️ Rule egress-vpc-allow-ingress-peer-app đã tồn tại."
+    --description="Allow App & Data Servers to call internal Egress Dispatcher on port 8090" \
+    || echo "⚠️ Rule egress-vpc-allow-ingress-peers đã tồn tại."
 
-  # 2. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 900)
+  # 2. Khóa Egress tới App & Data VPCs (Chặn Gateway chủ động chọc ngược nội bộ)
+  gcloud compute firewall-rules create egress-vpc-deny-egress-internal \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=DENY \
+    --destination-ranges="10.10.0.0/24,10.20.0.0/24" \
+    --rules="all" \
+    --priority=800 \
+    --description="Block all outbound connections from Gateway to App and Data VPCs" \
+    || echo "⚠️ Rule egress-vpc-deny-egress-internal đã tồn tại."
+
+  # 3. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 900)
   gcloud compute firewall-rules create egress-vpc-allow-egress-internet \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \

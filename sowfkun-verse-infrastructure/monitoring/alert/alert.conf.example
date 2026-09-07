@@ -8,8 +8,8 @@ SERVER_NAME="APP-NODE-01"
 SERVER_ROLE="Core Server"
 SERVER_IP="127.0.0.1"
 
-# Alert Forwarding URL (For internal private nodes to send via Core API Gateway)
-# Example for Server 1 (Data Node): ALERT_FORWARD_URL="http://10.20.0.2:8080/api/v1/system/alert/telegram"
+# Alert Forwarding URL (For internal private nodes to forward alerts 1-way to Egress Gateway)
+# Example: ALERT_FORWARD_URL="http://10.20.0.3:8090/api/v1/system/alert/telegram"
 ALERT_FORWARD_URL=""
 
 # Telegram Bot Alerts (Direct dispatch)

@@ -110,7 +110,7 @@ sudo bash bootstrap.sh --service=redis,api --mode=rollback
 Mỗi server sau khi chạy `bootstrap.sh` sẽ tự động kích hoạt **Monitor Cron Job** và tích hợp vào hệ thống quan sát tập trung:
 - **Quét tức thời mỗi 1 phút**: Tự động cảnh báo `🚨 DANGER` khi **CPU > 85%**, **RAM > 85%**, **Swap > 70%**, **Disk > 85%** hoặc container bị sập (kèm chống spam cooldown 30p & tự động báo `🟢 PHỤC HỒI`).
 - **Báo cáo định kỳ mỗi 3 tiếng**: Gửi bản tin tổng quan `🔵 PERIODIC SUMMARY` với giờ Việt Nam (`+7 GMT`).
-- **Quản lý Log Container & Metrics**: Promtail tự động gom log về Loki, Prometheus scrape metrics, và Grafana hiển thị trực quan tại `http://localhost:3000`.
+- **Gửi Cảnh Báo An Toàn Qua Egress Gateway**: Mọi node nội bộ chuyển tiếp cảnh báo 1 chiều qua Egress Gateway Server (`:8090`), đảm bảo cách ly Zero-Trust hoàn toàn cho Core App Server.
 
 ### Cấu hình nhận thông báo:
 Mở file cấu hình trên server:
@@ -120,7 +120,7 @@ sudo nano /etc/infra/alert.conf
 Điền cấu hình:
 ```ini
 SERVER_NAME="SOWFKUN-NODE"
-ALERT_FORWARD_URL="http://10.20.0.2:8080/api/v1/system/alert/telegram"
+ALERT_FORWARD_URL="http://10.20.0.3:8090/api/v1/system/alert/telegram"
 TELEGRAM_BOT_TOKEN="123456789:AAXXXXXXXXXXXXXX"
 TELEGRAM_CHAT_ID="123456789"
 ```
