@@ -21,7 +21,8 @@ Tài liệu này chuẩn hóa toàn bộ các lớp phòng thủ an ninh thông 
 | **Chống DoS bộ nhớ** | **Payload Size Limiting (OOM Mitigation)** | `http.MaxBytesReader` giới hạn tối đa 2MB cho Request Body | `http.MaxBytesReader` giới hạn 2MB tại Payload & Danger Middleware | ✅ **DONE** |
 | **Che giấu dữ liệu Log**| **PII & Secret Sanitization in Logs** | `sanitizeRequestBody` tự động mask password, token, otp thành `***MASKED***` | Mask trường nhạy cảm trước khi lưu Kafka/OpenSearch | ✅ **DONE** |
 | **Cô lập dữ liệu** | **Multi-Tenant Logical Isolation & Boundary Safety** | Kiểm tra quyền sở hữu Tenant ID tại UseCase & Projection Safety (`tid`, `is_del`) | Kiểm tra quyền sở hữu Tenant ID tại UseCase & Projection Safety (`tid`, `is_del`) | ✅ **DONE** |
-| **Quan sát & Cảnh báo** | **Centralized Telemetry & Log Integrity** | Promtail gom log, Loki lưu nén 7 ngày, Grafana bắt MongoDB Slow Query $\ge 100\text{ms}$ | Promtail gom log, Loki lưu nén 7 ngày, Grafana bắt MongoDB Slow Query $\ge 100\text{ms}$ | ✅ **DONE** |
+| **Quan sát & Cảnh báo** | **Continuous Health Telemetry & Air-Gapped Alerting** | `monitor.sh` (1m check nguy hiểm, 3h report định kỳ), MongoDB Profiling Level 1 (`slowms: 300ms`), Egress Gateway `:8090` | `monitor.sh` quét 1m, báo cáo 3h, gửi 1 chiều qua Egress Gateway `:8090` | ✅ **DONE** |
+| **Cách ly 1 chiều DMZ** | **True One-Way Air-Gapped DMZ Matrix** | IPTables chain `AIRGAP-INPUT` / `AIRGAP-OUTPUT` khóa 100% kết nối chủ động từ Gateway/Data/Cache ngược vào Core App | IPTables Host Kernel + Multi-VPC Ingress/Egress Deny Rules | ✅ **DONE** |
 
 ---
 
@@ -110,12 +111,15 @@ graph TD
 
 ### 📈 LỚP 4: GIÁM SÁT AN NINH, TRUY VẾT & CẢNH BÁO (Telemetry, Audit & Alerting)
 
-1. **Quản Lý Log Tập Trung An Toàn & Che Giấu Dữ Liệu Nhạy Cảm (Log Integrity & PII Masking)**:
-   - `Promtail` gom log toàn bộ container trên 3 máy chủ, mã hóa đường truyền nội bộ đẩy về cụm lưu trữ `Loki Hub` với chính sách tự động dọn rác 7 ngày.
-   - Hàm `sanitizeRequestBody` tự động quét và che giấu các trường nhạy cảm (`password`, `pwd`, `token`, `otp`, `secret`, `api_key`) thành `"***MASKED***"` trước khi ghi vào Danger Log OpenSearch.
-2. **Thanh Tra Truy Vấn Chậm (Database Slow Query Telemetry)**:
-   - Tự động bóc tách và gắn cờ `is_slow_query="true"` cho mọi câu lệnh MongoDB chạy $\ge 100\text{ms}$ giúp tối ưu hiệu năng và phát hiện sớm các cuộc tấn công DoS/ReDoS qua cơ sở dữ liệu.
-3. **Giám Sát & Cảnh Báo Khẩn Cấp (Continuous Health & Danger Alerting)**:
-   - Script `monitor.sh` quét nguy hiểm mỗi 1 phút (bắn Telegram `🚨 DANGER` khi CPU/RAM/Disk > 85%, kèm cơ chế chống spam 30 phút và tự động báo `🟢 RECOVERY` khi bình thường trở lại).
-4. **Chuyển Tiếp Cảnh Báo An Toàn (Isolated Alert Forwarding)**:
-   - Server 1 (Data Server bị khóa Internet) chuyển tiếp alert Telegram qua API Gateway nội bộ `:8080` $\rightarrow$ Egress Gateway `:8090` $\rightarrow$ Telegram API mà không cần mở kết nối Internet trực tiếp.
+1. **Ghi Log Tập Trung & Che Giấu Dữ Liệu Nhạy Cảm (OpenSearch Audit & PII Masking)**:
+   - Các middleware Danger Log & Customer Activity đẩy log có cấu trúc về Kafka Producer $\rightarrow$ Kafka Consumer ghi nhận tập trung tại cụm OpenSearch.
+   - Hàm `sanitizeRequestBody` tự động quét và che giấu các trường nhạy cảm (`password`, `pwd`, `token`, `otp`, `secret`, `api_key`) thành `"***MASKED***"` trước khi lưu log.
+2. **Thanh Tra Truy Vấn Chậm Cơ Sở Dữ Liệu (MongoDB Slow Query Profiling)**:
+   - Toàn bộ cơ sở dữ liệu nghiệp vụ (`tenant`, `app_system`, `app_config`) được cấu hình tự động **Profiling Level 1 (`slowms: 300ms`)**, lưu vết mọi truy vấn chậm vượt ngưỡng vào collection `system.profile` để kiểm toán hiệu năng và chống ReDoS/Slow Query DoS.
+3. **Giám Sát Sức Khỏe & Cảnh Báo Tức Thời (Continuous Health & Danger Alerting)**:
+   - Script `monitor.sh` quét nguy hiểm mỗi 1 phút (bắn Telegram `🚨 DANGER` khi CPU/RAM/Disk > 85%, kèm cơ chế chống spam 30 phút và tự động báo `🟢 RECOVERY` khi phục hồi).
+   - Tự động gửi bản tin tổng hợp tình trạng hạ tầng `🔵 PERIODIC SUMMARY` mỗi 3 tiếng theo giờ Việt Nam (`+7 GMT`).
+4. **Chuyển Tiếp Cảnh Báo An Toàn Qua Egress Gateway (Isolated Air-Gapped Alert Dispatching)**:
+   - Mọi máy chủ trong cụm (Server 1 Cache/MQ, Netcup Mongo, Server 2 App) chuyển tiếp bản tin cảnh báo 1 chiều trực tiếp tới **Egress Gateway Server 3 (`:8090`)** $\rightarrow$ Telegram API, loại bỏ hoàn toàn việc Core API Server 2 phải lưu trữ Telegram Token hoặc mở bypass mã hóa.
+5. **Ma Trận Cách Ly Một Chiều Tuyệt Đối (True One-Way Air-Gapped DMZ Matrix)**:
+   - Cấu hình chuỗi IPTables `AIRGAP-INPUT` và `AIRGAP-OUTPUT` khóa cứng 100% mọi kết nối chủ động khởi tạo từ Egress Gateway, Mongo, hoặc Cache/MQ ngược vào Core App Server, triệt tiêu hoàn toàn nguy cơ quét mạng hoặc nhảy cóc (Lateral Movement) giữa các máy chủ.
