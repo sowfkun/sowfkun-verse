@@ -31,17 +31,21 @@ function Show-Help {
     Write-Host "       -> Lossless Audio/Video Synchronizer (Shift sound forward/backward by ms)." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [Project: Sowfkun Verse - Infrastructure & Deployment]" -ForegroundColor Cyan
-    Write-Host "    3. deploy [cluster] [dev|prod]" -ForegroundColor White
+    Write-Host "    3. verse-start [tabs|split|windows]" -ForegroundColor White
+    Write-Host "       -> Fullstack Dev Launcher: Mo infra tunnel, Go API (air), Next.js Web (npm run dev)." -ForegroundColor DarkGray
+    Write-Host "    4. deploy [cluster] [dev|prod]" -ForegroundColor White
     Write-Host "       -> Build and deploy Go Core API to cluster (Tailscale / GCP IAP) in 15s." -ForegroundColor DarkGray
-    Write-Host "    4. deploy-gateway [cluster] [dev|prod]" -ForegroundColor White
+    Write-Host "    5. deploy-gateway [cluster] [dev|prod]" -ForegroundColor White
     Write-Host "       -> Build and deploy Egress Gateway to cluster (Tailscale / GCP IAP) in 15s." -ForegroundColor DarkGray
-    Write-Host "    5. infra [open|close|switch|status] [cluster/service]" -ForegroundColor White
+    Write-Host "    6. infra [open|close|switch|status] [cluster/service]" -ForegroundColor White
     Write-Host "       -> Infrastructure Tunnel: Mo/Dong ket noi toc do cao toi Database, Redis, Kafka, Gateway theo tung cum." -ForegroundColor DarkGray
-    Write-Host "    6. sync-infra [cluster] [node/all]" -ForegroundColor White
+    Write-Host "    7. sync-infra [cluster] [node/all]" -ForegroundColor White
     Write-Host "       -> Sync & Clean Infrastructure: Dong bo ha tang va don dep script rac tren toan bo cum server." -ForegroundColor DarkGray
+    Write-Host "    8. devtools [web|desktop|install|uninstall]" -ForegroundColor White
+    Write-Host "       -> Sowfkun Verse DevTools: GUI Dashboard quan tri MongoDB, Redis, Kafka, Postgres, RabbitMQ, Office, API Explorer..." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    7. help" -ForegroundColor White
+    Write-Host "    9. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -142,8 +146,11 @@ function Select-InteractiveMenu {
 if (-not $Command) {
     Show-Banner
     $menuOptions = @(
+        "Sowfkun Verse - Fullstack Dev Launcher (verse-start)",
         "Sowfkun Download Center (download)",
         "Audio / Video Synchronizer (sync-audio)",
+        "Sowfkun Verse DevTools - Web (devtools web)",
+        "Sowfkun Verse DevTools - Desktop (devtools desktop)",
         "Deploy Go API to Server 2 (verse-deploy)",
         "Deploy Egress Gateway to Server 3 (verse-deploy-gateway)",
         "JIT Direct SSH Infrastructure Tunnel (infra open/close)",
@@ -154,30 +161,44 @@ if (-not $Command) {
 
     switch ($chosen) {
         0 {
-            $script = Join-Path $modulesDir "downloader\download-center.ps1"
+            $script = Join-Path $modulesDir "verse\verse-start.ps1"
             & $script
         }
         1 {
-            $script = Join-Path $modulesDir "audio\sync-audio.ps1"
+            $script = Join-Path $modulesDir "downloader\download-center.ps1"
             & $script
         }
         2 {
-            $script = Join-Path $serverTestDir "deploy-api.ps1"
+            $script = Join-Path $modulesDir "audio\sync-audio.ps1"
             & $script
         }
         3 {
-            $script = Join-Path $serverTestDir "deploy-gateway.ps1"
-            & $script
+            $devToolsDir = Join-Path $rootDir "sowfkun-verse-dev-tools"
+            Push-Location $devToolsDir
+            try { npm run dev } finally { Pop-Location }
         }
         4 {
-            $script = Join-Path $serverTestDir "infra-tunnel.ps1"
+            $devToolsDir = Join-Path $rootDir "sowfkun-verse-dev-tools"
+            Push-Location $devToolsDir
+            try { npm run desktop } finally { Pop-Location }
+        }
+        5 {
+            $script = if (Test-Path (Join-Path $infraToolsDir "deploy-api.ps1")) { Join-Path $infraToolsDir "deploy-api.ps1" } else { Join-Path $serversDir "deploy-api.ps1" }
+            & $script
+        }
+        6 {
+            $script = if (Test-Path (Join-Path $infraToolsDir "deploy-gateway.ps1")) { Join-Path $infraToolsDir "deploy-gateway.ps1" } else { Join-Path $serversDir "deploy-gateway.ps1" }
+            & $script
+        }
+        7 {
+            $script = if (Test-Path (Join-Path $infraToolsDir "infra-tunnel.ps1")) { Join-Path $infraToolsDir "infra-tunnel.ps1" } else { Join-Path $serversDir "infra-tunnel.ps1" }
             & $script
         }
         Default {
             Write-Host "Goodbye!" -ForegroundColor Gray
         }
     }
-    exit 0
+    return
 }
 
 $cmdLower = $Command.ToLower()
@@ -192,7 +213,15 @@ if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() 
     }
 }
 
-if ($cmdLower -in @("download", "download-subtitle", "download-sub", "dl")) {
+if ($cmdLower -in @("verse-start", "verss-start", "start", "dev-start", "run-dev", "verse-dev")) {
+    if ((Get-Location).Path -ne $rootDir) {
+        Set-Location $rootDir
+        Write-Host "Auto CD to: $rootDir" -ForegroundColor DarkGray
+    }
+    $script = Join-Path $modulesDir "verse\verse-start.ps1"
+    . $script @ArgsList
+}
+elseif ($cmdLower -in @("download", "download-subtitle", "download-sub", "dl")) {
     $script = Join-Path $modulesDir "downloader\download-center.ps1"
     $url = if ($ArgsList.Count -ge 1) { $ArgsList[0] } else { "" }
     $outName = if ($ArgsList.Count -ge 2) { $ArgsList[1] } else { "" }
@@ -223,6 +252,46 @@ elseif ($cmdLower -in @("infra", "infra-tunnel", "tunnel")) {
 elseif ($cmdLower -in @("sync-infra", "sync-infrastructure", "infra-sync")) {
     $script = if (Test-Path (Join-Path $infraToolsDir "sync-infrastructure.ps1")) { Join-Path $infraToolsDir "sync-infrastructure.ps1" } else { Join-Path $serversDir "sync-infrastructure.ps1" }
     & $script @ArgsList
+}
+elseif ($cmdLower -in @("devtools", "dev-tools", "devbox", "dev-box", "dev")) {
+    $devToolsDir = Join-Path $rootDir "sowfkun-verse-dev-tools"
+    if (-not (Test-Path $devToolsDir)) {
+        Write-Host "Error: Directory '$devToolsDir' not found." -ForegroundColor Red
+        exit 1
+    }
+
+    $subAction = if ($ArgsList.Count -ge 1) { $ArgsList[0].ToLower() } else { "web" }
+
+    if (-not (Test-Path (Join-Path $devToolsDir "node_modules"))) {
+        Write-Host "Initializing dependencies in $devToolsDir (npm install)..." -ForegroundColor Yellow
+        Push-Location $devToolsDir
+        try { npm install } finally { Pop-Location }
+    }
+
+    Push-Location $devToolsDir
+    try {
+        switch ($subAction) {
+            "desktop" {
+                Write-Host "Launching Sowfkun Verse DevTools (Desktop App)..." -ForegroundColor Green
+                npm run desktop
+            }
+            "install" {
+                Write-Host "Installing Sowfkun Verse DevTools Desktop Shortcuts..." -ForegroundColor Green
+                npm run desktop:install
+            }
+            "uninstall" {
+                Write-Host "Uninstalling Sowfkun Verse DevTools Desktop Shortcuts..." -ForegroundColor Yellow
+                npm run desktop:uninstall
+            }
+            Default {
+                Write-Host "Launching Sowfkun Verse DevTools (Web Dev Server on port 3000)..." -ForegroundColor Green
+                npm run dev
+            }
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 elseif ($cmdLower -in @("help", "-h", "--help", "/?")) {
     Show-Help
