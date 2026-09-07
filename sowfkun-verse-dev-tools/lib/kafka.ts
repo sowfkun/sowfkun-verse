@@ -1,0 +1,383 @@
+// Client-side helpers + shared types for the Kafka workspace. All calls go to the
+// same-origin /api/kafka* routes (the Next server holds the kafkajs connection —
+// the browser never talks to Kafka directly). This file is browser-safe: NO `fs`,
+// NO `kafkajs`, no server-only imports.
+
+import { apiFetch } from './apiFetch';
+
+/** A Kafka connection as returned to the browser. */
+export interface PublicKafkaConnection {
+  id: string;
+  name: string;
+  project: string;
+  brokers: string[];
+  /** Optional node_exporter endpoints powering host metrics in the monitor. */
+  metricsUrls?: string[];
+}
+
+/** Body for add/update. */
+export interface KafkaConnectionInput {
+  id?: string;
+  name: string;
+  project: string;
+  /** Array of "host:port", or a comma/newline-separated string. */
+  brokers: string[] | string;
+}
+
+export interface KafkaConnectionsResponse {
+  enabled: boolean;
+  connections: PublicKafkaConnection[];
+}
+
+export interface TopicSummary {
+  name: string;
+  partitions: number;
+  replicationFactor: number;
+  internal: boolean;
+}
+
+export interface PartitionDetail {
+  partition: number;
+  leader: number;
+  replicas: number[];
+  isr: number[];
+  low: number;
+  high: number;
+  count: number;
+}
+
+export interface TopicDetail {
+  name: string;
+  partitions: PartitionDetail[];
+  totalMessages: number;
+}
+
+export interface GroupSummary {
+  groupId: string;
+  protocolType: string;
+  state: string;
+  members: number;
+}
+
+export interface GroupPartitionLag {
+  partition: number;
+  committed: number | null;
+  logEnd: number;
+  lag: number | null;
+}
+
+export interface GroupTopicLag {
+  topic: string;
+  partitions: GroupPartitionLag[];
+  totalLag: number;
+}
+
+export interface GroupDetail {
+  groupId: string;
+  state: string;
+  members: { memberId: string; clientId: string; clientHost: string }[];
+  topics: GroupTopicLag[];
+  totalLag: number;
+}
+
+/** One consumer group that has committed offsets on a given topic, with its lag. */
+export interface TopicConsumerGroup {
+  groupId: string;
+  state: string;
+  members: number;
+  totalLag: number;
+  partitions: GroupPartitionLag[];
+}
+
+export interface PreviewMessage {
+  partition: number;
+  offset: string;
+  timestamp: number;
+  key: string | null;
+  value: string | null;
+  valueTruncated: boolean;
+}
+
+export interface MessagePage {
+  messages: PreviewMessage[];
+  scanned: number;
+  truncated: boolean;
+  /** Optional human note (e.g. the time window mapped to an empty offset range). */
+  note?: string;
+}
+
+export interface TestResult {
+  latencyMs: number;
+  brokers: number;
+}
+
+// ── Connection registry (CRUD) ────────────────────────────────────────────────
+
+/** GET the connection list — never throws; returns disabled on any error. */
+export async function fetchKafkaConnections(): Promise<KafkaConnectionsResponse> {
+  try {
+    const r = await apiFetch('/api/kafka-connections', { timeoutMs: 15000 });
+    if (!r.ok) return { enabled: false, connections: [] };
+    return (await r.json()) as KafkaConnectionsResponse;
+  } catch {
+    return { enabled: false, connections: [] };
+  }
+}
+
+/** POST/PUT/DELETE a connection mutation. Throws Error(message) on a non-2xx. */
+export async function mutateKafkaConnection(
+  method: 'POST' | 'PUT' | 'DELETE',
+  body: Record<string, unknown>,
+): Promise<PublicKafkaConnection[]> {
+  const r = await apiFetch('/api/kafka-connections', {
+    method,
+    body: JSON.stringify(body),
+    timeoutMs: 15000,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+  return (data as { connections: PublicKafkaConnection[] }).connections;
+}
+
+// ── Kafka operations ────────────────────────────────────────────────────────────
+
+/** POST one Kafka action. Throws Error(message) on failure (surfaces Kafka error). */
+async function kafkaAction<T>(action: string, params: Record<string, unknown>): Promise<T> {
+  const r = await apiFetch('/api/kafka', {
+    method: 'POST',
+    body: JSON.stringify({ action, ...params }),
+    timeoutMs: 60000, // đọc message/offset trên topic lớn được phép lâu hơn CRUD config
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || (data as { ok?: boolean }).ok === false) {
+    throw new Error((data as { error?: string }).error || `HTTP ${r.status}`);
+  }
+  return (data as { result: T }).result;
+}
+
+/** Test a not-yet-saved connection straight from the form. */
+export function testKafkaConnection(brokers: string[] | string): Promise<TestResult> {
+  return kafkaAction<TestResult>('test', { brokers });
+}
+
+export interface KafkaBrokerInfo {
+  nodeId: number;
+  addr: string;
+  isController: boolean;
+  leaderPartitions: number;
+}
+
+export interface KafkaClusterHealth {
+  brokers: KafkaBrokerInfo[];
+  controllerId: number | null;
+  topicCount: number;
+  partitionCount: number;
+  underReplicated: number;
+  offline: number;
+  affectedTopics: string[];
+}
+
+/** Brokers + under-replicated/offline partition counts (60s monitor). */
+export function kafkaClusterHealth(connectionId: string): Promise<KafkaClusterHealth> {
+  return kafkaAction<KafkaClusterHealth>('clusterHealth', { connectionId });
+}
+
+export interface KafkaDiskMount {
+  mount: string;
+  sizeBytes: number;
+  availBytes: number;
+}
+
+export interface KafkaHostMetrics {
+  url: string;
+  host: string;
+  error?: string;
+  load1?: number;
+  load5?: number;
+  load15?: number;
+  memTotalBytes?: number;
+  memAvailableBytes?: number;
+  disks?: KafkaDiskMount[];
+  cpuIdleSec?: number;
+  cpuTotalSec?: number;
+  /** Số core (đếm nhãn `cpu` của node_cpu_seconds_total) — để quy load1 về mỗi core. */
+  cpuCores?: number;
+  at: number;
+}
+
+/** node_exporter RAM/disk/cpu/load per configured metrics URL. */
+export function kafkaHostMetrics(connectionId: string): Promise<KafkaHostMetrics[]> {
+  return kafkaAction<KafkaHostMetrics[]>('hostMetrics', { connectionId });
+}
+
+/** Kết quả bắt tay TCP tới một seed broker (chẩn đoán "mất kết nối"). */
+export interface KafkaBrokerReach {
+  addr: string;
+  host: string;
+  port: number;
+  reachable: boolean;
+  latencyMs?: number;
+  error?: string;
+}
+
+/** Kết quả hỏi cụm bằng GIAO THỨC Kafka (không phải chỉ TCP). */
+export interface KafkaProtocolProbe {
+  spoke: boolean;
+  latencyMs?: number;
+  /** null = không có controller → dấu hiệu mất quorum. */
+  controllerId?: number | null;
+  clusterId?: string;
+  /** advertised.listeners cụm trả về ('host:port'). */
+  advertised?: string[];
+  error?: string;
+}
+
+/** Phân giải một hostname theo MỘT đường (getaddrinfo hoặc nameserver). */
+export interface KafkaDnsAnswer {
+  resolved: boolean;
+  addresses?: string[];
+  ms?: number;
+  /** ENOTFOUND = không có bản ghi · EAI_AGAIN/ETIMEOUT = DNS không trả lời. */
+  error?: string;
+}
+
+/**
+ * Phân giải một hostname theo CẢ HAI đường — vì hai đường trả lời hai câu khác
+ * nhau: getaddrinfo là đường kafkajs thật sự đi (ăn theo /etc/hosts), còn
+ * Resolver hỏi thẳng nameserver.
+ */
+export interface KafkaDnsResult {
+  host: string;
+  /** getaddrinfo của OS — đường kafkajs/socket Node đi. */
+  system: KafkaDnsAnswer;
+  /** Hỏi thẳng nameserver, BỎ QUA hosts file. Vắng khi không đọc được resolver. */
+  nameserver?: KafkaDnsAnswer;
+  /** true = hai đường khác nhau → tên đang bị /etc/hosts hoặc NSS can thiệp. */
+  hostsFileOverride?: boolean;
+}
+
+/**
+ * DevBox phân giải hostname bằng DNS NÀO, và ra IP gì. Cần cho ca "cổng seed mở
+ * nhưng cụm quảng bá hostname khác": câu hỏi tiếp theo luôn là resolver nào.
+ */
+export interface KafkaDnsDiagnosis {
+  /** Nameserver tiến trình Node đang dùng (dns.getServers()). */
+  servers: string[];
+  hosts: KafkaDnsResult[];
+  /**
+   * true = không có hostname nào để tra (mọi địa chỉ đều là IP thuần và chưa lấy
+   * được advertised.listeners). `hosts` rỗng vì KHÔNG CÓ GÌ để phân giải, chứ
+   * không phải vì chưa đo — phân biệt được hai ca đó mới nói đúng hướng xử lý.
+   */
+  noNames?: boolean;
+}
+
+export interface KafkaReachReport {
+  brokers: KafkaBrokerReach[];
+  /** Vắng mặt khi không seed broker nào mở cổng. */
+  protocol?: KafkaProtocolProbe;
+  /** LUÔN có. `noNames` = mọi địa chỉ đều là IP nên không có gì để phân giải. */
+  dns: KafkaDnsDiagnosis;
+}
+
+/**
+ * Chẩn đoán cụm không trả lời: bắt tay TCP TỪNG seed broker + hỏi một câu Kafka
+ * thật. Phân biệt "cả cụm chết / một node chết / cổng mở mà không nói được giao
+ * thức / nói được nhưng advertised.listeners trỏ đi đâu" — xem brokerReachability
+ * trong lib/kafkaClient.
+ */
+export function kafkaBrokerReach(connectionId: string): Promise<KafkaReachReport> {
+  return kafkaAction<KafkaReachReport>('brokerReach', { connectionId });
+}
+
+export function listKafkaTopics(connectionId: string): Promise<TopicSummary[]> {
+  return kafkaAction<TopicSummary[]>('listTopics', { connectionId });
+}
+
+export function describeKafkaTopic(connectionId: string, topic: string): Promise<TopicDetail> {
+  return kafkaAction<TopicDetail>('describeTopic', { connectionId, topic });
+}
+
+export function listKafkaGroups(connectionId: string): Promise<GroupSummary[]> {
+  return kafkaAction<GroupSummary[]>('listGroups', { connectionId });
+}
+
+export function describeKafkaGroup(connectionId: string, groupId: string): Promise<GroupDetail> {
+  return kafkaAction<GroupDetail>('describeGroup', { connectionId, groupId });
+}
+
+/** One consumer group's lag, as returned by the cluster-wide sweep. */
+export interface GroupLagSummary {
+  groupId: string;
+  state: string;
+  members: number;
+  /** False when describeGroups failed: `members`/`state` are UNKNOWN, not measured. */
+  described: boolean;
+  totalLag: number;
+  worstTopic: string | null;
+  worstTopicLag: number;
+  partitions: number;
+  /** Tuổi thật (giây) của message chờ lâu nhất chưa commit; null = không có gì chờ đủ lâu. */
+  stalledSec: number | null;
+  /** Partition treo lâu nhất ("topic:partition") — để cảnh báo nêu đích danh. */
+  stalledAt?: string;
+  /** Lag của RIÊNG partition đang tắc (khác `totalLag` của cả group). */
+  stalledLag?: number;
+  /** Thời điểm message đang tắc được ghi vào log (epoch ms). */
+  stalledSince?: number;
+  /** This group alone failed — its lag is UNKNOWN, not zero. */
+  error?: string;
+}
+
+export interface KafkaConsumerLag {
+  at: number;
+  groups: GroupLagSummary[];
+  skippedGroups: number;
+}
+
+/**
+ * Lag for EVERY consumer group in one sweep, plus how long each has been stuck.
+ * Cheaper than describeGroup-per-group: high watermarks are fetched once per
+ * distinct topic. This is the call the automation probe uses.
+ */
+export function kafkaConsumerLag(connectionId: string): Promise<KafkaConsumerLag> {
+  return kafkaAction<KafkaConsumerLag>('consumerLag', { connectionId });
+}
+
+/** Consumer groups that consume THIS topic (have committed offsets), with per-partition lag. */
+export function listKafkaTopicGroups(connectionId: string, topic: string): Promise<TopicConsumerGroup[]> {
+  return kafkaAction<TopicConsumerGroup[]>('topicGroups', { connectionId, topic });
+}
+
+export function peekKafkaMessages(connectionId: string, topic: string, limit: number): Promise<MessagePage> {
+  return kafkaAction<MessagePage>('peek', { connectionId, topic, limit });
+}
+
+/** Search REQUIRES a time window (fromMs/toMs) AND a keyword. */
+export function searchKafkaMessages(
+  connectionId: string,
+  input: { topic: string; fromMs: number; toMs: number; keyword: string },
+): Promise<MessagePage> {
+  return kafkaAction<MessagePage>('search', { connectionId, ...input });
+}
+
+export function produceKafkaMessage(
+  connectionId: string,
+  input: { topic: string; key?: string; value: string; partition?: number },
+): Promise<{ partition: number; offset: string }> {
+  return kafkaAction<{ partition: number; offset: string }>('produce', { connectionId, ...input });
+}
+
+// ── Small shared formatters (used by the workspace UI) ──────────────────────────
+
+/** Humanize a large integer with thousands separators. */
+export function fmtInt(n: number): string {
+  return n.toLocaleString('en-US');
+}
+
+/** Format an epoch-millis timestamp for display (local time). */
+export function fmtTs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  const d = new Date(ms);
+  return d.toLocaleString('sv-SE'); // YYYY-MM-DD HH:mm:ss
+}

@@ -1,0 +1,117 @@
+# Next.js / Node
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+
+# env & logs
+.env*.local
+*.log
+npm-debug.log*
+
+# ── Local registries / state (secrets, machine paths) ──────────────────────
+# TẤT CẢ file cấu hình local giờ nằm trong configs/ — ignore cả thư mục là an
+# toàn nhất (khỏi phải nhớ liệt kê từng file mỗi khi thêm tính năng mới).
+# LƯU Ý: phải là `configs/*` chứ KHÔNG phải `configs/`. Ignore cả thư mục thì
+# git không xét tới file bên trong nữa, nên dòng `!` bên dưới sẽ vô hiệu.
+configs/*
+# NGOẠI LỆ DUY NHẤT — manifest repo của tab Git. Cố ý ĐƯỢC commit: nó chỉ chứa
+# tên project + remote URL (đã strip credential), không có root theo máy và
+# không có secret. Nhờ nó, ai pull dev-box về cũng biết project này gồm những
+# repo nào và clone lại được. Xem lib/gitManifest.ts.
+!configs/gitprojects.shared.json
+# NGOẠI LỆ THỨ HAI — manifest app dùng chung của tab Apps. Cùng lý do: nó chỉ có
+# tên app, lệnh `npm run`, cổng, tag; root theo máy nằm ở configs/apps.json và
+# KHÔNG được commit. Xem lib/appManifest.ts.
+!configs/apps.shared.json
+# Các dòng .xxx.json bên dưới là DI SẢN: file cũ ở repo-root, tự động được
+# migrate vào configs/ khi chạy. Giữ lại phòng máy nào chưa migrate xong.
+
+# local persisted connection config (holds API keys/secrets in plaintext)
+.apitester-config.json
+
+# local per-machine Git project list (name + root folder — machine-specific paths)
+.gitprojects.json
+
+# local Redis connection list (holds Redis passwords in plaintext — never commit)
+.redisconnections.json
+
+# OS / editor
+.DS_Store
+*.tsbuildinfo
+
+# local Kafka connection list (broker addresses — never commit)
+.kafkaconnections.json
+
+# local RabbitMQ connection list (holds passwords in plaintext — never commit)
+.rabbitconnections.json
+
+# local MongoDB connection list (holds passwords in plaintext — never commit)
+.mongoconnections.json
+
+# local Elasticsearch connection list (host lists, per-machine — never commit)
+.esconnections.json
+
+# local PostgreSQL connection list (holds passwords in plaintext — never commit)
+.pgconnections.json
+
+# local API integration pack registry (per-machine folder paths — never commit)
+.apiintegrations.json
+
+# Google tab — OAuth tokens (refresh token = full drive.readonly access) + per-
+# machine Drive folder registry — never commit
+.googleauth.json
+.googleroots.json
+.googlelinks.json
+# Links tab — bookmark registry (ke thua du lieu tu .googlelinks.json)
+.links.json
+
+# Mail tab — IMAP/SMTP credentials (password plaintext!) — never commit
+.mailaccounts.json
+
+# Telegram review-bot local state (Telegram offset + dedup shas + status snapshot)
+bot/.state.json
+bot/.status.json
+
+# Automation engine — local rules/watches (may embed webhook URLs + tokens) and
+# the default log-action sink (captured message text lands there) — never commit.
+# The trace file is the watch runner's own diagnostic output: high volume, hours
+# of lifetime, and it names real cluster hosts. Local only.
+.automation.json
+.automation-log.jsonl
+.automation-trace.jsonl
+.automation-infra.jsonl
+.automation-limits.json
+
+# Electron desktop shell — build output + per-workspace browser profiles
+# (cookies/localStorage/IndexedDB/cache live here; machine-specific, never commit)
+dist/
+data/browser/
+electron/dist/
+
+# IDE config + ad-hoc screenshots dropped into the repo root
+.idea/
+*.png
+
+# Apps tab — app run registry (duong dan local — never commit)
+.apps.json
+
+# Tools tab — snippet JSON/text da luu (never commit)
+.docs.json
+
+# API tab — collection + environment (co the chua token) — never commit
+.apicollections.json
+
+# Browser tab — bookmark + credentials — never commit
+.bookmarks.json
+# Browser tab — mat khau da luu (ma hoa safeStorage, van KHONG commit)
+.passwords.json
+
+# Backup thu cong cua configs/ — KHONG commit (chua secret)
+configs.*
+configs.rar
+*.rar
+
+# Monaco editor tu-host (copy tu node_modules boi scripts/copy-monaco.cjs)
+/public/monaco/

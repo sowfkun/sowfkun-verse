@@ -1,0 +1,26 @@
+{
+  "apps": [
+    {
+      "name": "Sowfkun Verse Web",
+      "project": "SOWFKUN",
+      "cmd": "dev",
+      "port": 3000,
+      "tags": [
+        "Frontend",
+        "Next.js"
+      ],
+      "rel": "sowfkun-verse-web"
+    },
+    {
+      "name": "Sowfkun Verse API",
+      "project": "SOWFKUN",
+      "cmd": "run",
+      "port": 8080,
+      "tags": [
+        "Backend",
+        "Golang"
+      ],
+      "rel": "sowfkun-verse-api"
+    }
+  ]
+}
