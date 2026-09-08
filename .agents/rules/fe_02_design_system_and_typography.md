@@ -3,16 +3,14 @@
 Đây là bộ quy tắc cốt lõi về UI/UX bắt buộc Agent phải tuân thủ nghiêm ngặt để đảm bảo tính nhất quán của hệ thống.
 
 ## A. Typography (Hệ thống chữ)
-Tuyệt đối không dùng trực tiếp các thẻ HTML (`h1`, `h2`, `p`, `span`) chứa class text tùy tiện. **BẮT BUỘC** sử dụng component `<Typo level="...">` với 8 cấp độ sau:
+Tuyệt đối không dùng trực tiếp các thẻ HTML (`h1`, `h2`, `p`, `span`) chứa class text tùy tiện. **BẮT BUỘC** sử dụng component `<Typo level="...">` hoặc `<Typo variant="...">` với các cấp độ chuẩn sau:
 
-*   **`H1`**: Dùng cho tựa đề trang (Page Title), kích thước lớn nhất của màn hình.
-*   **`H2`**: Dùng cho các tiêu đề phần lớn, phân vùng chính trong trang.
-*   **`H3`**: Dùng làm tiêu đề cho component `<Zone />` hoặc các khối nội dung độc lập.
-*   **`H4`**: Dùng cho tiêu đề các Card, Modal, hoặc nhóm form nhỏ.
-*   **`Body`**: Dùng cho nội dung văn bản chính, nhãn của Input (Label), nội dung trong table.
-*   **`Body-sm`**: Dùng cho các mô tả phụ, text hỗ trợ dưới label, nội dung không quá quan trọng.
-*   **`Caption`**: Dùng cho timestamp, text lỗi (Error message của input), chú thích siêu nhỏ.
-*   **`Overline`**: (ALL CAPS) Bắt buộc dùng cho các nhãn phân loại, badge, hoặc các cụm từ nhấn mạnh đặc tính (như tag "TYPO" hoặc "LEVEL SECOND" trong palette).
+*   **`h1` (16px, `text-base font-bold`)**: Dùng cho **Tiêu đề trang (Page Title)** và **Tiêu đề Modal (`<Modal />`)**.
+*   **`h2` (14px, `text-sm font-semibold`)**: Dùng cho **Tiêu đề Zone (`<Zone />`)** và các khối form/card nhỏ.
+*   **`body` (14px, `text-sm font-normal`)**: Dùng cho **Nội dung văn bản chính**, nhãn của Input (Label), nội dung trong Table.
+*   **`body-sm` (12px, `text-xs font-normal`)**: Dùng cho các **Mô tả phụ**, text hỗ trợ dưới label, nội dung hướng dẫn.
+*   **`caption` (11px, `text-[11px] font-medium`)**: Dùng cho **Timestamp, text báo lỗi** (Error message của input), chú thích siêu nhỏ.
+*   **`overline` (10px, `text-[10px] font-bold`, ALL CAPS)**: Bắt buộc dùng cho các nhãn phân loại, badge, hoặc các cụm từ nhấn mạnh đặc tính.
 *   **Quy tắc Không Đè Style Tuỳ Tiện**: Tuyệt đối không được phép sử dụng class CSS (như `!text-[var(--text-secondary)]`, `!text-xs`, v.v.) nhằm ghi đè trực tiếp kích thước font hoặc màu sắc của component `<Typo>`. Mọi cấu hình hiển thị phải sử dụng đúng variant/level đã được quy chuẩn để đảm bảo tính nhất quán của hệ thống.
 
 ## B. Spacing & Padding Tokens (Hệ thống khoảng cách - On-Premise Design Tokens)
