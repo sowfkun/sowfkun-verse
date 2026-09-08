@@ -10,7 +10,7 @@ Tài liệu này đặc tả toàn bộ quy trình nghiệp vụ (Business Rules
 - Cho phép mỗi Tenant quản lý các trường dữ liệu tùy biến (Custom Fields / Dynamic Attributes) theo từng thực thể (`CUSTOMER`, `TICKET`, v.v.).
 - Mỗi thực thể sở hữu một tài liệu `ModuleAttributeSet` lưu trong collection `entity_attribute_sets` (`dbConfig1`):
   - **Zones (`map[string]Zone`)**: Các khu vực hiển thị form giao diện.
-  - **Attributes (`map[string]AttributeDetail`)**: Các trường dữ liệu động với các kiểu dữ liệu (`TEXT_PLAIN`, `TEXT_HTML`, `NUMBER`, `DATETIME`, `SELECT_SINGLE`, `SELECT_MULTI`) được ánh xạ vào từng Slot cố định (`t_1`..`t_50`, `n_1`..`n_50`, v.v.).
+  - **Attributes (`map[string]AttributeDetail`)**: Các trường dữ liệu động với các kiểu dữ liệu (`TEXT_PLAIN`, `TEXT_HTML`, `NUMBER`, `DATETIME`, `SELECT_SINGLE`, `SELECT_MULTI`) được ánh xạ vào từng Slot cố định (`t_1`..`t_50`, `n_1`..`n_50`, v.v.) kèm trường thứ tự sắp xếp `order` (int, 1-based) trong từng Zone.
 
 ### 1.2 Phân Cấp 3 Zone Hệ Thống Bất Biến
 1. **Zone 1: `zone_basic` ("Thông tin cơ bản", `order: 1`)**:
@@ -20,7 +20,7 @@ Tài liệu này đặc tả toàn bộ quy trình nghiệp vụ (Business Rules
 2. **Zone 2: `zone_filters_classification` ("Thông tin phân loại & Tra cứu", `order: 2`)**:
    - Chứa **cố định $5 \times N$ thuộc tính mẫu hệ thống** có chỉ mục (`apply_idx: true`):
      - $N$ Text Search (Keywords): `t_search_1` $\dots$ `t_search_N` (`txt_opt: { min_len, max_len }`)
-     - $N$ Số (Sortable): `n_sort_1` $\dots$ `n_sort_N` (`num_opt: { unit, thous_sep }`)
+     - $N$ Số (Sortable): `n_sort_1` $\dots$ `n_sort_N` (`num_opt: { unit, thous_sep }`, `thous_sep`: `","`, `"."`, `"NONE"`)
      - $N$ Ngày (Sortable): `d_sort_1` $\dots$ `d_sort_N` (`dt_opt: { display_type, format }`)
      - $N$ Chọn 1 (Filterable): `s_filter_1` $\dots$ `s_filter_N` (`sel_opt: [...]`)
      - $N$ Chọn nhiều (Filterable): `s_filter_N+1` $\dots$ `s_filter_2N` (`sel_opt: [...]`)
@@ -30,15 +30,20 @@ Tài liệu này đặc tả toàn bộ quy trình nghiệp vụ (Business Rules
    - Chứa các thuộc tính custom có `status: "HIDDEN"`.
    - Cấm sửa đổi cấu hình hoặc xóa Zone này.
 4. **Các Zone Tùy Biến (Custom Zones)**:
-   - Người dùng tự do tạo, sửa tên/thứ tự, xóa khi rỗng, thêm thuộc tính custom (`t_1..`, `n_1..`, `d_1..`, `s_1..`), di chuyển qua lại, ẩn và bỏ ẩn.
+   - Người dùng tự do tạo, sửa tên/thứ tự, xóa khi rỗng, thêm thuộc tính custom (`t_1..`, `n_1..`, `d_1..`, `s_1..`), di chuyển qua lại, sắp xếp thứ tự (`order`), ẩn và bỏ ẩn.
 
-### 1.3 Cơ Chế Auto-Heal 2 Tầng Khi Đọc (`GET /list-for-options`)
+### 1.3 Quy Tắc Cấp Phát & Bảo Toàn Slot Dữ Liệu (Slot Allocation Lifecycle)
+- **Bảo toàn Slot cũ (100% Immutability):** Toàn bộ thuộc tính đã tồn tại trong DB giữ nguyên mã `slot` vĩnh viễn (ví dụ: `t_1`, `n_2`) khi người dùng chỉnh sửa tên, cấu hình, kéo thả đổi Zone hoặc đổi thứ tự `order`.
+- **Cấp Slot Khép Kín cho Thuộc tính Mới:** Khi thêm mới thuộc tính, hệ thống tự động tìm chỉ số lớn nhất hiện tại của prefix tương ứng (`t_`, `n_`, `d_`, `s_`) để cấp slot kế tiếp tăng dần (`max + 1`).
+
+### 1.4 Cơ Chế Auto-Heal 2 Tầng Khi Đọc (`GET /list-for-options`)
 1. **Tầng 1 (Bù EntityType):** Đối chiếu danh sách `coreDomain.EntityAttribute.GetSupportedTargets()`. Nếu Tenant (kể cả Tenant cũ) bị thiếu bất kỳ EntityType nào $\rightarrow$ Tự động sinh bộ thuộc tính mặc định chuẩn và lưu DB.
 2. **Tầng 2 (Bù Field theo Env):** Đối chiếu với số lượng $N$ trong `DEFAULT_ATTR_COUNT_PER_TYPE`. Nếu thiếu field trong Zone 2 (vd tăng $N=2 \rightarrow 3$) $\rightarrow$ Tự động bổ sung field mới thiếu vào Zone 2 mà không ghi đè tên cũ mà người dùng đã đổi.
 
-### 1.4 Chống Race Condition & Concurrency Fallback
+### 1.5 Chống Race Condition & Concurrency Fallback
 - **Bypass Atlas Search:** Hàm `GetByEntityType` ép cờ `bypassAtlas = true` để truy vấn trực tiếp vào **Standard Unique Compound Index (`tid + entity_type`)** trên MongoDB Primary (WiredTiger Storage Engine) đảm bảo Strong Consistency.
 - **Duplicate Key Fallback:** Khi 2 request cùng khởi tạo hoặc lưu trong 1 microsecond, nếu request sau bị lỗi duplicate key $\rightarrow$ Tự động truy vấn lại record vừa tạo từ Primary DB và hoàn tất luồng mà không gây lỗi sập hệ thống.
+- **Multi-DB Watcher Sync:** Thay đổi trên `entity_attribute_sets` (`dbConfig1`) được Mongo Change Stream đa cụm bắt tức thì, đẩy qua Kafka và bắn WebSocket `ENTITY_CHANGED` (`entity: ATTRIBUTE`, `op: UPDATE/CREATE`) xuống các Client.
 
 ---
 
@@ -50,8 +55,8 @@ sequenceDiagram
     actor Admin as Quản trị viên (Owner / CONFIG_MANAGE)
     participant FE as Frontend (Local Cache)
     participant API as Backend API (/api/v1/attribute)
-    participant DB as MongoDB (entity_attribute_sets)
-    participant ChangeStream as Mongo Change Stream / Kafka
+    participant DB as MongoDB (entity_attribute_sets in dbConfig1)
+    participant ChangeStream as Multi-DB Change Stream / Kafka
     participant WS as WebSocket Client Hub
 
     Note over FE, API: 1. ĐỌC & LOCAL CACHING (Bootstrap App)
@@ -60,16 +65,17 @@ sequenceDiagram
         API->>DB: Auto-Heal: Bù đắp EntityType/Field thiếu & Lưu DB
     end
     API-->>FE: Trả về toàn bộ danh sách Attribute Sets
-    FE->>FE: Lưu vào Local Cache (IndexedDB / Global State)
+    FE->>FE: Lưu vào Local Cache (IndexedDB / LocalStorage v0)
 
     Note over Admin, DB: 2. QUẢN TRỊ & LƯU CẤU HÌNH (Admin Save)
-    Admin->>FE: Chỉnh sửa Form (Tên, Options, Custom Zones, Ẩn/Hiện...)
+    Admin->>FE: Kéo thả thứ tự (order), chọn kiểu dữ liệu, sửa Options...
     Admin->>FE: Bấm nút "Lưu thay đổi"
+    FE->>FE: Chuẩn hóa slot mới (max+1), giữ nguyên slot cũ, gán order
     FE->>API: POST /api/v1/attribute/save (Gửi nguyên cục zones & attributes)
     API->>API: Validate nguyên tử 7 lớp bảo vệ (ValidateCompleteAttributeSet)
     API->>DB: Cập nhật nguyên tử toàn bộ document trong MongoDB
-    DB-->>ChangeStream: Phát sinh Change Stream Event
-    ChangeStream->>WS: Bắn WebSocket ENTITY_CHANGED cập nhật realtime
+    DB-->>ChangeStream: Phát sinh Multi-DB Change Stream Event (dbConfig1)
+    ChangeStream->>WS: Bắn WebSocket ENTITY_CHANGED (ATTRIBUTE) cập nhật realtime
     API-->>FE: HTTP 200 OK (Thành công)
 ```
 
@@ -106,7 +112,18 @@ Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
             "status": "ACTIVE",
             "apply_idx": true,
             "zid": "zone_filters_classification",
+            "order": 1,
             "txt_opt": { "min_len": 0, "max_len": 255 }
+          },
+          "n_sort_1": {
+            "slot": "n_sort_1",
+            "label": { "vi": "Doanh thu năm", "en": "Annual Revenue" },
+            "data_type": "NUMBER",
+            "status": "ACTIVE",
+            "apply_idx": true,
+            "zid": "zone_filters_classification",
+            "order": 2,
+            "num_opt": { "unit": "VND", "thous_sep": "," }
           },
           "t_1": {
             "slot": "t_1",
@@ -115,6 +132,7 @@ Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
             "status": "ACTIVE",
             "apply_idx": false,
             "zid": "zone_custom_1",
+            "order": 1,
             "txt_opt": { "min_len": 0, "max_len": 500 }
           }
         }
@@ -146,7 +164,18 @@ Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
         "status": "ACTIVE",
         "apply_idx": true,
         "zid": "zone_filters_classification",
+        "order": 1,
         "txt_opt": { "min_len": 0, "max_len": 255 }
+      },
+      "n_sort_1": {
+        "slot": "n_sort_1",
+        "label": { "vi": "Doanh thu năm", "en": "Annual Revenue" },
+        "data_type": "NUMBER",
+        "status": "ACTIVE",
+        "apply_idx": true,
+        "zid": "zone_filters_classification",
+        "order": 2,
+        "num_opt": { "unit": "VND", "thous_sep": "," }
       },
       "t_1": {
         "slot": "t_1",
@@ -155,6 +184,7 @@ Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
         "status": "ACTIVE",
         "apply_idx": false,
         "zid": "zone_custom_1",
+        "order": 1,
         "txt_opt": { "min_len": 0, "max_len": 500 }
       }
     }
