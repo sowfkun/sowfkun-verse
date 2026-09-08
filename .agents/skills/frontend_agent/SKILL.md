@@ -17,7 +17,11 @@ Khi bắt đầu bất kỳ một phiên làm việc mới (New Tab) hoặc nh�
 # Frontend Rules chi tiết
 Khi bạn nhận một task liên quan đến Frontend, bạn **BẮT BUỘC** phải tham chiếu (đọc) các quy tắc sau đây trước khi thực hiện:
 
-1. **Architecture & Framework:** `.agents/rules/fe_01_frontend_architecture.md`
-2. **Design System & Typography:** `.agents/rules/fe_02_design_system_and_typography.md`
-3. **Component Standards:** `.agents/rules/fe_03_component_standards.md`
-4. **Icon Standards:** `.agents/rules/fe_04_icon_standards.md`
+1. **Global Principles:** `.agents/rules/00_global_rules.md` (Dirty Check, Multi-Tenant, UTC, On-Premise)
+2. **Architecture & Framework:** `.agents/rules/fe_01_frontend_architecture.md`
+3. **Design System & Typography:** `.agents/rules/fe_02_design_system_and_typography.md`
+4. **Component Standards:** `.agents/rules/fe_03_component_standards.md`
+5. **Icon Standards:** `.agents/rules/fe_04_icon_standards.md`
+6. **Naming & Action Standards:** `.agents/rules/fe_05_naming_and_action_standards.md` (Pure Text Buttons, i18n Zones, Noun-only Tabs)
+7. **Table & List Standards:** `.agents/rules/fe_06_table_and_list_standards.md` (Smart Filters, Lazy Options, Zero-Refetch)
+8. **Performance & Render Optimization:** `.agents/rules/fe_07_performance_and_render_optimization.md` (Ref Stability, Anti Re-render, In-place Mutation)
