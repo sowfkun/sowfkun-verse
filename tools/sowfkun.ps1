@@ -41,11 +41,13 @@ function Show-Help {
     Write-Host "       -> Infrastructure Tunnel: Mo/Dong ket noi toc do cao toi Database, Redis, Kafka, Gateway theo tung cum." -ForegroundColor DarkGray
     Write-Host "    7. sync-infra [cluster] [node/all]" -ForegroundColor White
     Write-Host "       -> Sync & Clean Infrastructure: Dong bo ha tang va don dep script rac tren toan bo cum server." -ForegroundColor DarkGray
-    Write-Host "    8. devtools [web|desktop|install|uninstall]" -ForegroundColor White
+    Write-Host "    8. logs [cluster] [node] [container] [-f] [--tail <n>]" -ForegroundColor White
+    Write-Host "       -> Multi-Cluster Infrastructure Logs: Xem va stream log container truc tiep tren tung cum server." -ForegroundColor DarkGray
+    Write-Host "    9. devtools [web|desktop|install|uninstall]" -ForegroundColor White
     Write-Host "       -> Sowfkun Verse DevTools: GUI Dashboard quan tri MongoDB, Redis, Kafka, Postgres, RabbitMQ, Office, API Explorer..." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    9. help" -ForegroundColor White
+    Write-Host "    10. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -154,6 +156,7 @@ if (-not $Command) {
         "Deploy Go API to Server 2 (verse-deploy)",
         "Deploy Egress Gateway to Server 3 (verse-deploy-gateway)",
         "JIT Direct SSH Infrastructure Tunnel (infra open/close)",
+        "View Infrastructure & Container Logs (infra-logs)",
         "Exit"
     )
 
@@ -194,6 +197,10 @@ if (-not $Command) {
             $script = if (Test-Path (Join-Path $infraToolsDir "infra-tunnel.ps1")) { Join-Path $infraToolsDir "infra-tunnel.ps1" } else { Join-Path $serversDir "infra-tunnel.ps1" }
             & $script
         }
+        8 {
+            $script = if (Test-Path (Join-Path $infraToolsDir "infra-logs.ps1")) { Join-Path $infraToolsDir "infra-logs.ps1" } else { Join-Path $serversDir "infra-logs.ps1" }
+            & $script
+        }
         Default {
             Write-Host "Goodbye!" -ForegroundColor Gray
         }
@@ -206,6 +213,16 @@ $cmdLower = $Command.ToLower()
 # Support "sync audio" as an alias to sync-audio
 if ($cmdLower -eq "sync" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() -eq "audio") {
     $cmdLower = "sync-audio"
+    if ($ArgsList.Count -gt 1) {
+        $ArgsList = $ArgsList[1..($ArgsList.Count - 1)]
+    } else {
+        $ArgsList = @()
+    }
+}
+
+# Support "infra logs" / "infra log" as an alias to infra-logs
+if ($cmdLower -eq "infra" -and $ArgsList.Count -ge 1 -and $ArgsList[0].ToLower() -in @("logs", "log")) {
+    $cmdLower = "infra-logs"
     if ($ArgsList.Count -gt 1) {
         $ArgsList = $ArgsList[1..($ArgsList.Count - 1)]
     } else {
@@ -251,6 +268,10 @@ elseif ($cmdLower -in @("infra", "infra-tunnel", "tunnel")) {
 }
 elseif ($cmdLower -in @("sync-infra", "sync-infrastructure", "infra-sync")) {
     $script = if (Test-Path (Join-Path $infraToolsDir "sync-infrastructure.ps1")) { Join-Path $infraToolsDir "sync-infrastructure.ps1" } else { Join-Path $serversDir "sync-infrastructure.ps1" }
+    & $script @ArgsList
+}
+elseif ($cmdLower -in @("logs", "infra-logs", "infra-log", "log", "verse-logs")) {
+    $script = if (Test-Path (Join-Path $infraToolsDir "infra-logs.ps1")) { Join-Path $infraToolsDir "infra-logs.ps1" } else { Join-Path $serversDir "infra-logs.ps1" }
     & $script @ArgsList
 }
 elseif ($cmdLower -in @("devtools", "dev-tools", "devbox", "dev-box", "dev")) {
