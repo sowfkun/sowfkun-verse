@@ -40,7 +40,7 @@ Tài liệu đặc tả các luồng nghiệp vụ chức năng (Domain Flows):
 | Tài Liệu | Mô Tả Tóm Tắt |
 |---|---|
 | 🏢 [TENANT_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/TENANT_FLOW.md) | Quy trình đăng ký, kích hoạt, quản lý thông tin doanh nghiệp và kiến trúc cô lập Multi-tenant (Golden Standard). |
-| 🧹 [TENANT_DATA_PRUNE_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/TENANT_DATA_PRUNE_FLOW.md) | Dịch vụ dọn dẹp/soft-delete toàn bộ thực thể theo Tenant qua Change Stream Watcher & Kafka Event Dispatcher. |
+| 🧹 [DATA_PRUNE_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/DATA_PRUNE_FLOW.md) | Dịch vụ dọn dẹp dữ liệu (Data Pruning) khi xóa Tenant và TTL Purge 3 tháng ở các nghiệp vụ xóa thực thể. |
 | 👥 [USER_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/USER_FLOW.md) | Quản lý người dùng, nhân viên, phân cấp quản lý cấp trên - cấp dưới, và trạng thái kích hoạt tài khoản. |
 | 🔑 [AUTH_REGISTER_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/AUTH_REGISTER_FLOW.md) | Luồng đăng ký tài khoản, đăng nhập JWT, phân hệ Web/Admin/Mobile và cơ chế bắt tay mã hóa E2EE. |
 | 🛡️ [ROLE_FLOW.md](file:///f:/Coding/Project/sowfkun.verse.v2/.agents/docs/business_flows/ROLE_FLOW.md) | Quản lý vai trò (Roles), phân quyền RBAC và cơ chế phân giải phạm vi truy cập (Scope: `ALL`, `SUBORDINATES`, `SAME_DEPT`, `OWN_ONLY`). |

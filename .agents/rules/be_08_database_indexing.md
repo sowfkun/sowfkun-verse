@@ -35,3 +35,11 @@ Khi xây dựng BSON query tại hàm `buildQuery` của Repository:
   - `_id` / `$in` ObjectIDs $\rightarrow$ Chuyển thành toán tử `in` / `equals` trực tiếp trong `$search`.
   - `$nin`, `$ne`, `$exists`, range (`$gte`, `$lte`, `$gt`, `$lt`) $\rightarrow$ Chuyển thành các mệnh đề `filter` hoặc `mustNot` tương ứng.
 - **Mục tiêu tối thượng (100% In-Engine Search)**: Tất cả các điều kiện lọc thông thường, phân quyền và text search phải được ăn trọn vẹn trong `$search` stage, giữ cho `postMatchFilter` luôn rỗng (`map[]`) để không tốn tài nguyên DB chính.
+
+---
+
+## 5. Standard TTL Expired Index (`exp_ref`) cho Soft Delete
+- Mọi collection kế thừa `BaseEntity` đều được cấu hình Standard TTL Index trên trường `exp_ref` tại `cmd/indexer/mongo.go`:
+  - **Index Name**: `exp_ref_ttl_idx`
+  - **Options**: `SetExpireAfterSeconds(0)`, `SetPartialFilterExpression(bson.M{"is_del": true})`
+- **Nguyên tắc an toàn**: Chỉ kích hoạt TTL khi document có `is_del = true` và trường `exp_ref` (kiểu BSON Date UTC) mang giá trị cụ thể (thường được sinh qua `coreDomain.NewDeleteModelWith3MonthsTTL(actor, trackingID)`). Các document đang hoạt động (`is_del = false` hoặc `exp_ref = nil`) hoàn toàn không bao giờ bị ảnh hưởng.
