@@ -5,10 +5,8 @@
 giới tính: nam, nữ, khác
 
 
-component info zone
+- [x] sau khi chọn giờ xong thì ẩn picker luôn (đã thêm setIsOpen(false) tại handleSelectMinute & handleSelectNow)
 
-
-check lại size tiêu đề modal, 16, các zone nhỏ hơn 14
 
 
 - FE tổ chức ref component. click view detail (click xem chi tiết nhân viên)
