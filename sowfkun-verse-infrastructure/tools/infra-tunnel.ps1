@@ -262,11 +262,19 @@ function Open-Infra {
 
     # Filter active nodes by target service
     $selectedNodeKeys = @()
-    $svcLower = $TargetService.ToLower().Trim()
+    $svcLower = if ($TargetService) { $TargetService.ToLower().Trim() } else { "all" }
 
     if ($svcLower -in @("all", "", "*", "full")) {
         $selectedNodeKeys = @($profData.nodes.PSObject.Properties.Name)
         $svcDisplay = "All Services"
+    } elseif ($svcLower -in @("data", "infra", "deps", "local", "dev")) {
+        $selectedNodeKeys = @()
+        foreach ($k in $profData.nodes.PSObject.Properties.Name) {
+            if ($k -ne "app") {
+                $selectedNodeKeys += $k
+            }
+        }
+        $svcDisplay = "Data & Gateway Dependencies (Excluding App Node)"
     } elseif ($svcLower -in @("mongo", "mongodb", "db", "database", "netcup")) {
         $selectedNodeKeys = @("mongo")
         $svcDisplay = "MongoDB (Netcup Node)"
