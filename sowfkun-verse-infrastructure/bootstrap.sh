@@ -461,8 +461,7 @@ setup_security() {
 -A DOCKER-USER -s 100.64.0.0/10 -j RETURN
 -A DOCKER-USER -i tailscale0 -j RETURN
 
-# Allow public web and API ports
--A DOCKER-USER -p tcp -m tcp --dport 8080 -j RETURN
+# Allow public web ports (if running reverse proxy)
 -A DOCKER-USER -p tcp -m tcp --dport 80 -j RETURN
 -A DOCKER-USER -p tcp -m tcp --dport 443 -j RETURN
 
@@ -486,7 +485,10 @@ EOF
             for s in "${SELECTED_SERVICES[@]}"; do
                 case "$s" in
                     "api")
-                        ufw allow 8080/tcp comment 'Go API Public Port'
+                        # Chi mo cong 8080 ra public neu khong dung Cloudflare Tunnel va khong dung Tailscale
+                        if [ -z "$CLOUDFLARE_TOKEN" ] && [ "$ENABLE_TAILSCALE" = false ] && [ ! -d /sys/class/net/tailscale0 ]; then
+                            ufw allow 8080/tcp comment 'Go API Public Port'
+                        fi
                         ;;
                     "mongo")
                         for net in "${allowed_subnets[@]}"; do
