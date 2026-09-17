@@ -32,7 +32,7 @@ $lines = @(
     "    `$argIndex = if (`$isNewArg) { `$parts.Count } else { [Math]::Max(0, `$parts.Count - 1) }",
     "",
     "    if (`$argIndex -le 1) {",
-    "        `$topCommands = @('logs', 'infra-logs', 'verse-start', 'start', 'devtools', 'infra', 'deploy', 'deploy-gateway', 'sync-infra', 'verse-deploy', 'verse-deploy-gateway', 'download', 'sync-audio', 'help')",
+    "        `$topCommands = @('logs', 'infra-logs', 'verse-start', 'start', 'omicx-start', 'omicx', 'devtools', 'infra', 'deploy', 'deploy-gateway', 'sync-infra', 'verse-deploy', 'verse-deploy-gateway', 'download', 'sync-audio', 'help')",
     "        `$topCommands | Where-Object { `$_ -like `"`$wordToComplete*`" } | ForEach-Object {",
     "            [System.Management.Automation.CompletionResult]::new(`$_, `$_, 'ParameterValue', `$_)",
     "        }",

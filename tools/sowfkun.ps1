@@ -46,8 +46,12 @@ function Show-Help {
     Write-Host "    9. devtools [web|desktop|install|uninstall]" -ForegroundColor White
     Write-Host "       -> Sowfkun Verse DevTools: GUI Dashboard quan tri MongoDB, Redis, Kafka, Postgres, RabbitMQ, Office, API Explorer..." -ForegroundColor DarkGray
     Write-Host ""
+    Write-Host "  [Omicx Project]" -ForegroundColor Cyan
+    Write-Host "    10. omicx-start" -ForegroundColor White
+    Write-Host "       -> Navigate to F:\Vihat\Omicx\ and launch Claude Code CLI." -ForegroundColor DarkGray
+    Write-Host ""
     Write-Host "  [System]" -ForegroundColor Cyan
-    Write-Host "    10. help" -ForegroundColor White
+    Write-Host "    11. help" -ForegroundColor White
     Write-Host "       -> Show this help message." -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -157,6 +161,7 @@ if (-not $Command) {
         "Deploy Egress Gateway to Server 3 (verse-deploy-gateway)",
         "JIT Direct SSH Infrastructure Tunnel (infra open/close)",
         "View Infrastructure & Container Logs (infra-logs)",
+        "Omicx Project - Start Claude CLI (omicx-start)",
         "Exit"
     )
 
@@ -200,6 +205,26 @@ if (-not $Command) {
         8 {
             $script = if (Test-Path (Join-Path $infraToolsDir "infra-logs.ps1")) { Join-Path $infraToolsDir "infra-logs.ps1" } else { Join-Path $serversDir "infra-logs.ps1" }
             & $script
+        }
+        9 {
+            $omicxDir = "F:\Vihat\Omicx"
+            if (Test-Path $omicxDir) {
+                Set-Location $omicxDir
+                [Environment]::CurrentDirectory = (Get-Location).Path
+                Write-Host "CD to: $omicxDir" -ForegroundColor Green
+            } else {
+                Write-Host "Warning: Directory '$omicxDir' not found." -ForegroundColor Yellow
+            }
+            $claudeCmd = Get-Command claude.cmd -ErrorAction SilentlyContinue
+            if ($claudeCmd) {
+                Write-Host "Starting Claude Code CLI..." -ForegroundColor Cyan
+                & $claudeCmd.Source
+            } elseif (Get-Command claude -ErrorAction SilentlyContinue) {
+                Write-Host "Starting Claude Code CLI..." -ForegroundColor Cyan
+                & cmd.exe /c claude
+            } else {
+                Write-Host "Error: 'claude' command not found in PATH." -ForegroundColor Red
+            }
         }
         Default {
             Write-Host "Goodbye!" -ForegroundColor Gray
@@ -312,6 +337,26 @@ elseif ($cmdLower -in @("devtools", "dev-tools", "devbox", "dev-box", "dev")) {
     }
     finally {
         Pop-Location
+    }
+}
+elseif ($cmdLower -in @("omicx-start", "omicx", "omic-start", "omic")) {
+    $omicxDir = "F:\Vihat\Omicx"
+    if (Test-Path $omicxDir) {
+        Set-Location $omicxDir
+        [Environment]::CurrentDirectory = (Get-Location).Path
+        Write-Host "CD to: $omicxDir" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: Directory '$omicxDir' not found." -ForegroundColor Yellow
+    }
+    $claudeCmd = Get-Command claude.cmd -ErrorAction SilentlyContinue
+    if ($claudeCmd) {
+        Write-Host "Starting Claude Code CLI..." -ForegroundColor Cyan
+        & $claudeCmd.Source @ArgsList
+    } elseif (Get-Command claude -ErrorAction SilentlyContinue) {
+        Write-Host "Starting Claude Code CLI..." -ForegroundColor Cyan
+        & cmd.exe /c claude @ArgsList
+    } else {
+        Write-Host "Error: 'claude' command not found in PATH." -ForegroundColor Red
     }
 }
 elseif ($cmdLower -in @("help", "-h", "--help", "/?")) {
