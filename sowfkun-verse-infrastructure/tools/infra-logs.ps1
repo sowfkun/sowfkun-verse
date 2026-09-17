@@ -238,6 +238,11 @@ if ($Cluster -and (-not ($profileKeys -contains $Cluster))) {
         $Node = "app"
         $Cluster = $activeProf
     }
+    elseif ($Cluster.ToLower() -in @("cloudflared", "cloudflare", "tunnel", "cf")) {
+        $Container = "app_cloudflared"
+        $Node = "app"
+        $Cluster = $activeProf
+    }
     elseif ($Cluster.ToLower() -in @("gateway", "app-gateway", "egress")) {
         $Container = "gateway"
         $Node = "gateway"
