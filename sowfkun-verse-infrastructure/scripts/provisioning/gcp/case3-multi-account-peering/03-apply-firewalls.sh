@@ -42,7 +42,7 @@ echo "✅ Đang thao tác với tài khoản: [ ${ACTIVE_ACCOUNT} ]"
 echo ""
 echo "📌 [BƯỚC 1/4] CHỌN LOẠI MÁY CHỦ CẦN THIẾT LẬP TƯỜNG LỬA:"
 echo "  [1] Data Server     (Khóa Egress 0.0.0.0/0, mở IAP, mở DB cho App Subnet)"
-echo "  [2] App Server      (Mở Public API 8080, Khóa Egress, mở IAP Console 8085)"
+echo "  [2] App Server      (Khóa Ingress Public 100%, Cloudflare Tunnel / JIT Tunnel, Khóa Egress)"
 echo "  [3] Egress Gateway  (Mở Egress Webhook/Email 80/443, Mở Ingress từ App Subnet, mở IAP)"
 read -rp "👉 Chọn vai trò [1-3, Mặc định: 1]: " role_choice
 role_choice="${role_choice:-1}"

@@ -155,9 +155,10 @@ elif [[ "$ROLE" == "app" ]]; then
   public_console=$(echo "$rules_json" | grep -B 5 -A 10 '"0.0.0.0/0"' | grep -E '8085' || true)
   
   if [[ -n "$public_api" ]]; then
-    echo "ℹ️ [THÔNG TIN]: Cổng Go API (8080) đang mở Public cho Internet (Production Mode)."
+    echo "🚨 [CẢNH BÁO]: Cổng Go API (8080) đang bị mở trực tiếp ra Internet (0.0.0.0/0)! Hãy đóng lại và định tuyến qua Cloudflare Zero-Trust Tunnel."
+    ISSUES_FOUND=$((ISSUES_FOUND + 1))
   else
-    echo "✅ [CHUẨN ZERO-TRUST]: Cổng Go API (8080) được bảo vệ nội bộ, truy cập an toàn qua JIT Tunnel."
+    echo "✅ [CHUẨN ZERO-TRUST & CLOUDFLARE]: Cổng Go API (8080) được bảo vệ nội bộ, định tuyến an toàn 100% qua Cloudflare Tunnel."
   fi
 
   if [[ -n "$public_console" ]]; then
