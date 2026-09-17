@@ -23,6 +23,7 @@ SWAP_SIZE_GB=2
 APP_NETWORK="app_net"
 INTERNAL_SUBNET_INPUT=""
 ENABLE_TAILSCALE=false
+CLOUDFLARE_TOKEN=""
 SELECTED_SERVICES=()
 
 # Parse arguments
@@ -34,10 +35,12 @@ while [[ "$#" -gt 0 ]]; do
         --mode=*) MODE="${1#*=}" ;;
         --internal-subnet=*|--subnet=*) INTERNAL_SUBNET_INPUT="${1#*=}" ;;
         --tailscale|--enable-tailscale|-t) ENABLE_TAILSCALE=true ;;
+        --cloudflare-token=*|--cf-token=*|--tunnel-token=*) CLOUDFLARE_TOKEN="${1#*=}" ;;
         -s|--service|--services) SERVICE_INPUT="$2"; shift ;;
         -p|--profile|--prof) PROFILE_INPUT="$2"; shift ;;
         --api-mode|--api-type) API_MODE_INPUT="$2"; shift ;;
         --internal-subnet|--subnet|-net) INTERNAL_SUBNET_INPUT="$2"; shift ;;
+        --cloudflare-token|--cf-token|--tunnel-token) CLOUDFLARE_TOKEN="$2"; shift ;;
         -m|--mode) MODE="$2"; shift ;;
         -i|--interactive) SERVICE_INPUT="interactive" ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -136,6 +139,17 @@ interactive_menu() {
             2|source|Source) API_MODE="source" ;;
             *) API_MODE="binary" ;;
         esac
+    fi
+
+    # Hỏi cấu hình Cloudflare Tunnel nếu có API hoặc Gateway
+    if [ "$has_api" = true ] && [ -z "$CLOUDFLARE_TOKEN" ]; then
+        echo "================================================================="
+        echo "🌐 CẤU HÌNH CLOUDFLARE TUNNEL (ZERO-TRUST HTTPS)"
+        echo "================================================================="
+        read -r -p "👉 Nhập Cloudflare Tunnel Token (hoặc nhấn Enter để bỏ qua): " cf_token_prompt
+        if [ -n "$cf_token_prompt" ]; then
+            CLOUDFLARE_TOKEN="$cf_token_prompt"
+        fi
     fi
 }
 
@@ -709,6 +723,20 @@ start_services() {
         echo "-----------------------------------------------------------------"
         start_target "$s"
     done
+
+    # Khởi chạy Cloudflare Tunnel nếu được cấu hình
+    if [ -n "$CLOUDFLARE_TOKEN" ]; then
+        echo "-----------------------------------------------------------------"
+        echo "🌐 Đang khởi chạy Cloudflare Tunnel (app_cloudflared)..."
+        echo "-----------------------------------------------------------------"
+        docker rm -f app_cloudflared 2>/dev/null || true
+        docker run -d \
+          --name app_cloudflared \
+          --restart unless-stopped \
+          --network "$APP_NETWORK" \
+          cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN"
+        echo "✅ Cloudflare Tunnel container [app_cloudflared] đã khởi chạy thành công!"
+    fi
 }
 
 if [ "$MODE" == "fresh" ]; then
