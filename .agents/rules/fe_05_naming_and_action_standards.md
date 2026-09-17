@@ -29,56 +29,56 @@ Tuyệt đối **NGHIÊM CẤM** việc dùng từ ngữ tùy tiện, không nh�
 
 ## 3. Phân Zone & Quản lý Key trong Từ điển Đa Ngôn Ngữ (`src/lib/i18n.ts`)
 
-- **Tách Zone Riêng Biệt**: Tất cả các nhãn động từ hành động nút bấm **BẮT BUỘC** phải được khai báo tập trung trong zone:
-  ```ts
-  // ==========================================
-  // UI - BUTTONS & COMMON ACTIONS
-  // ==========================================
-  btn_add: 'Thêm mới', // EN: 'Add New'
-  btn_save: 'Lưu',      // EN: 'Save'
-  btn_cancel: 'Hủy',    // EN: 'Cancel'
-  btn_edit: 'Chỉnh sửa',// EN: 'Edit'
-  btn_delete: 'Xóa',    // EN: 'Delete'
-  btn_reset: 'Đặt lại', // EN: 'Reset'
-  btn_apply: 'Áp dụng', // EN: 'Apply'
-  btn_close: 'Đóng',    // EN: 'Close'
-  btn_saved_success: 'Cập nhật thành công!',
-  ```
-- **Phân Zone Cột Bảng & Thuộc Tính Dữ Liệu (Table Attribute Zones)**:
-  Mọi key đa ngôn ngữ cho bảng biểu **BẮT BUỘC** phân chia vào 4 zone riêng biệt:
-  ```ts
-  // ==========================================
-  // UI - BASE ENTITY AUDIT ATTRIBUTES (c_at, u_at, c_by, u_by)
-  // ==========================================
-  col_created_at: 'Ngày tạo',
-  col_updated_at: 'Lần update cuối',
-  col_created_by: 'Người tạo',
-  col_updated_by: 'Người update cuối',
+### Rule 3.1 - Chuẩn hóa Tiền tố theo Phân loại Chức năng (Prefix Taxonomy):
+Mọi key đa ngôn ngữ trong `src/lib/i18n.ts` **BẮT BUỘC** phải có tiền tố (prefix) phản ánh chính xác mục đích và phân loại UI:
 
-  // ==========================================
-  // UI - COMMON RECURRING ATTRIBUTES
-  // ==========================================
-  col_name: 'Tên',
-  col_email: 'Email',
-  col_phone: 'Số điện thoại',
-  col_status: 'Trạng thái',
-  col_owner: 'Người phụ trách',
-  col_roles: 'Bộ quyền',
+| Tiền tố (Prefix) | Phân loại chức năng | Ví dụ minh họa |
+| :--- | :--- | :--- |
+| **`col_`** | Tiêu đề cột dữ liệu bảng (Table Columns) | `col_name`, `col_status`, `col_phone`, `col_email`, `col_owner`, `col_created_at` |
+| **`field_`** | Nhãn trường nhập liệu trong Form / Modal (Form Inputs) | `field_name`, `field_email`, `field_phone`, `field_status`, `field_owner`, `field_roles` |
+| **`lbl_`** | Nhãn hiển thị thông tin, metadata tóm tắt (Display Labels) | `lbl_tenant_id`, `lbl_user_id`, `lbl_tier`, `lbl_system_language`, `lbl_timezone`, `lbl_results` |
+| **`filter_`** | Nhãn và tùy chọn của bộ lọc bảng (Table Filters) | `filter_status`, `filter_status_all`, `filter_owner`, `filter_all_owners` |
+| **`btn_`** | Động từ hành động nút bấm, trigger tương tác (Buttons & Actions) | `btn_add`, `btn_save`, `btn_cancel`, `btn_edit`, `btn_delete`, `btn_login`, `btn_logout` |
+| **`place_`** | Gợi ý nhập liệu bên trong ô input (Placeholders) | `place_login_email`, `place_login_pwd`, `place_search`, `place_header_search` |
+| **`msg_`** | Thông báo trạng thái, Toast, Alert, Notice (Feedback Messages) | `msg_create_success`, `msg_update_success`, `msg_delete_success`, `msg_no_data`, `msg_processing` |
+| **`title_`** | Tiêu đề trang, tiêu đề thẻ Card, tiêu đề Modal (Titles) | `title_login`, `title_register`, `title_settings`, `title_table_settings`, `title_preview` |
+| **`desc_`** | Đoạn văn bản mô tả chức năng / hướng dẫn (Descriptions) | `desc_settings`, `desc_table_settings`, `desc_activate_ready` |
+| **`tab_`** | Tên Tab điều hướng (Danh từ theo Rule 5.1) | `tab_basic_info`, `tab_roles_permissions`, `tab_organization`, `tab_subscription` |
+| **`nav_`** | Mục điều hướng Sidebar / Header Navigation | `nav_customers`, `nav_tickets`, `nav_users`, `nav_settings`, `nav_expand_sidebar` |
+| **`opt_`** | Tùy chọn trong Select Dropdown, Radio, Checkbox | `opt_all`, `opt_basic_gender_male`, `opt_text_min_len`, `opt_dt_type_date_only` |
+| **`notice_` / `hint_`** | Chú thích cố định, ghi chú chính sách, gợi ý thao tác | `notice_owner_only`, `notice_profile_view`, `notice_fixed_field`, `hint_locked_column` |
+| **`role_`, `tier_`, `status_`** | Vai trò tài khoản, gói dịch vụ, trạng thái thực thể | `role_owner`, `role_member`, `tier_free`, `tier_pro`, `status_active`, `status_inactive` |
+| **`perm_`, `scope_`, `group_`** | Quyền hạn, phạm vi truy cập, nhóm phân quyền | `perm_config_manage`, `scope_all`, `scope_owner`, `group_system_admin` |
+| **`entity_`, `zone_`, `data_type_`** | Định danh thực thể, phân vùng, kiểu dữ liệu tùy biến | `entity_customer`, `zone_type_custom`, `data_type_text_plain` |
+| **`err_`** | Thông báo lỗi validate form và lỗi logic hệ thống | `err_required`, `err_email`, `err_password`, `err_connection_failed` |
 
-  // ==========================================
-  // UI - DOMAIN-SPECIFIC ENTITY NAMES
-  // ==========================================
-  col_emp_name: 'Tên nhân viên',
-  col_customer_name: 'Tên khách hàng',
+---
 
-  // ==========================================
-  // UI - TABLE CONTROLS & SETTINGS MODAL
-  // ==========================================
-  filter_status: 'Trạng thái',
-  table_settings: 'Cấu hình hiển thị',
-  ...
-  ```
-- **Cấm Trùng Lặp Khóa (Zero Redundant Keys)**: Tuyệt đối không tạo thêm các key thừa như `btn_save_changes`, `save_settings`, `btn_create` khi đã có `btn_save`, `btn_add`.
+### Rule 3.2 - Tách biệt Code theo Phân loại khi trùng Giá trị (Disambiguation by Category):
+Khi một khái niệm hoặc một từ ngữ có cùng giá trị hiển thị (ví dụ: *"Tên"*, *"Trạng thái"*, *"Số điện thoại"*, *"Email"*, *"Người phụ trách"*, *"Đăng nhập"*):
+- **TUYỆT ĐỐI KHÔNG** dùng chung 1 key duy nhất cho nhiều mục đích khác nhau.
+- **BẮT BUỘC** phải tạo các code riêng biệt với tiền tố tương ứng với từng phân loại:
+  - *"Tên"*: Cột bảng dùng `col_name`, form nhập dùng `field_name`, thuộc tính cơ bản dùng `field_basic_name`.
+  - *"Trạng thái"*: Cột bảng dùng `col_status`, form nhập dùng `field_status`, bộ lọc dùng `filter_status`, nhãn chi tiết dùng `lbl_status`.
+  - *"Người phụ trách"*: Cột bảng dùng `col_owner`, form nhập dùng `field_owner`, bộ lọc dùng `filter_owner`.
+  - *"Email"*: Cột bảng dùng `col_email`, form nhập dùng `field_email`.
+  - *"Số điện thoại"*: Cột bảng dùng `col_phone`, form nhập dùng `field_phone`.
+  - *"Đăng nhập"*: Tiêu đề trang dùng `title_login`, nút hành động submit dùng `btn_login`.
+  - *"Đăng ký"*: Tiêu đề trang dùng `title_register`, nút hành động submit dùng `btn_register`.
+  - *"Tìm kiếm"*: Ô placeholder dùng `place_search`, nhãn hiển thị dùng `lbl_search`.
+
+---
+
+### Rule 3.3 - Tái sử dụng Khóa Common Cùng Phân Loại (Same-Category Common Reuse):
+- **Tối đa hóa tái sử dụng trong cùng một phân loại**: Khi các thành phần UI thuộc **CÙNG MỘT PHÂN LOẠI** (cùng là `btn_`, cùng là `field_`, cùng là `title_`, cùng là `msg_`, cùng là `nav_`) và có chung ngữ nghĩa hiển thị:
+  - **BẮT BUỘC** phải tái sử dụng khóa common chung có sẵn.
+  - **TUYỆT ĐỐI CẤM** tự ý sinh thêm các key biến thể dư thừa (Redundant Variant Keys) gây phân mảnh từ điển.
+- **Các nhóm Common bắt buộc tái sử dụng:**
+  1. **Nút bấm (`btn_`)**: Tái sử dụng `btn_add`, `btn_save`, `btn_cancel`, `btn_edit`, `btn_delete`, `btn_reset`, `btn_apply`, `btn_close`, `btn_login`, `btn_logout`, `btn_verify`. *Cấm tạo: `btn_save_changes`, `save_settings`, `btn_create`, `delete_item`.*
+  2. **Trường Form/Modal (`field_`)**: Tái sử dụng `field_name`, `field_desc`, `field_phone`, `field_email`, `field_status`, `field_gender`, `field_owner`, `field_roles` xuyên suốt tất cả các modal và form nghiệp vụ (Customer, Ticket, User, Attribute Sets, Tags, Roles). *Cấm tạo: `field_basic_name`, `field_basic_phone`, `field_attr_status`.*
+  3. **Tiêu đề (`title_`)**: Tái sử dụng `title_details` (*Chi tiết*) cho tất cả các phần tiêu đề xem thông tin / card header chi tiết. *Cấm tạo: `title_account_details`, `title_organization_details`.*
+  4. **Điều hướng (`nav_`)**: Tái sử dụng `nav_users` (*Nhân viên*) cho cả mục menu và breadcrumb. *Cấm tạo: `nav_employees`.*
+  5. **Thông báo (`msg_`)**: Tái sử dụng `msg_no_data`, `msg_processing`, `msg_create_success`, `msg_update_success`, `msg_save_success`, `msg_delete_success`.
 
 ---
 
