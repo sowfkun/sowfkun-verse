@@ -172,17 +172,8 @@ case "$ROLE" in
     ;;
 
   "app")
-    echo "🌐 Cấu hình App Node: Cho phép Public API (8080/80/443) & Khóa Egress Internet tự do..."
-    gcloud compute firewall-rules create "${VPC_NAME}-allow-public-api" \
-      --project="${PROJECT_ID}" \
-      --network="${VPC_NAME}" \
-      --direction=INGRESS \
-      --action=ALLOW \
-      --source-ranges="0.0.0.0/0" \
-      --rules="tcp:8080,tcp:80,tcp:443" \
-      --priority=950 \
-      --description="Allow public inbound HTTP/HTTPS traffic to Go API Backend" \
-      || echo "⚠️ Rule ${VPC_NAME}-allow-public-api đã tồn tại."
+    echo "🌐 Cấu hình App Node: Zero-Trust Ingress (chỉ qua Cloudflare Tunnel / Tailscale Mesh) & Khóa Egress Internet tự do..."
+    # Không mở public ingress 8080/80/443 vì toàn bộ traffic đã qua Cloudflare Tunnel và Tailscale Mesh an toàn 100%
 
     gcloud compute firewall-rules create "${VPC_NAME}-deny-all-egress" \
       --project="${PROJECT_ID}" \
