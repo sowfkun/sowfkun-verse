@@ -16,9 +16,14 @@
     - Điều hướng tab: Gọi `<Tabs>`
     - Danh sách chi tiết Key-Value: Gọi `<DescriptionList>`
 
-## 3. Form & Input Standards (ForwardRef)
-- Tất cả các component đóng vai trò nhập liệu (Input, Checkbox, Select, Textarea) bắt buộc phải được bọc qua `React.forwardRef`.
-- Mục đích: Để hỗ trợ các thư viện quản lý form như `react-hook-form` có thể truy xuất ref trực tiếp vào thẻ HTML cơ bản.
+## 3. Form & Input Standards (ForwardRef & Placeholders)
+- **ForwardRef**: Tất cả các component đóng vai trò nhập liệu (Input, Checkbox, Select, Textarea) bắt buộc phải được bọc qua `React.forwardRef` để hỗ trợ các thư viện quản lý form truy xuất ref trực tiếp vào thẻ HTML.
+- **Quy chuẩn Placeholder (Rule 3.4 trong `fe_05_naming_and_action_standards.md`)**:
+  - Field có ví dụ thực tế (Email, SĐT, Mật khẩu, OTP, Đơn vị đo): Dùng ví dụ cụ thể qua `place_email`, `place_phone`, `place_pwd`, `place_business`, `place_owner`.
+  - Field không có ví dụ (Tên, Mô tả, v.v.): Placeholder chính là tên trường (`placeholder={t('field_name')}`).
+  - Tuyệt đối KHÔNG dùng tiền tố *"Nhập abc..."*.
+  - Toàn bộ Dropdown/Select khi rỗng chỉ hiển thị duy nhất từ *"Chọn"* (`opt_select`).
+  - Ô tìm kiếm hiển thị *"Tìm kiếm"* (`place_search`).
 
 ## 4. UI Separation (Divider)
 - Để phân tách các khối nội dung, tuyệt đối tránh dùng các class `border-t`, `border-b` nội tuyến nếu không thật sự cần thiết.
