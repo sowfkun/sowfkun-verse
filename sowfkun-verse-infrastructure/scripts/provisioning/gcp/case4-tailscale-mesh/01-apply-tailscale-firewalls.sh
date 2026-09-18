@@ -131,7 +131,19 @@ gcloud compute firewall-rules create "${VPC_NAME}-allow-tailscale-ingress" \
   --description="Allow Tailscale WireGuard peer traffic and ICMP diagnostics" \
   || echo "⚠️ Rule ${VPC_NAME}-allow-tailscale-ingress đã tồn tại."
 
-# Rule chung 3: Cho phép Outbound thiết yếu (Tailscale WireGuard, STUN, HTTPS Control, DNS, NTP)
+# Rule chung 3: Cho phép Outbound nội bộ qua Peering & Tailscale Mesh (Priority 700)
+gcloud compute firewall-rules create "${VPC_NAME}-allow-internal-egress" \
+  --project="${PROJECT_ID}" \
+  --network="${VPC_NAME}" \
+  --direction=EGRESS \
+  --action=ALLOW \
+  --destination-ranges="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10" \
+  --rules="all" \
+  --priority=700 \
+  --description="Allow all outbound traffic to internal subnets and Tailscale Mesh" \
+  || echo "⚠️ Rule ${VPC_NAME}-allow-internal-egress đã tồn tại."
+
+# Rule chung 4: Cho phép Tailscale Coordination & DERP (Priority 800)
 gcloud compute firewall-rules create "${VPC_NAME}-allow-tailscale-egress" \
   --project="${PROJECT_ID}" \
   --network="${VPC_NAME}" \
@@ -143,6 +155,7 @@ gcloud compute firewall-rules create "${VPC_NAME}-allow-tailscale-egress" \
   --description="Allow Tailscale WireGuard UDP, STUN, and HTTPS Control Plane Outbound" \
   || echo "⚠️ Rule ${VPC_NAME}-allow-tailscale-egress đã tồn tại."
 
+# Rule chung 5: Cho phép DNS & NTP Đồng bộ thời gian UTC (Priority 810)
 gcloud compute firewall-rules create "${VPC_NAME}-allow-system-egress" \
   --project="${PROJECT_ID}" \
   --network="${VPC_NAME}" \
@@ -158,7 +171,7 @@ gcloud compute firewall-rules create "${VPC_NAME}-allow-system-egress" \
 case "$ROLE" in
   "data")
     echo "🔒 Áp dụng Zero-Trust cho Data Node: Khóa toàn bộ Ingress & Egress Internet lạ..."
-    # Khóa toàn bộ Egress không mong muốn (Priority 1000)
+    # Khóa toàn bộ Egress không mong muốn ra Internet (Priority 65000)
     gcloud compute firewall-rules create "${VPC_NAME}-deny-all-egress" \
       --project="${PROJECT_ID}" \
       --network="${VPC_NAME}" \
@@ -166,15 +179,38 @@ case "$ROLE" in
       --action=DENY \
       --destination-ranges="0.0.0.0/0" \
       --rules="all" \
-      --priority=1000 \
+      --priority=65000 \
       --description="Zero-Trust: Deny all arbitrary outbound internet from Data Server" \
       || echo "⚠️ Rule ${VPC_NAME}-deny-all-egress đã tồn tại."
     ;;
 
   "app")
     echo "🌐 Cấu hình App Node: Zero-Trust Ingress (chỉ qua Cloudflare Tunnel / Tailscale Mesh) & Khóa Egress Internet tự do..."
-    # Không mở public ingress 8080/80/443 vì toàn bộ traffic đã qua Cloudflare Tunnel và Tailscale Mesh an toàn 100%
+    # 1. Cho phép kết nối trực tiếp tới Aiven OpenSearch (Priority 820)
+    gcloud compute firewall-rules create "${VPC_NAME}-allow-opensearch-egress" \
+      --project="${PROJECT_ID}" \
+      --network="${VPC_NAME}" \
+      --direction=EGRESS \
+      --action=ALLOW \
+      --destination-ranges="0.0.0.0/0" \
+      --rules="tcp:13059,tcp:22178,tcp:9200,tcp:443" \
+      --priority=820 \
+      --description="Allow Core App to connect directly to Aiven OpenSearch clusters" \
+      || echo "⚠️ Rule ${VPC_NAME}-allow-opensearch-egress đã tồn tại."
 
+    # 2. Cho phép Cloudflare Tunnel kết nối tới Cloudflare Edge (Priority 830)
+    gcloud compute firewall-rules create "${VPC_NAME}-allow-cloudflared-egress" \
+      --project="${PROJECT_ID}" \
+      --network="${VPC_NAME}" \
+      --direction=EGRESS \
+      --action=ALLOW \
+      --destination-ranges="0.0.0.0/0" \
+      --rules="tcp:7844,udp:7844" \
+      --priority=830 \
+      --description="Allow Cloudflare Tunnel outbound QUIC/HTTP2 to Cloudflare edge" \
+      || echo "⚠️ Rule ${VPC_NAME}-allow-cloudflared-egress đã tồn tại."
+
+    # 3. Khóa toàn bộ duyệt web HTTP và kết nối lạ khác ra Internet (Priority 65000)
     gcloud compute firewall-rules create "${VPC_NAME}-deny-all-egress" \
       --project="${PROJECT_ID}" \
       --network="${VPC_NAME}" \
@@ -182,7 +218,7 @@ case "$ROLE" in
       --action=DENY \
       --destination-ranges="0.0.0.0/0" \
       --rules="all" \
-      --priority=1000 \
+      --priority=65000 \
       --description="Zero-Trust: Deny direct internet outbound; force routing via Egress Gateway" \
       || echo "⚠️ Rule ${VPC_NAME}-deny-all-egress đã tồn tại."
     ;;
@@ -196,9 +232,21 @@ case "$ROLE" in
       --action=ALLOW \
       --destination-ranges="0.0.0.0/0" \
       --rules="tcp:80,tcp:443" \
-      --priority=900 \
+      --priority=820 \
       --description="Allow Egress Gateway to dispatch outbound webhooks, emails (Resend), and APIs" \
       || echo "⚠️ Rule ${VPC_NAME}-allow-gateway-egress đã tồn tại."
+
+    # Khóa các protocol/port lạ khác (Priority 65000)
+    gcloud compute firewall-rules create "${VPC_NAME}-deny-all-egress" \
+      --project="${PROJECT_ID}" \
+      --network="${VPC_NAME}" \
+      --direction=EGRESS \
+      --action=DENY \
+      --destination-ranges="0.0.0.0/0" \
+      --rules="all" \
+      --priority=65000 \
+      --description="Zero-Trust: Deny all non-HTTP/HTTPS outbound traffic from Gateway" \
+      || echo "⚠️ Rule ${VPC_NAME}-deny-all-egress đã tồn tại."
     ;;
 esac
 

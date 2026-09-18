@@ -141,42 +141,31 @@ if [[ "$ROLE" == "data" ]]; then
     --description="Allow App Server (${ALLOWED_CIDR}) to access Mongo, Redis, Kafka, OpenSearch" \
     || echo "⚠️ Rule data-vpc-allow-ingress-peer-app đã tồn tại."
 
-  # 2. Mở Egress phản hồi cho App Subnet & IAP (Priority 900 - cao hơn Deny All)
-  gcloud compute firewall-rules create data-vpc-allow-egress-peer-app \
+  # 2. Mở Egress phản hồi cho Mạng nội bộ & Peering (Priority 700)
+  gcloud compute firewall-rules create data-vpc-allow-egress-internal \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=EGRESS \
     --action=ALLOW \
-    --destination-ranges="${ALLOWED_CIDR}" \
+    --destination-ranges="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,${ALLOWED_CIDR}" \
     --rules="all" \
-    --priority=900 \
-    --description="Allow outbound reply traffic to App Subnet" \
-    || echo "⚠️ Rule data-vpc-allow-egress-peer-app đã tồn tại."
+    --priority=700 \
+    --description="Allow outbound reply traffic to App Subnet and internal mesh" \
+    || echo "⚠️ Rule data-vpc-allow-egress-internal đã tồn tại."
 
-  # 2. Mở Egress phản hồi cho App Subnet & NTP/DNS (Priority 900 - cao hơn Deny All)
-  gcloud compute firewall-rules create data-vpc-allow-egress-peer-app \
-    --project="${PROJECT_ID}" \
-    --network="${VPC_NAME}" \
-    --direction=EGRESS \
-    --action=ALLOW \
-    --destination-ranges="${ALLOWED_CIDR}" \
-    --rules="all" \
-    --priority=900 \
-    --description="Allow outbound reply traffic to App Subnet" \
-    || echo "⚠️ Rule data-vpc-allow-egress-peer-app đã tồn tại."
-
+  # 3. Mở Egress DNS & NTP Time Sync (Priority 810)
   gcloud compute firewall-rules create data-vpc-allow-egress-ntp-dns \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=EGRESS \
     --action=ALLOW \
-    --destination-ranges="169.254.169.254/32,216.239.35.0/24" \
+    --destination-ranges="169.254.169.254/32,216.239.35.0/24,0.0.0.0/0" \
     --rules="udp:53,tcp:53,udp:123" \
-    --priority=900 \
+    --priority=810 \
     --description="Allow egress to Google Internal DNS and NTP Time Servers for UTC sync" \
     || echo "⚠️ Rule data-vpc-allow-egress-ntp-dns đã tồn tại."
 
-  # 3. Khóa Egress Internet chống Reverse Shell (Priority 1000)
+  # 4. Khóa toàn bộ Egress Internet chống Reverse Shell / Data Leak (Priority 65000)
   gcloud compute firewall-rules create data-vpc-deny-egress-internet \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -184,35 +173,60 @@ if [[ "$ROLE" == "data" ]]; then
     --action=DENY \
     --destination-ranges="0.0.0.0/0" \
     --rules="all" \
-    --priority=1000 \
-    --description="Block all outbound internet traffic from Data Server" \
+    --priority=65000 \
+    --description="Zero-Trust: Block all arbitrary outbound internet traffic from Data Server" \
     || echo "⚠️ Rule data-vpc-deny-egress-internet đã tồn tại."
 
 elif [[ "$ROLE" == "app" ]]; then
-  # 1. Mở Egress sang Data Server & Egress Gateway qua Peering & NTP/DNS (Priority 900)
-  gcloud compute firewall-rules create app-vpc-allow-egress-peer-data \
+  # 1. Mở Egress sang Data Server & Egress Gateway qua Peering & Mạng nội bộ (Priority 700)
+  gcloud compute firewall-rules create app-vpc-allow-egress-peer-internal \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=EGRESS \
     --action=ALLOW \
-    --destination-ranges="10.10.0.0/24,10.30.0.0/24" \
+    --destination-ranges="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10" \
     --rules="all" \
-    --priority=900 \
-    --description="Allow outbound to Data Server and Egress Gateway over Peering" \
-    || echo "⚠️ Rule app-vpc-allow-egress-peer-data đã tồn tại."
+    --priority=700 \
+    --description="Allow outbound to Data Server, Egress Gateway and internal subnets over Peering" \
+    || echo "⚠️ Rule app-vpc-allow-egress-peer-internal đã tồn tại."
 
+  # 2. Mở Egress DNS & NTP Time Sync (Priority 810)
   gcloud compute firewall-rules create app-vpc-allow-egress-ntp-dns \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
     --direction=EGRESS \
     --action=ALLOW \
-    --destination-ranges="169.254.169.254/32,216.239.35.0/24" \
+    --destination-ranges="169.254.169.254/32,216.239.35.0/24,0.0.0.0/0" \
     --rules="udp:53,tcp:53,udp:123" \
-    --priority=900 \
+    --priority=810 \
     --description="Allow egress to Google Internal DNS and NTP Time Servers for UTC sync" \
     || echo "⚠️ Rule app-vpc-allow-egress-ntp-dns đã tồn tại."
 
-  # 2. Khóa Egress Internet chống Reverse Shell / Data Leak (Priority 1000)
+  # 3. Cho phép kết nối trực tiếp tới Aiven OpenSearch (Priority 820)
+  gcloud compute firewall-rules create app-vpc-allow-egress-opensearch \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=ALLOW \
+    --destination-ranges="0.0.0.0/0" \
+    --rules="tcp:13059,tcp:22178,tcp:9200,tcp:443" \
+    --priority=820 \
+    --description="Allow Core App to connect directly to Aiven OpenSearch clusters" \
+    || echo "⚠️ Rule app-vpc-allow-egress-opensearch đã tồn tại."
+
+  # 4. Cho phép Cloudflare Tunnel kết nối tới Cloudflare Edge (Priority 830)
+  gcloud compute firewall-rules create app-vpc-allow-egress-cloudflared \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=ALLOW \
+    --destination-ranges="0.0.0.0/0" \
+    --rules="tcp:7844,udp:7844" \
+    --priority=830 \
+    --description="Allow Cloudflare Tunnel outbound QUIC/HTTP2 to Cloudflare edge" \
+    || echo "⚠️ Rule app-vpc-allow-egress-cloudflared đã tồn tại."
+
+  # 5. Khóa Egress Internet chống Reverse Shell / Data Leak (Priority 65000)
   gcloud compute firewall-rules create app-vpc-deny-egress-internet \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -220,11 +234,11 @@ elif [[ "$ROLE" == "app" ]]; then
     --action=DENY \
     --destination-ranges="0.0.0.0/0" \
     --rules="all" \
-    --priority=1000 \
-    --description="Block all outbound internet from App Server" \
+    --priority=65000 \
+    --description="Zero-Trust: Block all direct outbound internet from App Server" \
     || echo "⚠️ Rule app-vpc-deny-egress-internet đã tồn tại."
 
-  # 3. Khóa 100% Ingress từ Gateway Subnet & Data Subnet (Chặn gọi ngược về Core - Zero-Trust 1 chiều)
+  # 6. Khóa 100% Ingress từ Gateway Subnet & Data Subnet (Chặn gọi ngược về Core - Zero-Trust 1 chiều)
   gcloud compute firewall-rules create app-vpc-deny-ingress-gateway \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -272,7 +286,7 @@ elif [[ "$ROLE" == "egress" ]]; then
     --description="Block all outbound connections from Gateway to App and Data VPCs" \
     || echo "⚠️ Rule egress-vpc-deny-egress-internal đã tồn tại."
 
-  # 3. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 900)
+  # 3. Mở Egress Outbound Internet cho Webhook & Email & DNS/NTP (Priority 820)
   gcloud compute firewall-rules create egress-vpc-allow-egress-internet \
     --project="${PROJECT_ID}" \
     --network="${VPC_NAME}" \
@@ -280,9 +294,21 @@ elif [[ "$ROLE" == "egress" ]]; then
     --action=ALLOW \
     --destination-ranges="0.0.0.0/0" \
     --rules="tcp:80,tcp:443,udp:53,tcp:53,udp:123" \
-    --priority=900 \
+    --priority=820 \
     --description="Allow outbound Webhook, Resend Email HTTP/HTTPS, DNS and NTP" \
     || echo "⚠️ Rule egress-vpc-allow-egress-internet đã tồn tại."
+
+  # 4. Khóa các protocol/port lạ khác (Priority 65000)
+  gcloud compute firewall-rules create egress-vpc-deny-all-egress \
+    --project="${PROJECT_ID}" \
+    --network="${VPC_NAME}" \
+    --direction=EGRESS \
+    --action=DENY \
+    --destination-ranges="0.0.0.0/0" \
+    --rules="all" \
+    --priority=65000 \
+    --description="Zero-Trust: Deny all non-HTTP/HTTPS outbound traffic from Gateway" \
+    || echo "⚠️ Rule egress-vpc-deny-all-egress đã tồn tại."
 fi
 
 echo ""
