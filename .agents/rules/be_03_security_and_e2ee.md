@@ -53,6 +53,6 @@ trigger: always_on
 ## 5. Phòng Vệ Tấn Công DoS Bộ Nhớ, Log Masking & CORS Whitelist
 - **Chống DoS Bộ Nhớ (Payload Size Limit):** Mọi middleware/handler đọc Request Body (`PayloadCryptoMiddleware`, `RequestIDMiddleware`) **BẮT BUỘC** phải bọc `http.MaxBytesReader(w, r.Body, 2<<20)` (tối đa 2MB) trước khi `io.ReadAll` để phòng chống triệt để nguy cơ tấn công tràn RAM (OOM Crash).
 - **Che Giấu Dữ Liệu Nhạy Cảm Trong Log (Log Sanitization & PII Masking):** Tuyệt đối KHÔNG ghi log nguyên văn các trường nhạy cảm (`password`, `pwd`, `token`, `otp`, `secret`, `api_key`). Các middleware ghi nhận Danger Log bắt buộc phải bọc qua hàm `sanitizeRequestBody` để thay thế giá trị thành `"***MASKED***"` trước khi đẩy vào Kafka/OpenSearch.
-- **CORS Whitelist Động (Không Hardcode):** `CorsMiddleware` bắt buộc nạp danh sách domain cho phép từ biến môi trường `CORS_ALLOWED_ORIGINS` (hoặc `APP_URL`), chỉ cấp phép cho các domain nằm trong danh sách trắng (Whitelist).
+- **CORS Whitelist Động (Không Hardcode & Prod Isolation):** `CorsMiddleware` bắt buộc nạp danh sách domain cho phép từ biến môi trường `CORS_ALLOWED_ORIGINS` (hoặc `APP_URL`), chỉ cấp phép cho các domain nằm trong danh sách trắng (Whitelist). **Đặc biệt trên Production**: TUYỆT ĐỐI KHÔNG được cho phép `localhost`, `127.0.0.1` hay ký tự đại diện `*` trong whitelist CORS nhằm bảo vệ triệt để hệ thống khỏi nguy cơ Cross-Site Request Forgery và rò rỉ dữ liệu qua môi trường phát triển nội bộ. Môi trường Local/Dev mới được phép thêm `http://localhost:3000`.
 
 
