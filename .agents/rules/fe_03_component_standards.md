@@ -15,6 +15,8 @@
     - Ô nhập liệu: Gọi `<TextInput>`
     - Điều hướng tab: Gọi `<Tabs>`
     - Danh sách chi tiết Key-Value: Gọi `<DescriptionList>`
+    - Thẻ nhãn / Trạng thái: Gọi `<Badge>`
+    - Chú thích / Tooltip: Gọi `<Tooltip>` (hỗ trợ cờ `truncateOnly` khi chỉ hiện lúc text bị tràn)
 
 ## 3. Form & Input Standards (ForwardRef & Placeholders)
 - **ForwardRef**: Tất cả các component đóng vai trò nhập liệu (Input, Checkbox, Select, Textarea) bắt buộc phải được bọc qua `React.forwardRef` để hỗ trợ các thư viện quản lý form truy xuất ref trực tiếp vào thẻ HTML.
@@ -34,7 +36,7 @@ Mọi component trong thư mục `src/components/` bắt buộc phải được 
 - **`cards/`**: Các loại thẻ hiển thị dữ liệu (`<Zone>`, `<DescriptionList>`, `<StatCard>`, v.v.).
 - **`forms/`**: Các thành phần biểu mẫu & nhập liệu (`<TextInput>`, `<Form>`, `<Select>`, v.v.).
 - **`navigation/`**: Các thành phần điều hướng (`<Tabs>`, `<Breadcrumbs>`, v.v.).
-- **`primitives/`**: Các thành phần nguyên tử nền tảng (`<Button>`, `<Typo>`, `<Divider>`, `<Badge>`, `<BrandLogo>`).
+- **`primitives/`**: Các thành phần nguyên tử nền tảng (`<Button>`, `<Typo>`, `<Divider>`, `<Badge>`, `<Tooltip>`, `<BrandLogo>`).
 - **`guards/`**: Các wrapper bảo mật & phân quyền route (`<RouteGuard>`).
 - **`layout/`**: Khung sườn ứng dụng (`<AppLayout>`, `<Header>`, `<Sidebar>`).
 - **`tables/`**: Các thành phần hiển thị bảng dữ liệu (`<DataTable>`, bộ render cell `<TableCells>`, v.v.).
