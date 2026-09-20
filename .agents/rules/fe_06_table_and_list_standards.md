@@ -89,4 +89,22 @@ Tài liệu này quy định toàn bộ tiêu chuẩn về việc xây dựng, c
     - **`op_type === 'DELETE'`**: Lọc bỏ trực tiếp khỏi state (`setItems(prev => prev.filter(...))`) và giảm tổng số bản ghi (`setTotal(prev => Math.max(0, prev - 1))`).
   - **LUẬT THÉP BẤT BIẾN**: **TUYỆT ĐỐI CẤM gọi `fetchList()` hoặc `get*Map()` từ sự kiện WebSocket**. Mọi đồng bộ dữ liệu phải diễn ra tại chỗ (In-place Mutation) trên RAM và Local Storage.
 
+---
+
+## 10. Quy Chuẩn Hiển Thị "Tôi" (Me), Sắp Xếp Đầu Danh Sách & Sao Chép Tên Thật (Actor Identity Resolution & "Me" Rules)
+- **Thư Viện Dùng Chung Bắt Buộc (`src/lib/userUtils.ts`)**:
+  - **Phân giải Danh tính (`resolveActorInfo`)**: Mọi logic hiển thị tên người dùng (Người phụ trách, Người quản lý, Người tạo `c_by`, Người cập nhật `u_by`) **BẮT BUỘC** gọi `resolveActorInfo(actor, { usersMap, currentUser, t })`. Hàm trả về `{ displayName, realName, isMe, uid }`.
+  - **Đa ngôn ngữ (i18n)**: Sử dụng khóa từ điển `t('lbl_me')` (tiếng Việt: `"Tôi"`, tiếng Anh: `"Me"`). Tuyệt đối **KHÔNG hardcode** chuỗi `"Tôi"` trong JSX.
+- **Quy Tắc Đẩy Lên Đầu Danh Sách (`buildUserOptionsWithMe`)**:
+  - Trong tất cả các **Bộ lọc (Filter MultiSelect)** và **Dropdown Lựa chọn (Select / SearchableSelect / MultiSelect trong Modal)**:
+  - **BẮT BUỘC** dùng `buildUserOptionsWithMe(usersList, { currentUserId, t, excludeId })`.
+  - Hàm tự động sắp xếp tài khoản người dùng hiện tại (`currentUserId`) lên **vị trí đầu tiên (Index 0 - trên cùng)** của danh sách options với nhãn hiển thị dạng `Tôi (Tên | Email)` hoặc `Me (Name | Email)`. Các user khác được sắp xếp theo bảng chữ cái A-Z bên dưới.
+- **Quy Tắc Sao Chép Tên Thật (Real Name Clipboard Copying Rule)**:
+  - Khi người dùng bấm nút Copy hoặc click sao chép trên bất kỳ thành phần nào đang hiển thị nhãn "Tôi" / "Me" (trong `DescriptionList`, Tooltip hoặc Table cell):
+  - **BẮT BUỘC SAO CHÉP TÊN THẬT HOẶC EMAIL (`realName`)** của người dùng, **TUYỆT ĐỐI KHÔNG** sao chép chuỗi chữ `"Tôi"` hay `"Me"`.
+  - Với `DescriptionList` / `DescriptionItem`: Bắt buộc truyền `copyText: info.realName`.
+- **Đồng Bộ Trên Cột Audit Hệ Thống (`getBaseAuditColumns`)**:
+  - Khi gọi `getBaseAuditColumns`, **BẮT BUỘC** truyền thêm `currentUserId: user?.id` và `meLabel: t('lbl_me')` để các cột `c_by`, `u_by` tự động nhận diện tài khoản hiện tại và hiển thị "Tôi" / "Me" chuẩn xác trên toàn bộ các bảng danh sách (Khách hàng, Nhân viên, Tag, Vai trò, v.v.).
+
+
 
