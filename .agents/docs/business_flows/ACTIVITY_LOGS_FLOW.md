@@ -90,10 +90,9 @@ sequenceDiagram
       "items": [
         {
           "id": "670a1b2c3d4e5f6a7b8c9d0e",
-          "target_type": "CUSTOMER",
+          "target": "CUSTOMER",
           "target_id": "cust_670jknr123456",
           "type": "UPDATE",
-          "action": "UPDATE_INFO",
           "summary": "Cập nhật số điện thoại và hạng khách hàng",
           "changes": [
             {
@@ -123,10 +122,9 @@ sequenceDiagram
         },
         {
           "id": "670a1b2c3d4e5f6a7b8c9d0f",
-          "target_type": "CUSTOMER",
+          "target": "CUSTOMER",
           "target_id": "cust_670jknr123456",
           "type": "NOTE",
-          "action": "ADD_NOTE",
           "summary": "Thêm ghi chú cuộc gọi tư vấn",
           "body": "Khách hàng quan tâm đến gói dịch vụ Enterprise, hẹn gọi lại vào sáng thứ 2.",
           "attachments": [

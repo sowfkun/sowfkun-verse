@@ -106,11 +106,25 @@ sequenceDiagram
         Handler-->>Staff: HTTP 404 Not Found
     end
 
-    opt Có chỉ định OwnerID
-        UseCase->>UserRepo: GetByID(OwnerID)
-        alt Owner không thuộc Tenant
-            UserRepo-->>UseCase: nil / Khác TenantID
+    UseCase->>UserRepo: GetByID(OwnerID)
+    alt Owner không thuộc Tenant
+        UserRepo-->>UseCase: nil / Khác TenantID
+        UseCase-->>Handler: Error (ERR_USER_NOT_FOUND)
+        Handler-->>Staff: HTTP 404 Not Found
+    end
+
+    opt Có chỉ định AssigneeIDs
+        UseCase->>UserRepo: List(AssigneeIDs)
+        alt Có Assignee không thuộc Tenant
             UseCase-->>Handler: Error (ERR_USER_NOT_FOUND)
+            Handler-->>Staff: HTTP 404 Not Found
+        end
+    end
+
+    opt Có chỉ định TagIDs
+        UseCase->>TagRepo: List(TagIDs)
+        alt Có Tag không thuộc Tenant
+            UseCase-->>Handler: Error (ERR_TAG_NOT_FOUND)
             Handler-->>Staff: HTTP 404 Not Found
         end
     end
@@ -152,7 +166,10 @@ sequenceDiagram
     actor Staff as Nhân viên (CUSTOMER_MANAGE)
     participant Handler as CustomerHandler
     participant UseCase as UpdateCustomerUseCase
+    participant UserRepo as UserRepository
+    participant TagRepo as TagRepository
     participant CustRepo as CustomerRepository
+    participant Kafka as Kafka (general1 / entity-activities-progress)
     participant DB as MongoDB (customer.customers)
 
     Staff->>Handler: POST /api/v1/customer/update?id=... (Fields)
@@ -169,6 +186,24 @@ sequenceDiagram
         UseCase-->>Handler: Trả về dữ liệu hiện tại (Skip DB Write)
         Handler-->>Staff: HTTP 200 OK (Cached/Current Data)
     else Có trường thay đổi
+        opt Đổi OwnerID
+            UseCase->>UserRepo: GetByID(newOwnerID)
+            alt User không thuộc Tenant
+                UseCase-->>Handler: Error (ERR_USER_NOT_FOUND)
+            end
+        end
+        opt Đổi AssigneeIDs
+            UseCase->>UserRepo: List(newAssigneeIDs)
+            alt Có User không thuộc Tenant
+                UseCase-->>Handler: Error (ERR_USER_NOT_FOUND)
+            end
+        end
+        opt Đổi TagIDs
+            UseCase->>TagRepo: List(newTagIDs)
+            alt Có Tag không thuộc Tenant
+                UseCase-->>Handler: Error (ERR_TAG_NOT_FOUND)
+            end
+        end
         opt Đổi số điện thoại (PhoneNumber)
             UseCase->>CustRepo: GetByPhoneHash(new_p_hash)
             alt Số mới trùng với khách hàng khác trong Tenant
@@ -176,13 +211,14 @@ sequenceDiagram
                 Handler-->>Staff: HTTP 409 Conflict
             end
         end
-        opt Đổi Name / Phone / Email
+        opt Đổi Name / Phone / Email / Attrs
             UseCase->>UseCase: Rebuild Keywords (kws)
         end
         UseCase->>CustRepo: Update(id, CustomerUpdateModel)
         CustRepo->>DB: Update Fields & u_at, u_by
         DB-->>CustRepo: Updated Document
         CustRepo-->>UseCase: Decrypted Updated Entity
+        UseCase->>Kafka: Publish Activity Log (Changes Snapshot, phone/email Encrypted)
         UseCase-->>Handler: CustomerResponse DTO
         Handler-->>Staff: HTTP 200 OK
     end
@@ -207,7 +243,7 @@ sequenceDiagram
   | `phone.country_code` | `string` | Không | VD: `"+84"` | Mã quốc gia |
   | `phone.number` | `string` | **Có** | `required` | Số thuê bao nội địa |
   | `email` | `string` | Không | `omitempty,email,max=100` | Địa chỉ email |
-  | `owner_id` | `string` | Không | `omitempty,len=24` | ID nhân viên phụ trách chính |
+  | `owner_id` | `string` | **Có** | `required,len=24` | ID nhân viên phụ trách chính (Bắt buộc) |
   | `assignee_ids` | `[]string` | Không | `dive,len=24` | Danh sách ID nhân viên phối hợp |
   | `gender` | `string` | Không | `omitempty,oneof=MALE FEMALE OTHER` | Giới tính |
   | `dob` | `int64` | Không | `gt=0` | Ngày sinh (Unix timestamp ms UTC) |
