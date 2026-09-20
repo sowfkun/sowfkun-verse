@@ -35,8 +35,8 @@ Tài liệu này đặc tả toàn diện quy trình nghiệp vụ (Business Rul
 - **Bộ thuộc tính động (`attrs`)**: Lưu trữ dạng `map[string]any` tương ứng với các slot:
   - `t_search_1..5`: Thuộc tính dạng văn bản tìm kiếm (Text Search).
   - `s_filter_1..5`: Thuộc tính dạng lựa chọn/phân loại (Select Filter).
-  - `n_sort_1..5`: Thuộc tính dạng số có hỗ trợ sắp xếp (Number Sort).
-  - `d_sort_1..5`: Thuộc tính dạng thời gian có hỗ trợ sắp xếp (Date Sort).
+  - `n_filter_1..5`: Thuộc tính dạng số có hỗ trợ lọc khoảng & sắp xếp (Number Filter).
+  - `d_filter_1..5`: Thuộc tính dạng thời gian có hỗ trợ lọc khoảng & sắp xếp (Date Filter).
 - **Thẻ phân loại (`tag_ids`)**: Danh sách Tag ID liên kết, giới hạn tối đa 10 thẻ / khách hàng.
 
 ### 1.5 Thời Hạn Xử Lý & Cơ Chế Hết Hạn Tự Động (TTL Index)
@@ -70,7 +70,18 @@ Tài liệu này đặc tả toàn diện quy trình nghiệp vụ (Business Rul
 - Cho phép Quản trị viên (Admin) khôi phục (Un-delete) toàn bộ các bản ghi khách hàng bị xóa mềm trong một đợt thao tác dựa trên `tracking_id` (Request ID).
 - Phục hồi lại trạng thái `is_del = false`, cập nhật `u_at`, `u_by` và gia hạn lại TTL `exp_ref` (6 tháng + 3 ngày) mà vẫn bảo toàn `tracking_id` phục vụ kiểm toán và truy vết.
 
-### 1.10 Phân Quyền & Bảo Vệ Endpoint
+### 1.10 Phân Quyền Phân Cấp Dữ Liệu (Hierarchy Scoping)
+- **Cơ chế lọc phân cấp (`HierarchyService`)**: API `POST /api/v1/customer/list` tự động phân giải danh sách `accessibleIDs` dựa trên mã quyền `CUSTOMER_VIEW` và vai trò (Role) của người dùng:
+  - `ScopeAll`: Xem được toàn bộ khách hàng của Tenant.
+  - `ScopeSubordinates`: Xem được khách hàng do chính mình hoặc cấp dưới trực thuộc/gián tiếp phụ trách.
+  - `ScopeSameDept`: Xem được khách hàng của những người cùng bộ vai trò trong Tenant.
+  - `ScopeOwner`: Chỉ xem được khách hàng do chính mình phụ trách (`owner_id`) hoặc liên quan (`assignee_ids`).
+- **So khớp đa trường tại Repository (`buildQuery`)**:
+  - Khi `CommonQuery.Role.OwnerIDs` có dữ liệu, Repository áp dụng `mongodb.AppendOrClause` để lọc khách hàng có `owner_id` HOẶC `assignee_ids` nằm trong danh sách được cấp quyền truy cập.
+- **Tự động làm sạch Cache qua Change Stream**:
+  - `CUSTOMER_VIEW` được đăng ký vào `roleDomain.HierarchyPermissions`. Khi User hoặc Role thay đổi, MQ Handler tự động dọn dẹp Redis Accessible Cache (`user:accessible_users:{uid}:CUSTOMER_VIEW`).
+
+### 1.11 Phân Quyền & Bảo Vệ Endpoint
 - **API Ghi Dữ liệu Khách hàng (CUD - Add/Update/Delete)**: Đi qua `RequireAuth` + `RequirePermission("CUSTOMER_MANAGE")` + `RequestIDMiddleware`.
 - **API Đọc Dữ liệu (Read/List/Get)**: Đi qua `RequireAuth` + `RequirePermission("CUSTOMER_VIEW")` (cho phép toàn bộ nhân viên có quyền xem truy cập).
 - **API Quản Trị Hệ Thống (Rollback Delete)**: Đi qua `RequireAdminAuth` + `RequestIDMiddleware` dưới prefix `/api/v1/admin/customer/`.
@@ -395,7 +406,7 @@ sequenceDiagram
     "sort_dir": -1
   }
   ```
-- **Allowed Sort Fields**: `c_at`, `u_at`, `name`, `dob`, `proc_deadline`, `attrs.n_sort_1`, `attrs.n_sort_2`, `attrs.d_sort_1`, `attrs.d_sort_2`.
+- **Allowed Sort Fields**: `c_at`, `u_at`, `name`, `dob`, `proc_deadline`, `attrs.n_filter_1`, `attrs.n_filter_2`, `attrs.d_filter_1`, `attrs.d_filter_2`.
 - **Response `200 OK`**:
   ```json
   {

@@ -33,10 +33,29 @@ Phân hệ Role đóng vai trò trung tâm trong việc quản lý hệ thống 
   - **Kafka `entity_sync`**: Gửi sự kiện `EventTenantSyncMetaUpdate` để cập nhật `meta.ROLE = timestamp` vào document Tenant.
   - **Kafka `general2` (Target Tenant)**: Gửi sự kiện `EventEntityChanged` (`entity_type = "ROLE"`, `op_type = CREATE/UPDATE/DELETE`) để WebSocket Dispatcher phát sóng sự kiện `ENTITY_CHANGED` về client đang kết nối.
   - **Xóa Hierarchy Cache có chọn lọc (Conditional Hierarchy Cache Invalidation)**:
-    - Khi **ma trận phân quyền (`perms`)** hoặc Role bị **xóa (`is_del: true` / delete)**: `RoleMQHandler` tự động quét danh sách người dùng của Tenant và xóa sạch các key `user:accessible_users:{uid}:{perm}` trên Redis để nạp lại phân cấp quyền mới ngay lập tức.
+    - Danh sách các quyền áp dụng phân cấp dữ liệu được quản lý tập trung (Single Source of Truth) tại biến **`roleDomain.HierarchyPermissions`** trong [`internal/role/domain/permission_keys.go`](file:///f:/Coding/Project/sowfkun.verse.v2/sowfkun-verse-api/internal/role/domain/permission_keys.go) (hiện gồm `USER_VIEW`, `CUSTOMER_VIEW`).
+    - Khi **ma trận phân quyền (`perms`)** hoặc Role bị **xóa (`is_del: true` / delete)**: `RoleMQHandler` tự động quét danh sách người dùng của Tenant và lặp qua `roleDomain.HierarchyPermissions` để xóa sạch các key `user:accessible_users:{uid}:{perm}` trên Redis (`general1`), giúp người dùng nhận phân cấp quyền mới ngay lập tức.
     - Khi chỉ thay đổi thông tin cơ bản (**`name`** hoặc **`desc`**): Hệ thống **bỏ qua không xóa Hierarchy Cache** nhằm tối ưu hóa hiệu năng CPU và I/O Redis.
 
-### 1.4 Cơ chế Cập nhật & Xóa Tối ưu (Dirty Check & Soft Delete Tracking)
+### 1.4 Checklist Tiêu Chuẩn Khi Thêm Phân Quyền Phân Cấp (Hierarchy Scoping Checklist)
+Khi phát triển một phân hệ/module mới áp dụng phân quyền phân cấp theo cây tổ chức nhân sự (như `User`, `Customer`, `Order`, `Ticket`):
+1. **Domain Layer**:
+   - Định nghĩa `PermXView` và `PermXManage` trong `internal/role/domain/permission_keys.go`.
+   - Đăng ký ánh xạ `PermXManage: PermXView` vào `RequiredViewPermissions`.
+   - **Bắt buộc thêm `PermXView` vào mảng `HierarchyPermissions`** trong `permission_keys.go` để `RoleMQHandler` và `UserMQHandler` tự động dọn dẹp Redis Accessible Cache khi cây nhân sự hoặc quyền thay đổi.
+2. **Infrastructure Layer**:
+   - Khai báo các trường quản lý (`owner_id`, `assignee_ids`) dạng `"type": "token"` và `_id` dạng `"type": "objectId"` trong Atlas Search Index (`cmd/indexer/mongo.go`).
+   - Trong `buildQuery(cq)`, sử dụng `mongodb.AppendOrClause(baseQuery, ownerOrClause)` khi `len(cq.CommonQuery.Role.OwnerIDs) > 0` để lọc danh sách theo accessible IDs.
+3. **Application Layer (Tách biệt Query Scoping vs Single CUD In-Memory)**:
+   - **Truy vấn danh sách & Xóa hàng loạt (`ListXUseCase`, `DeleteXUseCase`)**: Gọi `hierarchyService.GetAccessibleUsers(ctx, cmd.TenantID, cmd.ByID, cmd.IsOwner, string(roleDomain.PermXView))` và gán `query.CommonQuery.Role.OwnerIDs = accessibleIDs` khi `!isAll` để MongoDB thực hiện lọc phạm vi qua query (so khớp cả người phụ trách chính `owner_id` lẫn nhân viên liên quan `assignee_ids`).
+   - **Thao tác đơn lẻ (`AddXUseCase`, `UpdateXUseCase`, `GetXUseCase`)**:
+     - **Không đẩy điều kiện vào query DB để giảm tải**: Lấy entity trực tiếp qua Primary DB (`GetByID`) đảm bảo Strong Consistency.
+     - **So sánh Owner/Assignees trong bộ nhớ (In-Memory)**: Sau khi lấy được entity (hoặc nhận `cmd.OwnerID`), đối chiếu xem `OwnerID` hoặc bất kỳ `AssigneeIDs` nào có nằm trong `accessibleIDs` hay không (`slices.Contains(accessibleIDs, ownerID)`). Nếu không thuộc phạm vi quyền hạn -> từ chối ngay với `ErrForbidden` (hoặc `ErrNotFound`).
+4. **Presentation & Lifecycle Layer**:
+   - `route.go`: Khởi tạo `hierarchyService` và inject vào toàn bộ các UseCase (`Add`, `Update`, `Delete`, `Get`, `List`).
+   - `Tenant Lifecycle`: Đăng ký `xRepo.SoftDeleteByTenant` vào `tenantPruneService` trong `cmd/api/setup_kafka.go`.
+
+### 1.5 Cơ chế Cập nhật & Xóa Tối ưu (Dirty Check & Soft Delete Tracking)
 - **Dirty Check (Rule 9)**: API Update so sánh dữ liệu mới với DB, nếu không có thay đổi nào thực sự khác biệt thì bỏ qua việc ghi MongoDB (Skip DB Write).
 - **Audit & Soft Delete Tracking (Rule 2.8)**: Khi thực hiện xóa, hệ thống ghi vết thông tin người thao tác (`u_by`) và mã vết (`tracking_id` từ `RequestIDMiddleware`) vào bản ghi bị xóa mềm (`is_del: true`).
 

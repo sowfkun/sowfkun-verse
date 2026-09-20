@@ -20,8 +20,8 @@ Tài liệu này đặc tả toàn bộ quy trình nghiệp vụ (Business Rules
 2. **Zone 2: `zone_filters_classification` ("Thông tin phân loại & Tra cứu", `order: 2`)**:
    - Chứa **cố định $5 \times N$ thuộc tính mẫu hệ thống** có chỉ mục (`apply_idx: true`):
      - $N$ Text Search (Keywords): `t_search_1` $\dots$ `t_search_N` (`txt_opt: { min_len, max_len }`)
-     - $N$ Số (Sortable): `n_sort_1` $\dots$ `n_sort_N` (`num_opt: { unit, thous_sep }`, `thous_sep`: `","`, `"."`, `"NONE"`)
-     - $N$ Ngày (Sortable): `d_sort_1` $\dots$ `d_sort_N` (`dt_opt: { display_type, format }`)
+     - $N$ Số (Filter & Sort): `n_filter_1` $\dots$ `n_filter_N` (`num_opt: { unit, thous_sep }`, `thous_sep`: `","`, `"."`, `"NONE"`)
+     - $N$ Ngày (Filter & Sort): `d_filter_1` $\dots$ `d_filter_N` (`dt_opt: { display_type, format }`)
      - $N$ Chọn 1 (Filterable): `s_filter_1` $\dots$ `s_filter_N` (`sel_opt: [...]`)
      - $N$ Chọn nhiều (Filterable): `s_filter_N+1` $\dots$ `s_filter_2N` (`sel_opt: [...]`)
    - Số lượng $N$ được cấu hình qua biến môi trường `DEFAULT_ATTR_COUNT_PER_TYPE` (mặc định: `2` $\rightarrow$ 10 fields).
@@ -115,8 +115,8 @@ Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
             "order": 1,
             "txt_opt": { "min_len": 0, "max_len": 255 }
           },
-          "n_sort_1": {
-            "slot": "n_sort_1",
+          "n_filter_1": {
+            "slot": "n_filter_1",
             "label": { "vi": "Doanh thu năm", "en": "Annual Revenue" },
             "data_type": "NUMBER",
             "status": "ACTIVE",
@@ -167,8 +167,8 @@ Toàn bộ phân hệ chỉ gồm **đúng 2 Endpoint duy nhất**:
         "order": 1,
         "txt_opt": { "min_len": 0, "max_len": 255 }
       },
-      "n_sort_1": {
-        "slot": "n_sort_1",
+      "n_filter_1": {
+        "slot": "n_filter_1",
         "label": { "vi": "Doanh thu năm", "en": "Annual Revenue" },
         "data_type": "NUMBER",
         "status": "ACTIVE",
