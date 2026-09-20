@@ -155,7 +155,11 @@ if ($nodeType -eq "tailscale" -or ($keyPath -and (Test-Path $keyPath))) {
 # 5. Automated Health Check Verification
 Write-Host ""
 Write-Host '[4/5] Verifying Gateway Health check (:8090/healthz)...' -ForegroundColor Yellow
-$healthCmd = "for i in 1 2 3 4 5 6 7 8 9 10; do if curl -s -f http://localhost:8090/healthz > /dev/null 2>&1; then echo 'SUCCESS_HEALTHY'; exit 0; fi; sleep 2; done; echo 'FAILED'"
+$healthCmd = 'for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do ' +
+             'if curl -s -f http://localhost:8090/healthz > /dev/null 2>&1 || ' +
+             '   sudo docker exec app_gateway wget -qO- http://localhost:8090/healthz > /dev/null 2>&1; then ' +
+             '  echo "SUCCESS_HEALTHY"; exit 0; ' +
+             'fi; sleep 2; done; echo "FAILED"'
 
 $healthRes = ""
 if ($nodeType -eq "tailscale" -or ($keyPath -and (Test-Path $keyPath))) {
